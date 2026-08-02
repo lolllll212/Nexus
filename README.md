@@ -1,0 +1,189 @@
+# NEXUS — A New Kind of Brain
+
+Not another ReAct orchestrator. NEXUS is a **living digital brain** with three capabilities that
+leave standard enterprise AI in the dust:
+
+1. **Subconscious** — a continuous background loop that synthesizes while you interact.
+2. **Dreaming** — overnight compression, pruning, and sandboxed future-simulation.
+3. **Self-Evolution** — the brain writes, tests, deploys, and registers its **own tools**.
+
+And one architectural promise: **the brain is technology-agnostic.** Swap Redis for Kafka,
+Neo4j for Memgraph, OpenAI for Llama, Qdrant for Pinecone — by changing **one file**.
+The brain itself never changes.
+
+---
+
+## The Architecture: Strict Clean (Hexagonal) Layers
+
+This project enforces the dependency rule. It is the mandatory first step that keeps a
+two-loop brain (live chat + background thinking) from collapsing into race conditions and
+spaghetti.
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                     NEXUS  (Ports & Adapters)                                │
+│                                                                            │
+│   ┌───────────────────────────────────────────────────────────────┐        │
+│   │  ENTRY POINTS  (thin, swappable)                              │        │
+│   │   FastAPI /v1  +  Celery workers +  Celery beat (dream cron)   │        │
+│   └───────────────────────────┬───────────────────────────────────┘        │
+│                               │                                            │
+│   ┌───────────────────────────▼───────────────────────────────────┐        │
+│   │  APPLICATION LAYER  (use cases, no I/O, no frameworks)         │        │
+│   │   ProcessMessage  EntitySynthesis  DreamSession  GenerateTool  │        │
+│   │   PatternDetection  SelfHeal  SubconsciousCoordinator          │        │
+│   └───────────────────────────┬───────────────────────────────────┘        │
+│                               │   depends only on ports (interfaces)      │
+│   ┌───────────────────────────▼───────────────────────────────────┐        │
+│   │  DOMAIN PORTS  (abstractions)                                 │        │
+│   │   MemoryRepository  ConceptRepository  ShortTermMemory         │        │
+│   │   LLMProvider  EmbeddingProvider  EventBus  ToolRegistry       │        │
+│   │   ToolExecutor  DeploymentProvider  Sandbox                    │        │
+│   └───────────────────────────┬───────────────────────────────────┘        │
+│                               │   depends only on pure entities           │
+│   ┌───────────────────────────▼───────────────────────────────────┐        │
+│   │  DOMAIN CORE  (pure Python, ZERO dependencies)                 │        │
+│   │   Memory  Concept  SynapticConnection  Thought  Tool  Session   │        │
+│   └───────────────────────────────────────────────────────────────┘        │
+│                                                                            │
+│   Adaptations (concrete, chosen only in the DI container):                 │
+│    Neo4j  ·  Qdrant  ·  Redis  ·  OpenAI  ·  SubprocessSandbox             │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### The dependency rule (verified by tests)
+
+- **Domain core** imports nothing outside itself. Proven: imports with zero packages installed.
+- **Application layer** depends only on domain ports + entities.
+- **Infrastructure** implements the ports; the **DI container** (`src/nexus/infrastructure/di/container.py`)
+  is the *only* place concrete adapters are chosen.
+
+The result is exactly the three guarantees you asked for:
+
+### 1. Zero Blocking
+The Cortex publishes a `USER_MESSAGE` event to the bus and **returns instantly**.
+The Subcortex picks it up asynchronously. The FastAPI layer never waits on heavy work.
+
+### 2. Infrastructure Independence
+The application talks to `LLMProvider`, `MemoryRepository`, `EventBus` — interfaces.
+An OpenAI → Llama swap is a new adapter class + one line in the container.
+
+### 3. Independent Scalability
+The cheap chat API scales separately from the heavy dreaming workers. Docker Compose
+ships them as separate services.
+
+---
+
+## Project Structure
+
+```
+NEXUS/
+├── src/nexus/
+│   ├── domain/                    # Pure core — no frameworks, no I/O
+│   │   ├── entities/              #   Memory, Concept, SynapticConnection, Thought, Tool, Conversation
+│   │   ├── value_objects/         #   EmotionalState, JSONSchema, SynapseConfig, ConnectionType
+│   │   ├── ports/                 #   Interfaces the app depends on (the "ports")
+│   │   └── exceptions/
+│   ├── application/               # Use cases — orchestrate, never touch infra
+│   │   ├── cortex/                #   ProcessMessage (ReAct), SessionManager
+│   │   ├── subcortex/             #   EntitySynthesis, PatternDetection
+│   │   │   └── dreaming/          #   Compress · Prune · Simulate · Consolidate · DreamSession
+│   │   ├── tools/                 #   GenerateTool (self-evolution), SelfHeal
+│   │   └── interfaces/            #   SubconsciousCoordinator (the dual-loop bridge)
+│   └── infrastructure/            # Adaptations — concrete, swappable
+│       ├── adapters/
+│       │   ├── persistence/       #   Neo4j graph · Qdrant vector · Redis short-term
+│       │   ├── llm/               #   OpenAI provider
+│       │   ├── embedding/         #   OpenAI embedder
+│       │   ├── eventbus/          #   Redis pub/sub (+ in-memory for dev)
+│       │   ├── sandbox/           #   Subprocess sandbox
+│       │   ├── deployment/        #   Local FastAPI deployer (Railway/Vercel next)
+│       │   └── execution/         #   Tool executor + built-in tools
+│       ├── api/                   #   FastAPI: /v1/chat, /v1/memory, /v1/tools, /v1/system
+│       ├── workers/               #   Celery app, synthesis + dreaming tasks
+│       └── di/                    #   Container — the only place tech is decided
+├── tests/
+│   ├── fakes/                     # In-memory adapters (prove the decoupling)
+│   └── unit/                      # 14 tests, run with zero infrastructure
+├── config/
+├── docker-compose.yml             # redis + neo4j + qdrant + cortex + worker + beat
+├── pyproject.toml
+└── .env.example
+```
+
+---
+
+## The Three New-Brain Capabilities
+
+### 1. Continuous Background Synthesis (The Subconscious)
+`SubconsciousCoordinator` subscribes to the event bus. On every `USER_MESSAGE` it
+asynchronously: extracts entities → upserts concepts into the graph → connects them to
+context (temporal synapses) → cross-references strong connections. If a connection's
+confidence crosses the threshold, a `CONTEXT_INJECTION` event fires a "realization" back
+to the cortex mid-conversation.
+
+### 2. Dreaming (Deep Batch Optimization)
+Runs nightly at 3 AM via Celery beat (`dreaming.run`):
+
+| Phase | File | What it does |
+|---|---|---|
+| 1 Compression | `dreaming/compress.py` | Episodic transcripts → distilled semantic facts |
+| 2 Pruning | `dreaming/prune.py` | Delete stale vectors; decay + prune weak synapses |
+| 3 Simulation | `dreaming/simulate.py` | Sandbox-test solutions to yesterday's unresolved problems |
+| 4 Consolidation | `dreaming/consolidate.py` | Reinforce clusters of frequently-used concepts |
+
+Findings land in working memory as `dream:findings` so the brain "already knows" at dawn.
+
+### 3. Dynamic Tool Generation (Self-Evolution)
+`GenerateToolUseCase` takes a problem → asks the LLM to write the tool → tests it in the
+sandbox against examples → deploys it to an endpoint → registers it. `SelfHealUseCase`
+regenerates tools that start failing. Trigger via `POST /v1/tools/generate`.
+
+---
+
+## Running It
+
+```bash
+# 1. Install
+py -m venv .venv && .venv\Scripts\activate
+pip install -e .[dev]
+
+# 2. Infrastructure (Redis, Neo4j, Qdrant)
+docker compose up -d redis neo4j qdrant
+
+# 3. Config
+copy .env.example .env   # fill in OPENAI_API_KEY, NEO4J_PASSWORD
+
+# 4. Conscious engine (FastAPI)
+uvicorn nexus.infrastructure.api.main:app --reload
+
+# 5. Subconscious (background workers + dreaming scheduler)
+celery -A nexus.infrastructure.workers.celery_app:celery_app worker -Q nexus -l info
+celery -A nexus.infrastructure.workers.celery_app:celery_app beat -l info
+
+# 6. Verify architecture with tests (no infra required)
+pytest
+```
+
+## API Surface
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /v1/chat` | Send a message to the conscious loop |
+| `GET /v1/memory/search?q=` | Vector recall from long-term memory |
+| `GET /v1/memory/concepts` | Inspect the synaptic graph |
+| `POST /v1/tools/generate` | Trigger self-evolution |
+| `GET /v1/tools` | List the brain's toolkit |
+| `POST /v1/system/dream` | Manually run tonight's dream cycle |
+
+---
+
+## Future of the Dreaming Pipeline
+
+- **Vector pruning at scale**: sharded Qdrant points with payload-based stale filters.
+- **Real future-simulation**: dream sandboxes that spin up full microservice scaffolds
+  and report back deployable solutions.
+- **Emotional context weighting**: memories encoded with `EmotionalWeight` already; dreaming
+  will prioritize re-consolidation of high-arousal memory clusters.
+- **Cross-session personality fluidity**: the `EmotionalState` value object is the seed —
+  the cortex will eventually modulate tone from the room's emotional weight.

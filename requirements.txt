@@ -1,0 +1,33 @@
+# NEXUS - Runtime Dependencies
+
+## API / Conscious Engine
+fastapi>=0.109
+uvicorn[standard]>=0.27
+pydantic>=2.5
+python-multipart>=0.0.6
+
+## Persistence Adapters
+redis>=5.0
+neo4j>=5.15
+qdrant-client>=1.9
+
+## LLM Adapters
+openai>=1.12
+
+## Background Workers / Subconscious
+celery>=5.3
+
+## Utilities
+pyyaml>=6.0
+python-dotenv>=1.0
+httpx>=0.26
+
+## Testing
+pytest>=8.0
+pytest-asyncio>=0.23
+pytest-cov>=4.1
+
+## Development
+black>=24.0
+ruff>=0.2
+mypy>=1.8

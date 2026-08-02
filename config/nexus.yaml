@@ -1,0 +1,52 @@
+# NEXUS Configuration
+# Environment-based config is the source of truth (see .env.example).
+# This file documents the tunable brain parameters that map to domain value objects.
+
+## Synaptic Graph Memory (Neuroplasticity)
+synapse:
+  initial_weight: 1.0
+  hebbian_learning_rate: 0.1      # how fast connections strengthen when used
+  decay_rate: 0.001               # per-day decay of unused connections
+  min_weight: 0.01                # below this, a synapse is pruned
+  max_weight: 10.0
+  strengthening_threshold: 3      # accesses before a connection is "strong"
+
+## Dreaming Cycle (3 AM batch optimization)
+dreaming:
+  schedule_hour: 3                # UTC (celery beat crontab)
+  timezone: "UTC"
+
+  phase1_compression:
+    batch_size: 50                # episodic transcripts per LLM call
+    max_tokens: 16384
+
+  phase2_pruning:
+    access_threshold_days: 90     # vectors unaccessed longer than this get pruned
+    stale_limit: 500              # max memories pruned per night
+
+  phase3_simulation:
+    max_sandboxes: 5              # problems to attempt solving overnight
+    sandbox_timeout_seconds: 60
+
+  phase4_consolidation:
+    max_clusters: 5               # core-knowledge clusters to reinforce
+    min_cluster_size: 3
+
+## Conscious Loop (Fast-Twitch Cortex)
+cortex:
+  react_max_iterations: 5         # ReAct loop depth before answering
+  memory_recall_limit: 8          # hybrid memories injected into context
+  short_term_ttl_seconds: 3600    # working memory lifetime
+
+## Subconscious Loop (Slow-Twitch Subcortex)
+subcortex:
+  context_injection_threshold: 0.85   # confidence needed to inject a "realization"
+  pattern_detection_interval_seconds: 1800
+
+## Event Bus (Nervous System)
+event_bus:
+  channels:
+    cortex_user_message: "nexus:cortex.user_message"
+    subcortex_injection: "nexus:subcortex.context_injection"
+    dreaming_trigger: "nexus:dreaming.triggered"
+    dreaming_complete: "nexus:dreaming.completed"
