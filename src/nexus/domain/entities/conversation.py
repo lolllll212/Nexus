@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Dict, List, Optional
 from uuid import uuid4
 
-from nexus.domain.value_objects.emotion import EmotionalState
+from nexus.domain.value_objects.emotion import EmotionalState, infer_emotional_state
 
 
 class MessageRole(Enum):
@@ -58,6 +58,11 @@ class Conversation:
         self.messages.append(msg)
         self.updated_at = datetime.utcnow()
         return msg
+
+    def observe_message(self, role: MessageRole, content: str) -> None:
+        """Update the room's emotional state from an incoming message (the seed for tone)."""
+        if role == MessageRole.USER:
+            self.emotional_state = self.emotional_state.blend(infer_emotional_state(content))
 
     def recent(self, n: int = 10) -> List[Message]:
         return self.messages[-n:]

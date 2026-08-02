@@ -18,16 +18,19 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
-from nexus.domain.entities.conversation import Conversation, MessageRole, Session
-from nexus.domain.entities.memory import Memory, MemoryType
+from nexus.domain.entities.conversation import Conversation, MessageRole
+from nexus.domain.entities.memory import Memory, MemoryType, EmotionalWeight
 from nexus.domain.entities.thought import Thought, ThoughtType
-from nexus.domain.entities.tool import Tool
 from nexus.domain.ports.event_bus import Event, EventBus, EventTopic, EventPriority
 from nexus.domain.ports.llm_provider import LLMProvider
+
+if TYPE_CHECKING:
+    from nexus.application.cortex.session_manager import SessionManager
 from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
-from nexus.domain.ports.tool_registry import ToolRegistry, ToolExecutor
+from nexus.domain.ports.execution import ToolExecutor
+from nexus.domain.ports.tool_registry import ToolRegistry
 from nexus.domain.exceptions import InvalidToolCallError, LLMUnavailableError
 
 
@@ -79,6 +82,7 @@ class ProcessMessageUseCase:
     ) -> MessageResult:
         conversation = await self._sessions.get_or_create(session_id, user_id)
         conversation.add_message(MessageRole.USER, message)
+        conversation.observe_message(MessageRole.USER, message)
 
         # --- 1. Dispatch to subconscious. Fire and forget - NEVER blocks the user. ---
         await self._dispatch_to_subconscious(conversation, message)
@@ -100,7 +104,10 @@ class ProcessMessageUseCase:
         asyncio.get_running_loop().create_task(
             self._working_memory.set(
                 f"session:{conversation.session_id}",
-                {"recent": conversation.to_llm_context()},
+                {
+                    "recent": conversation.to_llm_context(),
+                    "emotional_state": conversation.emotional_state.__dict__,
+                },
                 ttl_seconds=3600,
             )
         )
@@ -162,6 +169,10 @@ class ProcessMessageUseCase:
             if m.id not in seen:
                 seen.add(m.id)
                 m.accessed()
+                try:
+                    await self._memory_repo.record_access(m.id)
+                except Exception:
+                    pass
                 merged.append(m)
         return merged[: self.MEMORY_RECALL_LIMIT]
 
@@ -220,15 +231,21 @@ class ProcessMessageUseCase:
     async def _encode_episodic(self, conversation: Conversation, response: str) -> None:
         """Persist the raw exchange as episodic memory for tonight's dreaming."""
         last_user = conversation.recent(1)[0].content if conversation.messages else ""
+        state = conversation.emotional_state
         memory = Memory(
             content=f"USER: {last_user}\nNEXUS: {response}",
             memory_type=MemoryType.EPISODIC,
             concepts=list(conversation.active_concepts),
             metadata={"session_id": conversation.session_id, "user_id": conversation.user_id},
             context_state={
-                "emotional": conversation.emotional_state.__dict__,
+                "emotional": state.__dict__,
                 "task": conversation.current_task,
             },
+            emotional_weight=(
+                EmotionalWeight(valence=state.valence, arousal=state.arousal, context=state.dominant_emotion)
+                if state.intensity > 0.0
+                else None
+            ),
         )
         await self._memory_repo.store(memory)
         # Notify the nervous system
@@ -242,6 +259,11 @@ class ProcessMessageUseCase:
 
     def _build_context(self, conversation: Conversation, memories: List[Memory]) -> List[dict]:
         ctx = conversation.to_llm_context()
+        # Cross-session personality fluidity: the cortex modulates tone from the
+        # room's running emotional weight.
+        tone = conversation.emotional_state.tone_directive()
+        if tone:
+            ctx.insert(0, {"role": "system", "content": tone})
         if memories:
             ctx.insert(0, {"role": "system", "content": self._format_memories(memories)})
         return ctx

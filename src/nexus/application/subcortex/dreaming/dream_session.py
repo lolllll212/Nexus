@@ -12,10 +12,8 @@ Emits events so the cortex can be notified of new knowledge at dawn.
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Dict
 
 from nexus.domain.ports.event_bus import Event, EventBus, EventTopic
 from nexus.domain.ports.llm_provider import LLMProvider
@@ -64,11 +62,11 @@ class DreamSessionUseCase:
         self._compression = CompressionUseCase(llm, memory_repo)
         self._pruning = PruningUseCase(memory_repo, concept_repo, synapse)
         self._simulation = SimulationUseCase(llm, sandbox, executor, memory_repo, working_memory)
-        self._consolidation = ConsolidationUseCase(concept_repo, synapse)
+        self._consolidation = ConsolidationUseCase(concept_repo, synapse, memory_repo)
         self._event_bus = event_bus
         self._memory_repo = memory_repo
 
-    async def run(self) -> DreamSessionResult:
+    async def run(self, emotional_intensity: float = 0.0) -> DreamSessionResult:
         result = DreamSessionResult(session_id=f"dream-{int(datetime.utcnow().timestamp())}")
 
         await self._event_bus.publish(
@@ -88,7 +86,7 @@ class DreamSessionUseCase:
         result.simulation = await self._simulation.run(unresolved)
 
         # --- Phase 4: Consolidation ---
-        result.consolidation = await self._consolidation.run()
+        result.consolidation = await self._consolidation.run(emotional_intensity=emotional_intensity)
 
         result.completed_at = datetime.utcnow()
 

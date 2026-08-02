@@ -8,12 +8,11 @@ needing cloud credentials. Swap for Railway/Vercel providers for cloud runs.
 from __future__ import annotations
 
 import asyncio
-import os
 import socket
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
 from nexus.domain.ports.deployment import DeploymentInfo, DeploymentProvider, DeploymentRequest
 

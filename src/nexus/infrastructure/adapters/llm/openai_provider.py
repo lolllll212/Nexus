@@ -11,7 +11,7 @@ import json
 from typing import AsyncGenerator, Dict, List, Optional
 
 from nexus.domain.exceptions import LLMUnavailableError
-from nexus.domain.ports.llm_provider import LLMProvider, StreamingLLMProvider
+from nexus.domain.ports.llm_provider import StreamingLLMProvider
 from nexus.domain.value_objects.schema import JSONSchema
 
 

@@ -20,7 +20,6 @@ from nexus.domain.value_objects.synapse import SynapseConfig
 @dataclass
 class PruningResult:
     vectors_pruned: int
-    concepts_pruned: int
     synapses_pruned: int
 
 
@@ -37,19 +36,24 @@ class PruningUseCase:
         self._concept_repo = concept_repo
         self._synapse = synapse
 
-    async def run(self, access_threshold_days: int = 90, limit: int = 500) -> PruningResult:
-        result = PruningResult(0, 0, 0)
+    async def run(
+        self, access_threshold_days: int = 90, limit: int = 500, min_accesses: int = 1
+    ) -> PruningResult:
+        result = PruningResult(0, 0)
 
-        # --- 1. Vector pruning: stale, unaccessed memories ---
-        stale = await self._memory_repo.find_stale(access_threshold_days, limit)
-        for memory in stale:
-            await self._memory_repo.delete(memory.id)
-            result.vectors_pruned += 1
+        # --- 1. Vector pruning: stale, unaccessed memories (batch delete) ---
+        stale = await self._memory_repo.find_stale(access_threshold_days, limit, min_accesses)
+        if stale:
+            await self._memory_repo.delete_many([m.id for m in stale])
+            result.vectors_pruned = len(stale)
 
         # --- 2. Synaptic decay: weaken everything unused ---
         for conn in await self._concept_repo.find_weakest(limit):
             if conn.decay(self._synapse.decay_rate, self._synapse.min_weight):
                 await self._concept_repo.delete_connection(conn.id)
                 result.synapses_pruned += 1
+            else:
+                # Persist the reduced weight so decay actually accumulates in storage
+                await self._concept_repo.upsert_connection(conn)
 
         return result

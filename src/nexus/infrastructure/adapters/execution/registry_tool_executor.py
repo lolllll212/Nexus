@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from nexus.domain.entities.tool import Tool, ToolStatus
 from nexus.domain.exceptions import ToolNotFoundError
 from nexus.domain.ports.execution import ToolExecutor
 from nexus.domain.ports.sandbox import Sandbox

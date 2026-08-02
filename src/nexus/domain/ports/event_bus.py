@@ -25,11 +25,17 @@ class EventTopic(Enum):
     TOOL_GENERATION_REQUESTED = "tools.generation_requested"
     TOOL_GENERATED = "tools.generated"
     TOOL_GENERATION_FAILED = "tools.generation_failed"
+    TOOL_USED = "tools.used"
     DREAM_TRIGGERED = "dreaming.triggered"
     DREAM_COMPLETED = "dreaming.completed"
     DREAM_FAILED = "dreaming.failed"
     KNOWLEDGE_UPDATED = "knowledge.updated"
     SYSTEM_HEALTH = "system.health"
+    ATTENTION_GATED = "cognition.attention_gated"
+    ACTION_SELECTED = "cognition.action_selected"
+    VALENCE_TAGGED = "cognition.valence_tagged"
+    GRID_NAVIGATION = "cognition.grid_navigation"
+    HEX_ZOOM = "cognition.hex_zoom"
 
 
 class EventPriority(Enum):

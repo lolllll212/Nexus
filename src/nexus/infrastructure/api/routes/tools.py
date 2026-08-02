@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from typing import List
 
+from nexus.application.tools.generate_tool import ToolSpecRequest
+from nexus.infrastructure.api.dependencies import get_container
 from nexus.infrastructure.di.container import Container
 
 router = APIRouter(prefix="/v1/tools", tags=["tools"])
@@ -39,7 +41,7 @@ class GenerateResponse(BaseModel):
 
 
 @router.get("", response_model=List[ToolOut])
-async def list_tools(container: Container = Depends(lambda: Container())):
+async def list_tools(container: Container = Depends(get_container)):
     tools = await container.tool_registry.list_all()
     return [
         ToolOut(
@@ -52,19 +54,16 @@ async def list_tools(container: Container = Depends(lambda: Container())):
 
 
 @router.post("/generate", response_model=GenerateResponse)
-async def generate_tool(req: GenerateRequest, container: Container = Depends(lambda: Container())):
-    try:
-        result = await container.tool_generator.execute(
-            __import__("nexus.application.tools.generate_tool", fromlist=["ToolSpecRequest"]).ToolSpecRequest(
-                name=req.name,
-                description=req.description,
-                problem_statement=req.problem_statement,
-                requirements=req.requirements,
-                input_examples=req.input_examples,
-                expected_outputs=req.expected_outputs,
-            ),
-            deploy=True,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+async def generate_tool(req: GenerateRequest, container: Container = Depends(get_container)):
+    result = await container.tool_generator.execute(
+        ToolSpecRequest(
+            name=req.name,
+            description=req.description,
+            problem_statement=req.problem_statement,
+            requirements=req.requirements,
+            input_examples=req.input_examples,
+            expected_outputs=req.expected_outputs,
+        ),
+        deploy=True,
+    )
     return GenerateResponse(tool_id=result.tool.id, name=result.tool.name, tests_passed=result.tests_passed, endpoint=result.endpoint)

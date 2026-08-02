@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 
 from nexus.domain.entities.concept import Concept, SynapticConnection
 from nexus.domain.entities.memory import Memory
-from nexus.domain.value_objects.synapse import ConnectionType, SynapseConfig
+from nexus.domain.value_objects.synapse import ConnectionType
 
 
 class MemoryRepository(ABC):
@@ -28,13 +28,21 @@ class MemoryRepository(ABC):
     async def get_by_id(self, memory_id: str) -> Optional[Memory]: ...
 
     @abstractmethod
-    async def find_stale(self, threshold_days: int, limit: int = 100) -> List[Memory]: ...
+    async def find_stale(
+        self, threshold_days: int, limit: int = 100, min_accesses: int = 1
+    ) -> List[Memory]: ...
 
     @abstractmethod
     async def delete(self, memory_id: str) -> None: ...
 
     @abstractmethod
+    async def delete_many(self, memory_ids: List[str]) -> None: ...
+
+    @abstractmethod
     async def record_access(self, memory_id: str) -> None: ...
+
+    @abstractmethod
+    async def find_by_emotional_weight(self, min_intensity: float, limit: int = 100) -> List[Memory]: ...
 
 
 class ConceptRepository(ABC):

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from nexus.domain.entities.conversation import Conversation, Session
+from nexus.domain.entities.conversation import Conversation
 from nexus.domain.ports.memory_repository import ShortTermMemory
 
 
@@ -37,6 +37,13 @@ class SessionManager:
                     conv.messages.append(
                         Conversation(session_id, user_id).add_message(MessageRole(msg["role"]), msg["content"])
                     )
+                # Cross-session fluidity: restore the room's emotional weight so
+                # tone carries across separate sessions of the same room.
+                emo = restored.get("emotional_state")
+                if emo:
+                    from nexus.domain.value_objects.emotion import EmotionalState
+
+                    conv.emotional_state = EmotionalState(**emo)
                 self._cache[session_id] = conv
                 return conv
 

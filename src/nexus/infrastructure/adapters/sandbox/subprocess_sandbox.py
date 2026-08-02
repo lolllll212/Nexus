@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import tempfile
 import time
+from pathlib import Path
 from typing import Any, Dict
 
 from nexus.domain.ports.sandbox import Sandbox
@@ -58,6 +60,35 @@ class SubprocessSandbox(Sandbox):
 
         result["duration_ms"] = int((time.monotonic() - started) * 1000)
         return result
+
+    async def run_project(
+        self, files: Dict[str, str], test_command: str = "python -m pytest -q", timeout: int = 120
+    ) -> Dict[str, Any]:
+        started = time.monotonic()
+
+        with tempfile.TemporaryDirectory(prefix="nexus-project-") as tmp:
+            workdir = Path(tmp)
+            for rel_path, content in files.items():
+                target = workdir / rel_path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding="utf-8")
+
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *test_command.split(),
+                    cwd=str(workdir),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            except asyncio.TimeoutError:
+                return {"error": "sandbox timeout", "duration_ms": int((time.monotonic() - started) * 1000)}
+
+            return {
+                "output": stdout.decode()[-2000:],
+                "error": (stderr.decode() or stdout.decode())[-2000:] if proc.returncode else "",
+                "duration_ms": int((time.monotonic() - started) * 1000),
+            }
 
 
 def _indent(code: str, spaces: int) -> str:

@@ -35,6 +35,11 @@ class EmotionalWeight:
         if not 0.0 <= self.arousal <= 1.0:
             raise ValueError(f"arousal must be in [0,1], got {self.arousal}")
 
+    @property
+    def intensity(self) -> float:
+        """Overall emotional magnitude, drives consolidation priority."""
+        return (abs(self.valence) + self.arousal) / 2.0
+
 
 @dataclass
 class Memory:

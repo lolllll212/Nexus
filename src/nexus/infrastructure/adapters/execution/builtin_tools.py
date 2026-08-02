@@ -4,8 +4,7 @@ Built-in tool registry adapter - the capabilities NEXUS ships with.
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from nexus.domain.entities.tool import Tool, ToolStatus
 from nexus.domain.ports.tool_registry import ToolRegistry

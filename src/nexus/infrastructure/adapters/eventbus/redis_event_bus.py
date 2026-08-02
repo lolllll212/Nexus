@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from nexus.domain.ports.event_bus import Event, EventBus, EventHandler, EventTopic
 

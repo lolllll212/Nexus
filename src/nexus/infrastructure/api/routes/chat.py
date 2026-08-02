@@ -7,10 +7,11 @@ use case, and serializes the result. Zero business logic lives here.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from typing import Optional
 
+from nexus.infrastructure.api.dependencies import get_container
 from nexus.infrastructure.di.container import Container
 
 router = APIRouter(prefix="/v1/chat", tags=["chat"])
@@ -31,23 +32,14 @@ class ChatResponse(BaseModel):
     thought_count: int
 
 
-def get_container() -> Container:
-    from nexus.infrastructure.di.container import Container
-
-    return Container()
-
-
 @router.post("", response_model=ChatResponse)
 async def chat(req: ChatRequest, container: Container = Depends(get_container)) -> ChatResponse:
-    try:
-        result = await container.process_message.execute(
-            user_id=req.user_id,
-            message=req.message,
-            session_id=req.session_id,
-            stream=req.stream,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    result = await container.process_message.execute(
+        user_id=req.user_id,
+        message=req.message,
+        session_id=req.session_id,
+        stream=req.stream,
+    )
 
     return ChatResponse(
         response=result.response,

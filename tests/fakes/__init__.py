@@ -7,12 +7,13 @@ fakes, meaning it is completely decoupled from Redis/Neo4j/Qdrant/OpenAI.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any, Dict, List, Optional
 
 from nexus.domain.entities.concept import Concept, SynapticConnection
+from nexus.domain.entities.cortex import CorticalColumn
 from nexus.domain.entities.memory import Memory
-from nexus.domain.entities.tool import Tool, ToolStatus
+from nexus.domain.entities.tool import Tool
+from nexus.domain.ports.cognition import ActionPolicyStore, CorticalColumnRegistry
 from nexus.domain.ports.event_bus import Event, EventBus, EventHandler, EventTopic
 from nexus.domain.ports.llm_provider import LLMProvider, EmbeddingProvider
 from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
@@ -60,15 +61,34 @@ class FakeMemoryRepository(MemoryRepository):
     async def get_by_id(self, memory_id: str) -> Optional[Memory]:
         return self.memories.get(memory_id)
 
-    async def find_stale(self, threshold_days: int, limit: int = 100) -> List[Memory]:
-        return []
+    async def find_stale(self, threshold_days: int, limit: int = 100, min_accesses: int = 1) -> List[Memory]:
+        import datetime
+
+        cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=threshold_days)
+        stale = [
+            m
+            for m in self.memories.values()
+            if m.last_accessed_at < cutoff and m.access_count < min_accesses
+        ]
+        return stale[:limit]
 
     async def delete(self, memory_id: str) -> None:
         self.memories.pop(memory_id, None)
 
+    async def delete_many(self, memory_ids: List[str]) -> None:
+        for memory_id in memory_ids:
+            self.memories.pop(memory_id, None)
+
     async def record_access(self, memory_id: str) -> None:
         if memory_id in self.memories:
             self.memories[memory_id].accessed()
+
+    async def find_by_emotional_weight(self, min_intensity: float, limit: int = 100) -> List[Memory]:
+        charged = [
+            m for m in self.memories.values() if m.emotional_weight and m.emotional_weight.intensity >= min_intensity
+        ]
+        charged.sort(key=lambda m: m.emotional_weight.intensity, reverse=True)
+        return charged[:limit]
 
 
 class FakeConceptRepository(ConceptRepository):
@@ -164,8 +184,20 @@ class FakeEmbedder(EmbeddingProvider):
 
 
 class FakeSandbox(Sandbox):
+    def __init__(self) -> None:
+        self.project_runs: List[Dict[str, Any]] = []
+        self.fail_project: bool = False
+
     async def run(self, code: str, inputs: Dict[str, Any] = None, timeout: int = 30) -> Dict[str, Any]:
         return {"ok": True, "result": "sandboxed-ok", "duration_ms": 1}
+
+    async def run_project(
+        self, files: Dict[str, str], test_command: str = "python -m pytest -q", timeout: int = 120
+    ) -> Dict[str, Any]:
+        self.project_runs.append({"files": files, "test_command": test_command})
+        if self.fail_project:
+            return {"output": "", "error": "tests failed: assert 0", "duration_ms": 5}
+        return {"output": "1 passed", "error": "", "duration_ms": 5}
 
 
 class FakeToolRegistry(ToolRegistry):
@@ -191,3 +223,42 @@ class FakeToolRegistry(ToolRegistry):
 class FakeExecutor(ToolExecutor):
     async def execute(self, tool_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": True, "result": "tool-executed"}
+
+
+class FakeCorticalColumnRegistry(CorticalColumnRegistry):
+    def __init__(self) -> None:
+        self.columns: Dict[str, CorticalColumn] = {}
+
+    async def upsert(self, column: CorticalColumn) -> None:
+        self.columns[column.id] = column
+
+    async def get(self, column_id: str) -> Optional[CorticalColumn]:
+        return self.columns.get(column_id)
+
+    async def list_all(self) -> List[CorticalColumn]:
+        return list(self.columns.values())
+
+    async def get_or_create(self, name: str, **kwargs) -> CorticalColumn:
+        for column in self.columns.values():
+            if column.name == name:
+                return column
+        column = CorticalColumn(name=name, **kwargs)
+        self.columns[column.id] = column
+        return column
+
+
+class FakeActionPolicyStore(ActionPolicyStore):
+    def __init__(self) -> None:
+        self.state: Dict[str, Dict[str, float]] = {}
+
+    async def get_value(self, state_key: str, action_id: str) -> float:
+        return self.state.get(state_key, {}).get(action_id, 0.0)
+
+    async def set_value(self, state_key: str, action_id: str, value: float) -> None:
+        self.state.setdefault(state_key, {})[action_id] = value
+
+    async def get_state(self, state_key: str) -> Dict[str, float]:
+        return dict(self.state.get(state_key, {}))
+
+    async def reset(self, state_key: str) -> None:
+        self.state.pop(state_key, None)

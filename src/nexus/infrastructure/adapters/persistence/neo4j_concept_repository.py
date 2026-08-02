@@ -11,7 +11,6 @@ import json
 from typing import Dict, List, Optional
 
 from nexus.domain.entities.concept import Concept, SynapticConnection
-from nexus.domain.exceptions import ConceptNotFoundError
 from nexus.domain.ports.memory_repository import ConceptRepository
 from nexus.domain.value_objects.synapse import ConnectionType, SynapseConfig
 
