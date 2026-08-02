@@ -23,7 +23,9 @@ from nexus.domain.exceptions import LLMUnavailableError
 from nexus.infrastructure.api.main import create_app
 from nexus.infrastructure.di.container import Config
 
-from tests.fakes.container import FakeContainer
+from tests.fakes.container import FakeContainer, TEST_API_KEY_1
+
+AUTH = {"Authorization": f"Bearer {TEST_API_KEY_1}"}
 
 
 @pytest.fixture
@@ -68,8 +70,8 @@ def test_routes_reuse_same_container_across_requests(app, client):
     """Two requests must hit the SAME container (regression: was Container() per request)."""
     fake = _inject_container(client, app, llm_script={"complete": "FINAL ANSWER: hi"})
 
-    r1 = client.post("/v1/chat", json={"message": "hello", "user_id": "u1", "session_id": "s1"})
-    r2 = client.post("/v1/chat", json={"message": "hello again", "user_id": "u1", "session_id": "s1"})
+    r1 = client.post("/v1/chat", json={"message": "hello", "session_id": "s1"}, headers=AUTH)
+    r2 = client.post("/v1/chat", json={"message": "hello again", "session_id": "s1"}, headers=AUTH)
 
     assert r1.status_code == 200
     assert r2.status_code == 200
@@ -85,7 +87,7 @@ def test_health_and_tools_routes_smoke(app, client):
     assert health.status_code == 200
     assert health.json()["status"] == "healthy"
 
-    tools = client.get("/v1/tools")
+    tools = client.get("/v1/tools", headers=AUTH)
     assert tools.status_code == 200
     assert isinstance(tools.json(), list)
 
@@ -95,9 +97,9 @@ def test_memory_search_route(app, client):
     from nexus.domain.entities.memory import Memory, MemoryType
 
     m = Memory(content="a recalled fact", memory_type=MemoryType.SEMANTIC)
-    asyncio.run(fake.memory_repo.store(m))
+    asyncio.run(fake.memory_repo.store(m, tenant_id="t1"))
 
-    r = client.get("/v1/memory/search", params={"query": "recalled"})
+    r = client.get("/v1/memory/search", params={"query": "recalled"}, headers=AUTH)
     assert r.status_code == 200
     assert len(r.json()) == 1
     assert r.json()[0]["content"] == "a recalled fact"
@@ -167,7 +169,7 @@ def test_llm_unavailable_maps_to_503(app, client):
     app.state.container = fake
     client.app.state.container = fake
 
-    r = client.post("/v1/chat", json={"message": "hello", "user_id": "u1", "session_id": "s1"})
+    r = client.post("/v1/chat", json={"message": "hello", "session_id": "s1"}, headers=AUTH)
     # LLMUnavailableError is caught inside the react loop -> graceful message
     assert r.status_code == 200
     assert "briefly unavailable" in r.json()["response"]

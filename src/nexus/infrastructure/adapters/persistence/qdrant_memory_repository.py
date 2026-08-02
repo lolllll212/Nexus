@@ -3,6 +3,9 @@ Qdrant MemoryRepository adapter - vector space for semantic search.
 
 Stores episodic + semantic memories with dense embeddings. Also provides
 `find_stale` via payload filters on `last_accessed_at` for dreaming-phase pruning.
+
+Tenancy: one collection per tenant (`nexus_memory` for the default tenant,
+`nexus_memory_<tenant>` otherwise) keeps vectors physically isolated.
 """
 
 from __future__ import annotations
@@ -35,33 +38,53 @@ class QdrantMemoryRepository(MemoryRepository):
         self._shard_number = shard_number
         self._replication_factor = replication_factor
 
-    async def ensure_collection(self) -> None:
+    @staticmethod
+    def collection_name_for(tenant_id: str) -> str:
+        """Map a tenant to a physical collection name."""
+        if not tenant_id or tenant_id == "default":
+            return QdrantMemoryRepository.COLLECTION
+        safe = "".join(c for c in tenant_id if c.isalnum() or c in "._-")[:40].lower()
+        return f"{QdrantMemoryRepository.COLLECTION}_{safe or 'default'}"
+
+    def _collection(self, tenant_id: str) -> str:
+        return self.collection_name_for(tenant_id)
+
+    async def ensure_collection(self, tenant_id: str = "default") -> None:
         from qdrant_client import models
 
-        if await self._client.collection_exists(self.COLLECTION):
+        name = self._collection(tenant_id)
+        if await self._client.collection_exists(name):
             return
         await self._client.create_collection(
-            collection_name=self.COLLECTION,
+            collection_name=name,
             vectors_config=models.VectorParams(size=self._embedder.dimension, distance=models.Distance.COSINE),
             shard_number=self._shard_number,
             replication_factor=self._replication_factor,
         )
 
-    async def store(self, memory: Memory) -> None:
+    async def store(self, memory: Memory, tenant_id: str = "default") -> None:
         if memory.embedding is None:
             memory.embedding = await self._embedder.embed(memory.content)
+        payload = self._to_payload(memory)
+        payload["tenant_id"] = tenant_id
         await self._client.upsert(
-            collection_name=self.COLLECTION,
+            collection_name=self._collection(tenant_id),
             points=[
                 {
                     "id": memory.id,
                     "vector": memory.embedding,
-                    "payload": self._to_payload(memory),
+                    "payload": payload,
                 }
             ],
         )
 
-    async def retrieve(self, query: str, limit: int = 10, memory_types: Optional[list] = None) -> List[Memory]:
+    async def retrieve(
+        self,
+        query: str,
+        limit: int = 10,
+        memory_types: Optional[list] = None,
+        tenant_id: str = "default",
+    ) -> List[Memory]:
         query_vec = await self._embedder.embed(query)
         filter_ = None
         if memory_types:
@@ -71,7 +94,7 @@ class QdrantMemoryRepository(MemoryRepository):
                 must=[models.FieldCondition(key="memory_type", match=models.MatchAny(any=[t.value for t in memory_types]))]
             )
         hits = await self._client.search(
-            collection_name=self.COLLECTION, query_vector=query_vec, limit=limit, query_filter=filter_
+            collection_name=self._collection(tenant_id), query_vector=query_vec, limit=limit, query_filter=filter_
         )
         return [self._from_payload(h.payload, point_id=h.id) for h in hits]
 
@@ -82,7 +105,11 @@ class QdrantMemoryRepository(MemoryRepository):
         return self._from_payload(points[0].payload, point_id=points[0].id)
 
     async def find_stale(
-        self, threshold_days: int, limit: int = 100, min_accesses: int = 1
+        self,
+        threshold_days: int,
+        limit: int = 100,
+        min_accesses: int = 1,
+        tenant_id: str = "default",
     ) -> List[Memory]:
         from qdrant_client import models
 
@@ -94,11 +121,13 @@ class QdrantMemoryRepository(MemoryRepository):
             ]
         )
         points = await self._client.scroll(
-            collection_name=self.COLLECTION, limit=limit, filter_=filter_, with_payload=True
+            collection_name=self._collection(tenant_id), limit=limit, filter_=filter_, with_payload=True
         )
         return [self._from_payload(p.payload, point_id=p.id) for p, _ in points]
 
-    async def find_by_emotional_weight(self, min_intensity: float, limit: int = 100) -> List[Memory]:
+    async def find_by_emotional_weight(
+        self, min_intensity: float, limit: int = 100, tenant_id: str = "default"
+    ) -> List[Memory]:
         from qdrant_client import models
 
         filter_ = models.Filter(
@@ -107,26 +136,26 @@ class QdrantMemoryRepository(MemoryRepository):
             ]
         )
         points = await self._client.scroll(
-            collection_name=self.COLLECTION, limit=limit, filter_=filter_, with_payload=True
+            collection_name=self._collection(tenant_id), limit=limit, filter_=filter_, with_payload=True
         )
         return [self._from_payload(p.payload, point_id=p.id) for p, _ in points]
 
-    async def delete(self, memory_id: str) -> None:
-        await self._client.delete(collection_name=self.COLLECTION, points_selector=[memory_id])
+    async def delete(self, memory_id: str, tenant_id: str = "default") -> None:
+        await self._client.delete(collection_name=self._collection(tenant_id), points_selector=[memory_id])
 
-    async def delete_many(self, memory_ids: List[str]) -> None:
+    async def delete_many(self, memory_ids: List[str], tenant_id: str = "default") -> None:
         if not memory_ids:
             return
-        await self._client.delete(collection_name=self.COLLECTION, points_selector=memory_ids)
+        await self._client.delete(collection_name=self._collection(tenant_id), points_selector=memory_ids)
 
-    async def record_access(self, memory_id: str) -> None:
-        points = await self._client.retrieve(collection_name=self.COLLECTION, ids=[memory_id])
+    async def record_access(self, memory_id: str, tenant_id: str = "default") -> None:
+        points = await self._client.retrieve(collection_name=self._collection(tenant_id), ids=[memory_id])
         if not points:
             return
         payload = points[0].payload
         payload["access_count"] = payload.get("access_count", 0) + 1
         payload["last_accessed_at"] = datetime.datetime.utcnow().isoformat()
-        await self._client.set_payload(collection_name=self.COLLECTION, payload=payload, points=[memory_id])
+        await self._client.set_payload(collection_name=self._collection(tenant_id), payload=payload, points=[memory_id])
 
     # ---------------- helpers ----------------
 

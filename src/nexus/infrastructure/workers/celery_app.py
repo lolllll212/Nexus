@@ -13,7 +13,11 @@ celery_app = Celery(
     "nexus_subcortex",
     broker=broker,
     backend=backend,
-    include=["nexus.infrastructure.workers.tasks.synthesis_tasks", "nexus.infrastructure.workers.tasks.dream_tasks"],
+    include=[
+        "nexus.infrastructure.workers.tasks.synthesis_tasks",
+        "nexus.infrastructure.workers.tasks.dream_tasks",
+        "nexus.infrastructure.workers.tasks.autonomy_tasks",
+    ],
 )
 
 celery_app.conf.update(
@@ -36,6 +40,11 @@ celery_app.conf.update(
         "heal-tools-after-dream": {
             "task": "dreaming.self_heal_tools",
             "schedule": __import__("celery.schedules", fromlist=["crontab"]).crontab(hour=3, minute=30),
+        },
+        # Advance autonomous goals every 10 minutes
+        "autonomy-loop-every-10m": {
+            "task": "autonomy.loop",
+            "schedule": 600.0,
         },
     },
 )

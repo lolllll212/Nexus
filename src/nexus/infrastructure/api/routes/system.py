@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from nexus.infrastructure.api.dependencies import get_container
+from nexus.infrastructure.api.dependencies import get_container, require_identity
 from nexus.infrastructure.di.container import Container
 
 router = APIRouter(prefix="/v1/system", tags=["system"])
@@ -38,7 +38,7 @@ class DreamResponse(BaseModel):
     next_dream_at: str
 
 
-@router.post("/dream", response_model=DreamResponse)
+@router.post("/dream", response_model=DreamResponse, dependencies=[Depends(require_identity)])
 async def trigger_dream(container: Container = Depends(get_container)):
     from nexus.application.subcortex.dreaming.dream_session import DreamSessionUseCase
 

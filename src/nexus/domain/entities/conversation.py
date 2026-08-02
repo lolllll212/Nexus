@@ -35,6 +35,7 @@ class Session:
 
     session_id: str = field(default_factory=lambda: str(uuid4()))
     user_id: str = "anonymous"
+    tenant_id: str = "default"
     started_at: datetime = field(default_factory=datetime.utcnow)
     ended_at: Optional[datetime] = None
     metadata: Dict[str, object] = field(default_factory=dict)
@@ -46,6 +47,7 @@ class Conversation:
 
     session_id: str
     user_id: str
+    tenant_id: str = "default"
     messages: List[Message] = field(default_factory=list)
     active_concepts: List[str] = field(default_factory=list)
     emotional_state: EmotionalState = field(default_factory=EmotionalState)

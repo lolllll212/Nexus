@@ -119,7 +119,7 @@ class SimulationUseCase:
         self._memory_repo = memory_repo
         self._working_memory = working_memory
 
-    async def run(self, unresolved_memories: List[Memory], max_sandboxes: int = 5) -> SimulationResult:
+    async def run(self, unresolved_memories: List[Memory], max_sandboxes: int = 5, tenant_id: str = "default") -> SimulationResult:
         result = SimulationResult(problems_identified=len(unresolved_memories))
 
         problems = await self._extract_problems(unresolved_memories)
@@ -135,14 +135,15 @@ class SimulationUseCase:
                         content=f"PROBLEM: {solution.problem}\nSOLUTION: {solution.hypothesis}",
                         memory_type=MemoryType.PROCEDURAL,
                         metadata={"origin": "dream_simulation"},
-                    )
+                    ),
+                    tenant_id=tenant_id,
                 )
 
         # Deliver findings (with deployable scaffolds) to working memory so the
         # cortex "already knows" at dawn.
         if result.solutions_verified:
             await self._working_memory.set(
-                "dream:findings",
+                f"dream:{tenant_id}:findings",
                 {
                     "solutions": [
                         {"problem": s.problem, "solution": s.hypothesis, "notes": s.notes}

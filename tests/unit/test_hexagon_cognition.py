@@ -203,6 +203,7 @@ class TestBasalGanglia:
         policy = FakeActionPolicyStore()
 
         use_case = BasalGangliaUseCase(registry, policy, bus)
+        use_case.EXPLORATION_RATE = 0.0  # deterministic greedy selection for the test
         result = await use_case.select(
             "solve",
             {"weak": "weak-action", "strong": "strong-action"},

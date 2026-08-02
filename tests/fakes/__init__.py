@@ -18,6 +18,7 @@ from nexus.domain.ports.event_bus import Event, EventBus, EventHandler, EventTop
 from nexus.domain.ports.llm_provider import LLMProvider, EmbeddingProvider
 from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
 from nexus.domain.ports.sandbox import Sandbox
+from nexus.domain.ports.speech import SpeechToText, TextToSpeech
 from nexus.domain.ports.tool_registry import ToolRegistry, ToolExecutor
 from nexus.domain.value_objects.synapse import ConnectionType
 from nexus.domain.value_objects.schema import JSONSchema
@@ -48,12 +49,16 @@ class FakeEventBus(EventBus):
 class FakeMemoryRepository(MemoryRepository):
     def __init__(self) -> None:
         self.memories: Dict[str, Memory] = {}
+        self._tenant: Dict[str, str] = {}
 
-    async def store(self, memory: Memory) -> None:
+    async def store(self, memory: Memory, tenant_id: str = "default") -> None:
         self.memories[memory.id] = memory
+        self._tenant[memory.id] = tenant_id
 
-    async def retrieve(self, query: str, limit: int = 10, memory_types: Optional[list] = None) -> List[Memory]:
-        results = [m for m in self.memories.values()]
+    async def retrieve(
+        self, query: str, limit: int = 10, memory_types: Optional[list] = None, tenant_id: str = "default"
+    ) -> List[Memory]:
+        results = [m for m in self.memories.values() if self._tenant.get(m.id) == tenant_id]
         if memory_types:
             results = [m for m in results if m.memory_type in memory_types]
         return results[:limit]
@@ -61,31 +66,43 @@ class FakeMemoryRepository(MemoryRepository):
     async def get_by_id(self, memory_id: str) -> Optional[Memory]:
         return self.memories.get(memory_id)
 
-    async def find_stale(self, threshold_days: int, limit: int = 100, min_accesses: int = 1) -> List[Memory]:
+    async def find_stale(
+        self, threshold_days: int, limit: int = 100, min_accesses: int = 1, tenant_id: str = "default"
+    ) -> List[Memory]:
         import datetime
 
         cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=threshold_days)
         stale = [
             m
             for m in self.memories.values()
-            if m.last_accessed_at < cutoff and m.access_count < min_accesses
+            if self._tenant.get(m.id) == tenant_id
+            and m.last_accessed_at < cutoff
+            and m.access_count < min_accesses
         ]
         return stale[:limit]
 
-    async def delete(self, memory_id: str) -> None:
+    async def delete(self, memory_id: str, tenant_id: str = "default") -> None:
         self.memories.pop(memory_id, None)
+        self._tenant.pop(memory_id, None)
 
-    async def delete_many(self, memory_ids: List[str]) -> None:
+    async def delete_many(self, memory_ids: List[str], tenant_id: str = "default") -> None:
         for memory_id in memory_ids:
             self.memories.pop(memory_id, None)
+            self._tenant.pop(memory_id, None)
 
-    async def record_access(self, memory_id: str) -> None:
+    async def record_access(self, memory_id: str, tenant_id: str = "default") -> None:
         if memory_id in self.memories:
             self.memories[memory_id].accessed()
 
-    async def find_by_emotional_weight(self, min_intensity: float, limit: int = 100) -> List[Memory]:
+    async def find_by_emotional_weight(
+        self, min_intensity: float, limit: int = 100, tenant_id: str = "default"
+    ) -> List[Memory]:
         charged = [
-            m for m in self.memories.values() if m.emotional_weight and m.emotional_weight.intensity >= min_intensity
+            m
+            for m in self.memories.values()
+            if self._tenant.get(m.id) == tenant_id
+            and m.emotional_weight
+            and m.emotional_weight.intensity >= min_intensity
         ]
         charged.sort(key=lambda m: m.emotional_weight.intensity, reverse=True)
         return charged[:limit]
@@ -95,43 +112,79 @@ class FakeConceptRepository(ConceptRepository):
     def __init__(self) -> None:
         self.concepts: Dict[str, Concept] = {}
         self.connections: Dict[str, List[SynapticConnection]] = {}
+        self._tenant_concepts: Dict[str, str] = {}
+        self._tenant_connections: Dict[str, str] = {}
 
-    async def upsert(self, concept: Concept) -> None:
+    async def upsert(self, concept: Concept, tenant_id: str = "default") -> None:
         self.concepts[concept.id] = concept
+        self._tenant_concepts[concept.id] = tenant_id
 
-    async def get(self, concept_id: str) -> Optional[Concept]:
-        return self.concepts.get(concept_id)
+    async def get(self, concept_id: str, tenant_id: str = "default") -> Optional[Concept]:
+        concept = self.concepts.get(concept_id)
+        if concept is None or self._tenant_concepts.get(concept_id) != tenant_id:
+            return None
+        return concept
 
-    async def find_by_label(self, label: str, limit: int = 10) -> List[Concept]:
-        return [c for c in self.concepts.values() if label.lower() in c.label.lower()][:limit]
+    async def find_by_label(self, label: str, limit: int = 10, tenant_id: str = "default") -> List[Concept]:
+        return [
+            c
+            for cid, c in self.concepts.items()
+            if self._tenant_concepts.get(cid) == tenant_id and label.lower() in c.label.lower()
+        ][:limit]
 
-    async def upsert_connection(self, connection: SynapticConnection) -> None:
+    async def upsert_connection(self, connection: SynapticConnection, tenant_id: str = "default") -> None:
         self.connections.setdefault(connection.source_id, []).append(connection)
+        self._tenant_connections[connection.id] = tenant_id
 
-    async def get_connections(self, concept_id: str, min_weight: float = 0.0) -> List[SynapticConnection]:
-        return [c for c in self.connections.get(concept_id, []) if c.weight >= min_weight]
+    async def get_connections(
+        self, concept_id: str, min_weight: float = 0.0, tenant_id: str = "default"
+    ) -> List[SynapticConnection]:
+        return [
+            c
+            for c in self.connections.get(concept_id, [])
+            if c.weight >= min_weight and self._tenant_connections.get(c.id) == tenant_id
+        ]
 
-    async def get_or_create(self, label: str, concept_type: str, properties: Optional[Dict] = None) -> Concept:
-        existing = [c for c in self.concepts.values() if c.label == label]
+    async def get_or_create(
+        self, label: str, concept_type: str, properties: Optional[Dict] = None, tenant_id: str = "default"
+    ) -> Concept:
+        existing = [
+            c
+            for cid, c in self.concepts.items()
+            if self._tenant_concepts.get(cid) == tenant_id and c.label == label
+        ]
         if existing:
             existing[0].strengthen()
             return existing[0]
         c = Concept(label=label, concept_type=concept_type, properties=properties or {})
         self.concepts[c.id] = c
+        self._tenant_concepts[c.id] = tenant_id
         return c
 
-    async def connect(self, source_id: str, target_id: str, connection_type: ConnectionType = ConnectionType.SEMANTIC) -> SynapticConnection:
+    async def connect(
+        self,
+        source_id: str,
+        target_id: str,
+        connection_type: ConnectionType = ConnectionType.SEMANTIC,
+        tenant_id: str = "default",
+    ) -> SynapticConnection:
         conn = SynapticConnection(source_id=source_id, target_id=target_id, connection_type=connection_type)
-        await self.upsert_connection(conn)
+        await self.upsert_connection(conn, tenant_id=tenant_id)
         return conn
 
-    async def find_weakest(self, limit: int = 100) -> List[SynapticConnection]:
-        all_conns = [c for conns in self.connections.values() for c in conns]
+    async def find_weakest(self, limit: int = 100, tenant_id: str = "default") -> List[SynapticConnection]:
+        all_conns = [
+            c
+            for conns in self.connections.values()
+            for c in conns
+            if self._tenant_connections.get(c.id) == tenant_id
+        ]
         return sorted(all_conns, key=lambda c: c.weight)[:limit]
 
-    async def delete_connection(self, connection_id: str) -> None:
+    async def delete_connection(self, connection_id: str, tenant_id: str = "default") -> None:
         for key in self.connections:
             self.connections[key] = [c for c in self.connections[key] if c.id != connection_id]
+        self._tenant_connections.pop(connection_id, None)
 
 
 class FakeShortTermMemory(ShortTermMemory):
@@ -221,8 +274,32 @@ class FakeToolRegistry(ToolRegistry):
 
 
 class FakeExecutor(ToolExecutor):
+    def __init__(self) -> None:
+        self.executed: List[str] = []
+
     async def execute(self, tool_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        self.executed.append(tool_id)
         return {"ok": True, "result": "tool-executed"}
+
+
+class FakeSpeechToText(SpeechToText):
+    def __init__(self, script: Optional[Dict[str, Any]] = None) -> None:
+        self.script = script or {}
+        self.calls = []
+
+    async def transcribe(self, audio: bytes, mime_type: str = "audio/mpeg") -> str:
+        self.calls.append({"bytes": audio, "mime": mime_type})
+        return self.script.get("transcribe", "transcribed audio text")
+
+
+class FakeTextToSpeech(TextToSpeech):
+    def __init__(self, script: Optional[Dict[str, Any]] = None) -> None:
+        self.script = script or {}
+        self.calls = []
+
+    async def synthesize(self, text: str, voice: str = "alloy") -> bytes:
+        self.calls.append({"text": text, "voice": voice})
+        return self.script.get("audio", b"\x00audio-payload")
 
 
 class FakeCorticalColumnRegistry(CorticalColumnRegistry):

@@ -1,4 +1,8 @@
-"""Tool routes - inspect and trigger the self-evolution capability."""
+"""Tool routes - inspect and trigger the self-evolution capability.
+
+Listing tools requires identity; generating a tool is additionally rate
+limited (self-evolution is expensive and a prime abuse target).
+"""
 
 from __future__ import annotations
 
@@ -7,10 +11,10 @@ from pydantic import BaseModel, Field
 from typing import List
 
 from nexus.application.tools.generate_tool import ToolSpecRequest
-from nexus.infrastructure.api.dependencies import get_container
+from nexus.infrastructure.api.dependencies import get_container, require_identity, require_rate_limit
 from nexus.infrastructure.di.container import Container
 
-router = APIRouter(prefix="/v1/tools", tags=["tools"])
+router = APIRouter(prefix="/v1/tools", tags=["tools"], dependencies=[Depends(require_identity)])
 
 
 class ToolOut(BaseModel):
@@ -53,7 +57,7 @@ async def list_tools(container: Container = Depends(get_container)):
     ]
 
 
-@router.post("/generate", response_model=GenerateResponse)
+@router.post("/generate", response_model=GenerateResponse, dependencies=[Depends(require_rate_limit("tool_gen"))])
 async def generate_tool(req: GenerateRequest, container: Container = Depends(get_container)):
     result = await container.tool_generator.execute(
         ToolSpecRequest(

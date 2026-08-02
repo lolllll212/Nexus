@@ -8,18 +8,25 @@ means editing THIS file (or its config) - never the application layer.
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 
 from nexus.domain.value_objects.synapse import SynapseConfig
 
 # Ports (abstractions)
+from nexus.domain.ports.auth import Authenticator
 from nexus.domain.ports.cognition import ActionPolicyStore, CorticalColumnRegistry
 from nexus.domain.ports.event_bus import EventBus
 from nexus.domain.ports.execution import ToolExecutor
 from nexus.domain.ports.llm_provider import LLMProvider, EmbeddingProvider
 from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
+from nexus.domain.ports.observability import Metrics, Tracer
+from nexus.domain.ports.rate_limiter import RateLimiter
 from nexus.domain.ports.sandbox import Sandbox
+from nexus.domain.ports.secrets import SecretStore
+from nexus.domain.ports.speech import SpeechToText, TextToSpeech
+from nexus.domain.ports.swarm import AgentRepository, SwarmRepository
 from nexus.domain.ports.tool_registry import ToolRegistry
 from nexus.domain.ports.deployment import DeploymentProvider
 
@@ -35,6 +42,26 @@ from nexus.application.subcortex.pattern_detection import PatternDetectionUseCas
 from nexus.application.subcortex.thalamus import ThalamicGatingUseCase
 from nexus.application.tools.generate_tool import GenerateToolUseCase
 from nexus.application.tools.self_heal import SelfHealUseCase
+from nexus.application.autonomy.goals import (
+    ApproveGoalUseCase,
+    AutonomyLoopUseCase,
+    CancelGoalUseCase,
+    CreateGoalUseCase,
+    GetGoalUseCase,
+    ListGoalsUseCase,
+)
+from nexus.domain.ports.autonomy import AutonomyPolicy
+from nexus.domain.ports.goal_repository import GoalRepository
+
+
+def _parse_json_env(name: str, default: dict | None = None) -> dict:
+    raw = os.getenv(name, "")
+    if not raw:
+        return default or {}
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return default or {}
 
 
 @dataclass
@@ -57,6 +84,31 @@ class Config:
             o.strip() for o in os.getenv("NEXUS_CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()
         ]
     )
+    # ---- Production hardening (P1) ----
+    api_keys: dict = field(default_factory=lambda: _parse_json_env("NEXUS_API_KEYS"))
+    deploy_platform: str = field(default_factory=lambda: os.getenv("NEXUS_DEPLOY_PLATFORM", "local"))
+    tenants: list = field(
+        default_factory=lambda: [t.strip() for t in os.getenv("NEXUS_TENANTS", "").split(",") if t.strip()]
+    )
+    chat_rate_limit: int = field(default_factory=lambda: int(os.getenv("NEXUS_CHAT_RATE_LIMIT", "60")))
+    tool_gen_rate_limit: int = field(default_factory=lambda: int(os.getenv("NEXUS_TOOL_GEN_RATE_LIMIT", "20")))
+    rate_limit_window_seconds: int = field(default_factory=lambda: int(os.getenv("NEXUS_RATE_LIMIT_WINDOW_SECONDS", "60")))
+    json_logs: bool = field(default_factory=lambda: os.getenv("NEXUS_JSON_LOGS", "true").lower() == "true")
+    # ---- Autonomous goals (P2) ----
+    autonomy_hourly_budget: int = field(default_factory=lambda: int(os.getenv("NEXUS_AUTONOMY_HOURLY_BUDGET", "0")))
+    autonomy_default_budget: int = field(default_factory=lambda: int(os.getenv("NEXUS_AUTONOMY_DEFAULT_BUDGET", "20")))
+    autonomy_allowlist: list = field(
+        default_factory=lambda: [
+            a.strip() for a in os.getenv("NEXUS_AUTONOMY_ALLOWLIST", "tool_selfheal").split(",") if a.strip()
+        ]
+    )
+    goals_max_active: int = field(default_factory=lambda: int(os.getenv("NEXUS_GOALS_MAX_ACTIVE", "10")))
+    # ---- Multi-modal (P3) ----
+    stt_model: str = field(default_factory=lambda: os.getenv("NEXUS_STT_MODEL", "whisper-1"))
+    tts_model: str = field(default_factory=lambda: os.getenv("NEXUS_TTS_MODEL", "tts-1"))
+    tts_voice: str = field(default_factory=lambda: os.getenv("NEXUS_TTS_VOICE", "alloy"))
+    # ---- Swarm (P4) ----
+    swarm_max_workers: int = field(default_factory=lambda: int(os.getenv("NEXUS_SWARM_MAX_WORKERS", "5")))
 
 
 class Container:
@@ -67,10 +119,20 @@ class Container:
         self._started = False
         self._shutdown = False
 
+        # ---- Security / observability (P1) ----
+        self.secrets: SecretStore = self._build_secret_store()
+        self._resolve_secrets_into_config()
+        self.authenticator: Authenticator = self._build_authenticator()
+        self.tracer: Tracer = self._build_tracer()
+        self.metrics: Metrics = self._build_metrics()
+        self.rate_limiter: RateLimiter = self._build_rate_limiter()
+
         # ---- Ports (concrete adapters chosen here) ----
         self.event_bus: EventBus = self._build_event_bus()
         self.embedder: EmbeddingProvider = self._build_embedder()
         self.llm: LLMProvider = self._build_llm()
+        self.speech_to_text: SpeechToText = self._build_speech_to_text()
+        self.text_to_speech: TextToSpeech = self._build_text_to_speech()
         self.sandbox: Sandbox = self._build_sandbox()
         self.memory_repo: MemoryRepository = self._build_memory_repo()
         self.concept_repo: ConceptRepository = self._build_concept_repo()
@@ -81,6 +143,10 @@ class Container:
         self.executor: ToolExecutor = self._build_executor()
         self.column_registry: CorticalColumnRegistry = self._build_column_registry()
         self.policy_store: ActionPolicyStore = self._build_policy_store()
+        self.goal_repo: GoalRepository = self._build_goal_repo()
+        self.autonomy_policy: AutonomyPolicy = self._build_autonomy_policy()
+        self.agent_repo: AgentRepository = self._build_agent_repo()
+        self.swarm_repo: SwarmRepository = self._build_swarm_repo()
 
         # ---- Use cases (application) ----
         self.session_manager = SessionManager(self.working_memory)
@@ -93,6 +159,8 @@ class Container:
             executor=self.executor,
             event_bus=self.event_bus,
             session_manager=self.session_manager,
+            tracer=self.tracer,
+            metrics=self.metrics,
         )
         self.entity_synthesis = EntitySynthesisUseCase(self.llm, self.concept_repo, self.memory_repo, self.event_bus)
         self.pattern_detection = PatternDetectionUseCase(self.llm, self.memory_repo, self.event_bus)
@@ -105,6 +173,8 @@ class Container:
             executor=self.executor,
             synapse=self.synapse,
             event_bus=self.event_bus,
+            tracer=self.tracer,
+            metrics=self.metrics,
         )
         self.tool_generator = GenerateToolUseCase(
             llm=self.llm,
@@ -113,7 +183,52 @@ class Container:
             executor=self.executor,
             deployer=self.deployer,
         )
-        self.self_heal = SelfHealUseCase(self.tool_registry, self.tool_generator)
+        self.self_heal = SelfHealUseCase(
+            self.tool_registry,
+            self.tool_generator,
+            policy=self.autonomy_policy,
+            tenant_id="default",
+        )
+
+        # ---- Autonomous goals (P2) ----
+        from nexus.infrastructure.adapters.autonomy.executor import CortexStepExecutor
+
+        self.create_goal = CreateGoalUseCase(self.goal_repo)
+        self.approve_goal = ApproveGoalUseCase(self.goal_repo)
+        self.cancel_goal = CancelGoalUseCase(self.goal_repo)
+        self.list_goals = ListGoalsUseCase(self.goal_repo)
+        self.get_goal = GetGoalUseCase(self.goal_repo)
+        self.autonomy_loop = AutonomyLoopUseCase(
+            self.goal_repo,
+            self.autonomy_policy,
+            CortexStepExecutor(self.process_message),
+        )
+
+        # ---- Swarm (P4) ----
+        from nexus.infrastructure.adapters.swarm.executor import SwarmAgentExecutor
+        from nexus.application.swarm.swarm import (
+            CreateSwarmUseCase,
+            GetAgentUseCase,
+            GetSwarmUseCase,
+            ListAgentsUseCase,
+            ListSwarmsUseCase,
+            RegisterAgentUseCase,
+            SwarmCoordinatorUseCase,
+        )
+
+        self.register_agent = RegisterAgentUseCase(self.agent_repo)
+        self.list_agents = ListAgentsUseCase(self.agent_repo)
+        self.get_agent = GetAgentUseCase(self.agent_repo)
+        self.create_swarm = CreateSwarmUseCase(self.swarm_repo, self.agent_repo)
+        self.list_swarms = ListSwarmsUseCase(self.swarm_repo)
+        self.get_swarm = GetSwarmUseCase(self.swarm_repo)
+        self.swarm_agent_executor = SwarmAgentExecutor(self.process_message, self.tool_registry)
+        self.swarm_coordinator = SwarmCoordinatorUseCase(
+            self.swarm_repo,
+            self.agent_repo,
+            self.swarm_agent_executor,
+            max_workers=self.config.swarm_max_workers,
+        )
 
         # ---- Subcortex control loops ----
         self.thalamus = ThalamicGatingUseCase(self.column_registry, self.event_bus)
@@ -135,6 +250,54 @@ class Container:
     #  Adapter factories - the only place technology is decided
     # ------------------------------------------------------------------ #
 
+    def _build_secret_store(self) -> SecretStore:
+        from nexus.infrastructure.adapters.security.secrets import (
+            ChainedSecretStore,
+            EnvSecretStore,
+            JsonFileSecretStore,
+        )
+
+        backend = os.getenv("NEXUS_SECRET_BACKEND", "env")
+        if backend.startswith("json:"):
+            path = backend.split(":", 1)[1].strip()
+            return ChainedSecretStore([JsonFileSecretStore(path), EnvSecretStore()])
+        return EnvSecretStore()
+
+    def _resolve_secrets_into_config(self) -> None:
+        for env_name, attr in (
+            ("OPENAI_API_KEY", "openai_api_key"),
+            ("NEO4J_PASSWORD", "neo4j_password"),
+        ):
+            value = self.secrets.get(env_name)
+            if value:
+                setattr(self.config, attr, value)
+        raw_keys = self.secrets.get("NEXUS_API_KEYS")
+        if raw_keys:
+            try:
+                self.config.api_keys = json.loads(raw_keys)
+            except json.JSONDecodeError:
+                self.config.api_keys = {}
+
+    def _build_authenticator(self) -> Authenticator:
+        from nexus.infrastructure.adapters.auth.api_key_authenticator import ApiKeyAuthenticator
+
+        return ApiKeyAuthenticator(self.config.api_keys)
+
+    def _build_tracer(self) -> Tracer:
+        from nexus.infrastructure.adapters.observability.observability import LoggingTracer
+
+        return LoggingTracer()
+
+    def _build_metrics(self) -> Metrics:
+        from nexus.infrastructure.adapters.observability.observability import InMemoryMetrics
+
+        return InMemoryMetrics()
+
+    def _build_rate_limiter(self) -> RateLimiter:
+        from nexus.infrastructure.adapters.security.rate_limiter import SlidingWindowRateLimiter
+
+        return SlidingWindowRateLimiter()
+
     def _build_event_bus(self) -> EventBus:
         from nexus.infrastructure.adapters.eventbus.redis_event_bus import RedisEventBus
 
@@ -149,6 +312,20 @@ class Container:
         from nexus.infrastructure.adapters.llm.openai_provider import OpenAIProvider
 
         return OpenAIProvider(api_key=self.config.openai_api_key, model=self.config.llm_model)
+
+    def _build_speech_to_text(self) -> SpeechToText:
+        from nexus.infrastructure.adapters.speech.openai_speech import OpenAISpeechToText
+
+        return OpenAISpeechToText(api_key=self.config.openai_api_key, model=self.config.stt_model)
+
+    def _build_text_to_speech(self) -> TextToSpeech:
+        from nexus.infrastructure.adapters.speech.openai_speech import OpenAITextToSpeech
+
+        return OpenAITextToSpeech(
+            api_key=self.config.openai_api_key,
+            model=self.config.tts_model,
+            default_voice=self.config.tts_voice,
+        )
 
     def _build_sandbox(self) -> Sandbox:
         from nexus.infrastructure.adapters.sandbox.subprocess_sandbox import SubprocessSandbox
@@ -187,6 +364,19 @@ class Container:
         return BuiltinToolRegistry(default_builtin_tools())
 
     def _build_deployer(self) -> DeploymentProvider | None:
+        platform = self.config.deploy_platform
+        if platform == "railway":
+            from nexus.infrastructure.adapters.deployment.railway_deployer import RailwayDeployer
+
+            token = self.secrets.get("RAILWAY_TOKEN")
+            project = self.secrets.get("RAILWAY_PROJECT_ID")
+            return RailwayDeployer(token=token or "", project_id=project or "")
+        if platform == "vercel":
+            from nexus.infrastructure.adapters.deployment.vercel_deployer import VercelDeployer
+
+            token = self.secrets.get("VERCEL_TOKEN")
+            team = self.secrets.get("VERCEL_TEAM_ID")
+            return VercelDeployer(token=token or "", team_id=team)
         from nexus.infrastructure.adapters.deployment.local_deployer import LocalDeployer
 
         return LocalDeployer()
@@ -211,12 +401,38 @@ class Container:
 
         return InMemoryActionPolicyStore()
 
+    def _build_goal_repo(self) -> GoalRepository:
+        from nexus.infrastructure.adapters.autonomy.goal_repository import InMemoryGoalRepository
+
+        return InMemoryGoalRepository()
+
+    def _build_autonomy_policy(self) -> AutonomyPolicy:
+        from nexus.infrastructure.adapters.autonomy.policy import DefaultAutonomyPolicy
+
+        return DefaultAutonomyPolicy(
+            rate_limiter=self.rate_limiter,
+            hourly_budget=self.config.autonomy_hourly_budget,
+            allowlist=self.config.autonomy_allowlist,
+        )
+
+    def _build_agent_repo(self) -> AgentRepository:
+        from nexus.infrastructure.adapters.swarm.repositories import InMemoryAgentRepository
+
+        return InMemoryAgentRepository()
+
+    def _build_swarm_repo(self) -> SwarmRepository:
+        from nexus.infrastructure.adapters.swarm.repositories import InMemorySwarmRepository
+
+        return InMemorySwarmRepository()
+
     async def start(self) -> None:
         if self._started:
             return
         self._started = True
         await self.event_bus.start()
         await self.memory_repo.ensure_collection()
+        for tenant_id in self.config.tenants:
+            await self.memory_repo.ensure_collection(tenant_id=tenant_id)
 
     async def shutdown(self) -> None:
         if self._shutdown:

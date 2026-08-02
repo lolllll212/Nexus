@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 from nexus.domain.ports.event_bus import Event, EventBus, EventTopic
 from nexus.domain.ports.llm_provider import LLMProvider
 from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
+from nexus.domain.ports.observability import Metrics, NoopMetrics, NoopTracer, Tracer
 from nexus.domain.ports.execution import ToolExecutor
 from nexus.domain.ports.sandbox import Sandbox
 from nexus.domain.value_objects.synapse import SynapseConfig
@@ -58,6 +59,8 @@ class DreamSessionUseCase:
         executor: ToolExecutor,
         synapse: SynapseConfig,
         event_bus: EventBus,
+        tracer: Tracer | None = None,
+        metrics: Metrics | None = None,
     ) -> None:
         self._compression = CompressionUseCase(llm, memory_repo)
         self._pruning = PruningUseCase(memory_repo, concept_repo, synapse)
@@ -65,48 +68,56 @@ class DreamSessionUseCase:
         self._consolidation = ConsolidationUseCase(concept_repo, synapse, memory_repo)
         self._event_bus = event_bus
         self._memory_repo = memory_repo
+        self._tracer = tracer or NoopTracer()
+        self._metrics = metrics or NoopMetrics()
 
-    async def run(self, emotional_intensity: float = 0.0) -> DreamSessionResult:
-        result = DreamSessionResult(session_id=f"dream-{int(datetime.utcnow().timestamp())}")
+    async def run(self, emotional_intensity: float = 0.0, tenant_id: str = "default") -> DreamSessionResult:
+        async with self._tracer.span("dream_session", {"tenant_id": tenant_id}):
+            result = DreamSessionResult(session_id=f"dream-{int(datetime.utcnow().timestamp())}")
 
-        await self._event_bus.publish(
-            Event(topic=EventTopic.DREAM_TRIGGERED, payload={"session_id": result.session_id})
-        )
-
-        # --- Phase 1: Episodic -> Semantic ---
-        episodes = await self._memory_repo.retrieve("", limit=1000)
-        episodes = [e for e in episodes if not e.consolidated]
-        result.compression = await self._compression.run(episodes)
-
-        # --- Phase 2: Pruning ---
-        result.pruning = await self._pruning.run(access_threshold_days=90)
-
-        # --- Phase 3: Simulation ---
-        unresolved = await self._memory_repo.find_stale(1, limit=20)  # yesterday's active problems
-        result.simulation = await self._simulation.run(unresolved)
-
-        # --- Phase 4: Consolidation ---
-        result.consolidation = await self._consolidation.run(emotional_intensity=emotional_intensity)
-
-        result.completed_at = datetime.utcnow()
-
-        await self._event_bus.publish(
-            Event(
-                topic=EventTopic.DREAM_COMPLETED,
-                payload={
-                    "session_id": result.session_id,
-                    "duration_seconds": result.duration_seconds,
-                    "compression": result.compression.__dict__,
-                    "pruning": result.pruning.__dict__,
-                    "simulation": {
-                        "problems": result.simulation.problems_identified,
-                        "verified_solutions": len(result.simulation.solutions_verified),
-                    },
-                    "consolidation": result.consolidation.__dict__,
-                },
+            await self._event_bus.publish(
+                Event(topic=EventTopic.DREAM_TRIGGERED, payload={"session_id": result.session_id})
             )
-        )
-        return result
+
+            # --- Phase 1: Episodic -> Semantic ---
+            episodes = await self._memory_repo.retrieve("", limit=1000, tenant_id=tenant_id)
+            episodes = [e for e in episodes if not e.consolidated]
+            result.compression = await self._compression.run(episodes, tenant_id=tenant_id)
+
+            # --- Phase 2: Pruning ---
+            result.pruning = await self._pruning.run(access_threshold_days=90, tenant_id=tenant_id)
+
+            # --- Phase 3: Simulation ---
+            unresolved = await self._memory_repo.find_stale(1, limit=20, tenant_id=tenant_id)  # yesterday's active problems
+            result.simulation = await self._simulation.run(unresolved, tenant_id=tenant_id)
+
+            # --- Phase 4: Consolidation ---
+            result.consolidation = await self._consolidation.run(
+                emotional_intensity=emotional_intensity, tenant_id=tenant_id
+            )
+
+            result.completed_at = datetime.utcnow()
+
+            self._metrics.counter("dream_sessions_total", labels={"tenant_id": tenant_id})
+
+            await self._event_bus.publish(
+                Event(
+                    topic=EventTopic.DREAM_COMPLETED,
+                    payload={
+                        "session_id": result.session_id,
+                        "tenant_id": tenant_id,
+                        "duration_seconds": result.duration_seconds,
+                        "compression": result.compression.__dict__,
+                        "pruning": result.pruning.__dict__,
+                        "simulation": {
+                            "problems": result.simulation.problems_identified,
+                            "verified_solutions": len(result.simulation.solutions_verified),
+                        },
+                        "consolidation": result.consolidation.__dict__,
+                    },
+                )
+            )
+            return result
 
     @staticmethod
     def next_dream_time(now: datetime | None = None) -> datetime:

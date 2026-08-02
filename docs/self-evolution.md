@@ -29,6 +29,11 @@ the brain can grow its own compute as its needs grow.
 2. Regenerated with fresh context (the description + known failures).
 3. Re-tested and re-registered.
 
+Since P2, every regeneration passes through the `AutonomyPolicy` guardrail:
+the per-tenant hourly budget is checked, regeneration requires approval
+(`tool_selfheal` is allowlisted by default), and each attempt is written to the
+tenant audit log (`/v1/goals/audit`). See [autonomous-goals.md](autonomous-goals.md).
+
 ## Lifecycle
 
 ```

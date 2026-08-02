@@ -396,7 +396,7 @@ async def test_simulation_builds_and_verifies_deployable_microservice_scaffold()
     assert "logic.py" in solution.scaffold
     assert sandbox.project_runs and "main.py" in sandbox.project_runs[0]["files"]
     # Findings delivered to working memory for dawn
-    stored = await working.get("dream:findings")
+    stored = await working.get("dream:default:findings")
     assert stored is not None and "deployables" in stored
 
 
@@ -483,7 +483,7 @@ def test_session_restore_preserves_emotional_state():
         sessions = SessionManager(working)
         conv = await sessions.get_or_create("room-1", "u1")
         conv.observe_message(MessageRole.USER, "I am really angry and frustrated about this")
-        await working.set("session:room-1", {"recent": [], "emotional_state": conv.emotional_state.__dict__}, 3600)
+        await working.set("session:default:room-1", {"recent": [], "emotional_state": conv.emotional_state.__dict__}, 3600)
 
         fresh = SessionManager(working)  # new session manager, same store
         restored = await fresh.get_or_create("room-1", "u1")

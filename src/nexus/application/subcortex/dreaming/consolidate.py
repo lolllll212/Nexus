@@ -46,6 +46,7 @@ class ConsolidationUseCase:
         max_clusters: int = 5,
         min_cluster_size: int = 3,
         emotional_intensity: float = 0.0,
+        tenant_id: str = "default",
     ) -> ConsolidationResult:
         result = ConsolidationResult()
 
@@ -54,7 +55,7 @@ class ConsolidationUseCase:
         charged: Dict[str, float] = {}
         if self._memory_repo and emotional_intensity > 0.0:
             charged_memories = await self._memory_repo.find_by_emotional_weight(
-                emotional_intensity, limit=200
+                emotional_intensity, limit=200, tenant_id=tenant_id
             )
             for m in charged_memories:
                 intensity = m.emotional_weight.intensity if m.emotional_weight else 0.0
@@ -63,12 +64,12 @@ class ConsolidationUseCase:
 
         # Find the strongest concepts - they anchor the core knowledge graph
         # (an adapter could implement a proper community-detection query)
-        strong_concepts = await self._concept_repo.find_by_label("", limit=200)
+        strong_concepts = await self._concept_repo.find_by_label("", limit=200, tenant_id=tenant_id)
         strong_concepts.sort(key=lambda c: c.strength, reverse=True)
 
         # Build simple clusters around each strong anchor
         for anchor in strong_concepts[:max_clusters]:
-            neighbors = await self._concept_repo.get_connections(anchor.id, min_weight=0.5)
+            neighbors = await self._concept_repo.get_connections(anchor.id, min_weight=0.5, tenant_id=tenant_id)
             if len(neighbors) < min_cluster_size:
                 continue
             cluster = CoreCluster(
@@ -89,7 +90,7 @@ class ConsolidationUseCase:
                         rate *= 1.0 + boost
                         result.emotionally_charged += 1
                     conn.reinforce(rate)
-                    await self._concept_repo.upsert_connection(conn)
+                    await self._concept_repo.upsert_connection(conn, tenant_id=tenant_id)
                     result.connections_strengthened += 1
 
         return result
