@@ -89,6 +89,7 @@ class FakeContainer:
         self.event_bus = FakeEventBus()
         self.embedder = FakeEmbedder()
         self.llm = FakeLLM(script=llm_script)
+        self.background_llm = FakeLLM(script=llm_script)
         self.speech_to_text = FakeSpeechToText()
         self.text_to_speech = FakeTextToSpeech()
         self.sandbox = FakeSandbox()
@@ -119,10 +120,22 @@ class FakeContainer:
             tracer=self.tracer,
             metrics=self.metrics,
         )
-        self.entity_synthesis = EntitySynthesisUseCase(self.llm, self.concept_repo, self.memory_repo, self.event_bus)
-        self.pattern_detection = PatternDetectionUseCase(self.llm, self.memory_repo, self.event_bus)
+        self.background_process_message = ProcessMessageUseCase(
+            llm=self.background_llm,
+            memory_repo=self.memory_repo,
+            concept_repo=self.concept_repo,
+            working_memory=self.working_memory,
+            tools=self.tool_registry,
+            executor=self.executor,
+            event_bus=self.event_bus,
+            session_manager=self.session_manager,
+            tracer=self.tracer,
+            metrics=self.metrics,
+        )
+        self.entity_synthesis = EntitySynthesisUseCase(self.background_llm, self.concept_repo, self.memory_repo, self.event_bus)
+        self.pattern_detection = PatternDetectionUseCase(self.background_llm, self.memory_repo, self.event_bus)
         self.dream_session = DreamSessionUseCase(
-            llm=self.llm,
+            llm=self.background_llm,
             memory_repo=self.memory_repo,
             concept_repo=self.concept_repo,
             working_memory=self.working_memory,
@@ -150,7 +163,7 @@ class FakeContainer:
         self.autonomy_loop = AutonomyLoopUseCase(
             self.goal_repo,
             self.autonomy_policy,
-            CortexStepExecutor(self.process_message),
+            CortexStepExecutor(self.background_process_message),
         )
         self.register_agent = RegisterAgentUseCase(self.agent_repo)
         self.list_agents = ListAgentsUseCase(self.agent_repo)

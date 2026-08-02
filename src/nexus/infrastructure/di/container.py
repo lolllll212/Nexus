@@ -70,6 +70,18 @@ class Config:
     openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
     llm_model: str = field(default_factory=lambda: os.getenv("NEXUS_LLM_MODEL", "gpt-4o"))
     embedding_model: str = field(default_factory=lambda: os.getenv("NEXUS_EMBEDDING_MODEL", "text-embedding-3-large"))
+    # Offline LLM (Ollama / LM Studio): point the OpenAI-compatible adapters at a local base URL.
+    llm_base_url: str | None = field(default_factory=lambda: os.getenv("NEXUS_LLM_BASE_URL"))
+    embedding_base_url: str | None = field(default_factory=lambda: os.getenv("NEXUS_EMBEDDING_BASE_URL"))
+    embedding_dimension: int = field(default_factory=lambda: int(os.getenv("NEXUS_EMBEDDING_DIMENSION", "1536")))
+    # Background LLM (hybrid): a second provider for background loops
+    # (subconscious synthesis, dreaming, autonomy). Leave unset to reuse the
+    # primary LLM. E.g. Groq for live chat, Ollama for the nightly loops.
+    background_llm_api_key: str | None = field(default_factory=lambda: os.getenv("NEXUS_BACKGROUND_LLM_API_KEY"))
+    background_llm_model: str = field(
+        default_factory=lambda: os.getenv("NEXUS_BACKGROUND_LLM_MODEL") or os.getenv("NEXUS_LLM_MODEL", "gpt-4o")
+    )
+    background_llm_base_url: str | None = field(default_factory=lambda: os.getenv("NEXUS_BACKGROUND_LLM_BASE_URL"))
     redis_host: str = field(default_factory=lambda: os.getenv("REDIS_HOST", "localhost"))
     redis_port: int = field(default_factory=lambda: int(os.getenv("REDIS_PORT", "6379")))
     neo4j_uri: str = field(default_factory=lambda: os.getenv("NEO4J_URI", "bolt://localhost:7687"))
@@ -131,6 +143,7 @@ class Container:
         self.event_bus: EventBus = self._build_event_bus()
         self.embedder: EmbeddingProvider = self._build_embedder()
         self.llm: LLMProvider = self._build_llm()
+        self.background_llm: LLMProvider = self._build_background_llm()
         self.speech_to_text: SpeechToText = self._build_speech_to_text()
         self.text_to_speech: TextToSpeech = self._build_text_to_speech()
         self.sandbox: Sandbox = self._build_sandbox()
@@ -162,10 +175,27 @@ class Container:
             tracer=self.tracer,
             metrics=self.metrics,
         )
-        self.entity_synthesis = EntitySynthesisUseCase(self.llm, self.concept_repo, self.memory_repo, self.event_bus)
-        self.pattern_detection = PatternDetectionUseCase(self.llm, self.memory_repo, self.event_bus)
+        # A second cortex instance bound to the background LLM, so autonomous
+        # steps run on the cheap/local provider instead of the interactive one.
+        self.background_process_message = ProcessMessageUseCase(
+            llm=self.background_llm,
+            memory_repo=self.memory_repo,
+            concept_repo=self.concept_repo,
+            working_memory=self.working_memory,
+            tools=self.tool_registry,
+            executor=self.executor,
+            event_bus=self.event_bus,
+            session_manager=self.session_manager,
+            tracer=self.tracer,
+            metrics=self.metrics,
+        )
+        # Subconscious + dreaming loops use the background (local/cheap) LLM.
+        self.entity_synthesis = EntitySynthesisUseCase(
+            self.background_llm, self.concept_repo, self.memory_repo, self.event_bus
+        )
+        self.pattern_detection = PatternDetectionUseCase(self.background_llm, self.memory_repo, self.event_bus)
         self.dream_session = DreamSessionUseCase(
-            llm=self.llm,
+            llm=self.background_llm,
             memory_repo=self.memory_repo,
             concept_repo=self.concept_repo,
             working_memory=self.working_memory,
@@ -201,7 +231,7 @@ class Container:
         self.autonomy_loop = AutonomyLoopUseCase(
             self.goal_repo,
             self.autonomy_policy,
-            CortexStepExecutor(self.process_message),
+            CortexStepExecutor(self.background_process_message),
         )
 
         # ---- Swarm (P4) ----
@@ -306,12 +336,30 @@ class Container:
     def _build_embedder(self) -> EmbeddingProvider:
         from nexus.infrastructure.adapters.embedding.openai_embedder import OpenAIEmbedder
 
-        return OpenAIEmbedder(api_key=self.config.openai_api_key, model=self.config.embedding_model)
+        return OpenAIEmbedder(
+            api_key=self.config.openai_api_key,
+            model=self.config.embedding_model,
+            dimension=self.config.embedding_dimension,
+            base_url=self.config.embedding_base_url,
+        )
 
     def _build_llm(self) -> LLMProvider:
         from nexus.infrastructure.adapters.llm.openai_provider import OpenAIProvider
 
-        return OpenAIProvider(api_key=self.config.openai_api_key, model=self.config.llm_model)
+        return OpenAIProvider(
+            api_key=self.config.openai_api_key,
+            model=self.config.llm_model,
+            base_url=self.config.llm_base_url,
+        )
+
+    def _build_background_llm(self) -> LLMProvider:
+        from nexus.infrastructure.adapters.llm.openai_provider import OpenAIProvider
+
+        return OpenAIProvider(
+            api_key=self.config.background_llm_api_key or self.config.openai_api_key,
+            model=self.config.background_llm_model,
+            base_url=self.config.background_llm_base_url,
+        )
 
     def _build_speech_to_text(self) -> SpeechToText:
         from nexus.infrastructure.adapters.speech.openai_speech import OpenAISpeechToText

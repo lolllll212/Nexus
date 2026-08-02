@@ -2,7 +2,9 @@
 OpenAI LLMProvider adapter.
 
 Swap to Anthropic or Llama by writing a new adapter class that implements
-the same port - the application layer never changes.
+the same port - the application layer never changes. This adapter also speaks
+to any OpenAI-compatible endpoint (Ollama, LM Studio, etc.) by passing an
+optional `base_url` - a pure config change, no new adapter required.
 """
 
 from __future__ import annotations
@@ -16,12 +18,27 @@ from nexus.domain.value_objects.schema import JSONSchema
 
 
 class OpenAIProvider(StreamingLLMProvider):
-    """Implements LLMProvider + StreamingLLMProvider via the OpenAI API."""
+    """Implements LLMProvider + StreamingLLMProvider via an OpenAI-compatible API."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4o", temperature: float = 0.7) -> None:
-        self._api_key = api_key
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "gpt-4o",
+        temperature: float = 0.7,
+        base_url: Optional[str] = None,
+    ) -> None:
+        # Local servers (Ollama / LM Studio) don't check the key; accept any value.
+        self._api_key = api_key or "local-no-key"
         self._model = model
         self._temperature = temperature
+        self._base_url = base_url
+
+    def _client(self):
+        from openai import AsyncOpenAI
+
+        if self._base_url:
+            return AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+        return AsyncOpenAI(api_key=self._api_key)
 
     async def complete(
         self,
@@ -31,9 +48,7 @@ class OpenAIProvider(StreamingLLMProvider):
         tools: Optional[List[Dict]] = None,
     ) -> str:
         try:
-            from openai import AsyncOpenAI
-
-            client = AsyncOpenAI(api_key=self._api_key)
+            client = self._client()
             kwargs: dict = {"model": self._model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
             if tools:
                 kwargs["tools"] = tools
@@ -44,14 +59,15 @@ class OpenAIProvider(StreamingLLMProvider):
 
     async def extract_structured(self, content: str, schema: JSONSchema, instructions: str = "") -> Dict:
         """Force JSON output matching the schema via the structured-output path."""
+        # NOTE: `response_format={"type": "json_object"}` is not reliably
+        # supported by every local model (Ollama / LM Studio). This is a known
+        # limitation to flag, not something to work around in this adapter.
         messages = [
             {"role": "system", "content": instructions + " Return ONLY valid JSON."},
             {"role": "user", "content": content},
         ]
         try:
-            from openai import AsyncOpenAI
-
-            client = AsyncOpenAI(api_key=self._api_key)
+            client = self._client()
             resp = await client.chat.completions.create(
                 model=self._model,
                 messages=messages,
@@ -64,9 +80,7 @@ class OpenAIProvider(StreamingLLMProvider):
 
     async def stream(self, messages: List[Dict[str, str]], temperature: float = 0.7, max_tokens: int = 4096) -> AsyncGenerator[str, None]:
         try:
-            from openai import AsyncOpenAI
-
-            client = AsyncOpenAI(api_key=self._api_key)
+            client = self._client()
             stream = await client.chat.completions.create(
                 model=self._model, messages=messages, temperature=temperature, max_tokens=max_tokens, stream=True
             )
