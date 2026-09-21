@@ -52,19 +52,17 @@ class SwarmAgentExecutor:
         self._tool_registry = tool_registry
 
     async def run_agent(self, agent: Agent, task: str, tenant_id: str) -> str:
-        original_tools = self._process_message._tools
-        try:
-            if agent.tools:
-                self._process_message._tools = _FilteredToolRegistry(
-                    self._tool_registry, set(agent.tools)
-                )
-            result = await self._process_message.execute(
-                user_id=agent.owner_id,
-                message=task,
-                session_id=f"agent:{agent.id}",
-                tenant_id=tenant_id,
-                system_prompt=agent.system_prompt,
+        tools_registry = None
+        if agent.tools:
+            tools_registry = _FilteredToolRegistry(
+                self._tool_registry, set(agent.tools)
             )
-            return result.response
-        finally:
-            self._process_message._tools = original_tools
+        result = await self._process_message.execute(
+            user_id=agent.owner_id,
+            message=task,
+            session_id=f"agent:{agent.id}",
+            tenant_id=tenant_id,
+            system_prompt=agent.system_prompt,
+            tools=tools_registry,
+        )
+        return result.response

@@ -71,6 +71,9 @@ class ConceptRepository(ABC):
     async def get(self, concept_id: str, tenant_id: str = "default") -> Optional[Concept]: ...
 
     @abstractmethod
+    async def get_memories(self, concept_id: str, tenant_id: str = "default") -> List[Memory]: ...
+
+    @abstractmethod
     async def find_by_label(
         self, label: str, limit: int = 10, tenant_id: str = "default"
     ) -> List[Concept]: ...

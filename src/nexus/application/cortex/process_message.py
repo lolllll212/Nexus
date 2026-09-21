@@ -91,6 +91,7 @@ class ProcessMessageUseCase:
         tenant_id: str = "default",
         image_urls: Optional[List[str]] = None,
         system_prompt: Optional[str] = None,
+        tools: Optional[ToolRegistry] = None,
     ) -> MessageResult:
         started = time.perf_counter()
         async with self._tracer.span("process_message", {"user_id": user_id, "tenant_id": tenant_id}):
@@ -107,7 +108,8 @@ class ProcessMessageUseCase:
             # --- 3. Run the ReAct loop (optionally multimodal / persona'd). ---
             thoughts: List[Thought] = []
             tools_used: List[str] = []
-            response = await self._react_loop(conversation, memories, thoughts, tools_used, image_urls, system_prompt)
+            active_tools = tools if tools is not None else self._tools
+            response = await self._react_loop(conversation, memories, thoughts, tools_used, image_urls, system_prompt, active_tools)
 
             # --- 4. Persist as episodic memory. ---
             await self._encode_episodic(conversation, response)
@@ -175,10 +177,17 @@ class ProcessMessageUseCase:
         graph_recalled: List[Memory] = []
         for concept_id in conversation.active_concepts[:5]:
             try:
+                # Retrieve memories linked to connected concepts
+                memories = await self._concept_repo.get_memories(concept_id, tenant_id=tenant)
+                for m in memories:
+                    if len(graph_recalled) >= 3:
+                        break
+                    if m.id not in {gm.id for gm in graph_recalled}:
+                        graph_recalled.append(m)
+                # Strengthen connections
                 for conn in await self._concept_repo.get_connections(concept_id, tenant_id=tenant):
                     if len(graph_recalled) >= 3:
                         break
-                    # Each connection implies a related memory; recall strengthens the synapse
                     related = await self._concept_repo.get(conn.target_id, tenant_id=tenant)
                     if related:
                         await self._concept_repo.upsert_connection(conn.reinforce(), tenant_id=tenant)
@@ -207,9 +216,11 @@ class ProcessMessageUseCase:
         tools_used: List[str],
         image_urls: Optional[List[str]] = None,
         system_prompt: Optional[str] = None,
+        tools: Optional[ToolRegistry] = None,
     ) -> str:
         """Autonomous ReAct: Think -> Act -> Observe -> Repeat until final answer."""
         context = self._build_context(conversation, memories, image_urls, system_prompt)
+        active_tools = tools if tools is not None else self._tools
         iteration = 0
         seen_tools: List[str] = []
         total_tokens = self._estimate_tokens(context)
@@ -259,7 +270,7 @@ class ProcessMessageUseCase:
                 continue
 
             # ACT
-            tool = await self._tools.get(tool_name)
+            tool = await active_tools.get(tool_name)
             if tool is None:
                 context.append({
                     "role": "system",

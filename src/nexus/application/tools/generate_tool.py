@@ -84,6 +84,10 @@ class GenerateToolUseCase:
         for inp, expected in zip(request.input_examples, request.expected_outputs):
             result = await self._sandbox.run(code, inputs=inp, timeout=30)
             if result.get("error") is None:
+                if expected:
+                    actual = result.get("result")
+                    if actual is not None and actual != expected and str(actual) != str(expected):
+                        break
                 passed += 1
             else:
                 break

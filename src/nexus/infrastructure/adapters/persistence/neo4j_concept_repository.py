@@ -72,6 +72,27 @@ class Neo4jConceptRepository(ConceptRepository):
             access_count=node.get("access_count", 0),
         )
 
+    async def get_memories(self, concept_id: str, tenant_id: str = "default") -> List[Memory]:
+        """Retrieve memories linked to a concept via its embeddings/properties."""
+        cypher = """
+        MATCH (c:Concept {id: $id, tenant: $tenant})-[:MENTIONS]->(m:Memory)
+        RETURN m
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, id=concept_id, tenant=tenant_id)
+            records = await result.data()
+        memories = []
+        for r in records:
+            node = r["m"]
+            props = json.loads(node.get("properties", "{}"))
+            memories.append(Memory(
+                id=node["id"],
+                content=node.get("content", ""),
+                memory_type=MemoryType(node.get("memory_type", "semantic")),
+                concepts=props.get("concepts", []),
+            ))
+        return memories
+
     async def find_by_label(self, label: str, limit: int = 10, tenant_id: str = "default") -> List[Concept]:
         cypher = """
         MATCH (c:Concept)

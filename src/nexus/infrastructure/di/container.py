@@ -395,7 +395,7 @@ class Container:
         )
 
     def _build_sandbox(self) -> Sandbox:
-        if self.config.sandbox_backend == "docker":
+        if self.config.sandbox_backend != "subprocess":
             from nexus.infrastructure.adapters.sandbox.docker_sandbox import DockerSandbox
 
             return DockerSandbox()

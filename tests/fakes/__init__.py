@@ -125,6 +125,10 @@ class FakeConceptRepository(ConceptRepository):
             return None
         return concept
 
+    async def get_memories(self, concept_id: str, tenant_id: str = "default") -> List[Memory]:
+        """Return memories linked to concept IDs. Fake returns empty unless concept has memories."""
+        return []
+
     async def find_by_label(self, label: str, limit: int = 10, tenant_id: str = "default") -> List[Concept]:
         return [
             c
@@ -242,7 +246,16 @@ class FakeSandbox(Sandbox):
         self.fail_project: bool = False
 
     async def run(self, code: str, inputs: Dict[str, Any] = None, timeout: int = 30) -> Dict[str, Any]:
-        return {"ok": True, "result": "sandboxed-ok", "duration_ms": 1}
+        inputs = inputs or {}
+        try:
+            ns = {}
+            exec(code, ns)
+            if "solve" in ns and callable(ns["solve"]):
+                result = ns["solve"](inputs)
+                return {"ok": True, "result": result, "duration_ms": 1}
+            return {"ok": True, "result": code[:50], "duration_ms": 1}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "duration_ms": 1}
 
     async def run_project(
         self, files: Dict[str, str], test_command: str = "python -m pytest -q", timeout: int = 120
