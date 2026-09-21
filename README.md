@@ -104,7 +104,7 @@ NEXUS/
 │       └── di/                    #   Container — the only place tech is decided
 ├── tests/
 │   ├── fakes/                     # In-memory adapters (prove the decoupling)
-│   └── unit/                      # 14 tests, run with zero infrastructure
+│   └── unit/                      # Unit tests + architecture guards — zero infrastructure
 ├── config/
 ├── docker-compose.yml             # redis + neo4j + qdrant + cortex + worker + beat
 ├── pyproject.toml
