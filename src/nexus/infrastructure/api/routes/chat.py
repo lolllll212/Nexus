@@ -18,9 +18,11 @@ Multimodal (P3):
 from __future__ import annotations
 
 import base64
+import json
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from nexus.infrastructure.api.dependencies import get_container, require_identity, require_rate_limit
@@ -114,4 +116,44 @@ async def chat(
         memories_recalled=result.memories_recalled,
         thought_count=len(result.thoughts),
         audio=audio,
+    )
+
+
+@router.post("/stream")
+async def chat_stream(
+    req: ChatRequest,
+    identity: Identity = Depends(require_identity),
+    container: Container = Depends(get_container),
+):
+    """SSE streaming endpoint — streams thoughts, tool calls, and tokens in real-time."""
+    if not req.message:
+        raise HTTPException(status_code=422, detail="Provide a message")
+
+    async def event_generator():
+        # Send initial event
+        yield f"data: {json.dumps({'type': 'start', 'session_id': req.session_id})}\n\n"
+
+        try:
+            # Use the streaming LLM provider
+            from nexus.application.cortex.react_prompt import REACT_SYSTEM_PROMPT
+            messages = [
+                {"role": "system", "content": REACT_SYSTEM_PROMPT},
+                {"role": "user", "content": req.message},
+            ]
+
+            async for token in container.background_llm.stream(messages):
+                yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )

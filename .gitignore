@@ -7,11 +7,14 @@
 # ── Python ────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
+*.egg
 .eggs/
 build/
 dist/
 wheels/
+*.whl
 
 # ── Virtual environments ──────────────────────────────────────────────
 .venv/
@@ -24,6 +27,7 @@ env/
 .ruff_cache/
 .coverage
 .coverage.*
+*.cover
 htmlcov/
 coverage.xml
 
@@ -31,9 +35,19 @@ coverage.xml
 celerybeat-schedule
 celerybeat.pid
 
+# ── Logs ──────────────────────────────────────────────────────────────
+logs/
+*.log
+
 # ── Editors & OS ──────────────────────────────────────────────────────
 .idea/
 .vscode/
 *.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
+
+# ── Temp files ────────────────────────────────────────────────────────
+_test_*.py
+*.tmp

@@ -13,7 +13,8 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from nexus.domain.exceptions import (
     AgentNotFoundError,
@@ -126,6 +127,13 @@ def create_app(config: Config | None = None) -> FastAPI:
         if metrics_adapter is None:
             return Response(content="", media_type="text/plain")
         return Response(content=metrics_adapter.render(), media_type="text/plain; version=0.0.4")
+
+    @app.get("/dashboard", tags=["meta"], include_in_schema=False)
+    async def dashboard() -> HTMLResponse:
+        from pathlib import Path
+        dashboard_path = Path(__file__).parent / "static" / "dashboard.html"
+        content = dashboard_path.read_text(encoding="utf-8")
+        return HTMLResponse(content=content)
 
     return app
 

@@ -18,14 +18,22 @@ class ApiKeyAuthenticator(Authenticator):
 
     Key table shape (from NEXUS_API_KEYS JSON / secret):
         {"sk-...": {"user_id": "u1", "tenant_id": "acme", "role": "admin"}}
+
+    Fail-closed: refuses to authenticate when the key table is empty,
+    preventing accidental anonymous access in production.
     """
 
     def __init__(self, keys: Dict[str, Dict]) -> None:
         self._keys = keys or {}
+        self._empty = len(self._keys) == 0
 
     async def authenticate(self, credential: str) -> Identity:
         if not credential:
             raise UnauthorizedError("Missing credentials")
+        if self._empty:
+            raise UnauthorizedError(
+                "No API keys configured. Set NEXUS_API_KEYS in .env to allow access."
+            )
         record = self._keys.get(credential)
         if record is None:
             raise UnauthorizedError("Invalid credentials")

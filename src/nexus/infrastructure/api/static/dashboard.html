@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'SF Mono', 'Fira Code', monospace; background: #0a0a0a; color: #e0e0e0; }
+        .header { padding: 20px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 18px; color: #00ff88; }
+        .header .status { font-size: 12px; color: #666; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; padding: 20px; }
+        .card { background: #111; border: 1px solid #222; border-radius: 8px; padding: 16px; }
+        .card h3 { font-size: 12px; text-transform: uppercase; color: #666; margin-bottom: 12px; }
+        .card .value { font-size: 32px; font-weight: bold; color: #00ff88; }
+        .card .detail { font-size: 11px; color: #444; margin-top: 4px; }
+        .full-width { grid-column: span 3; }
+        .two-col { grid-column: span 2; }
+        .graph { height: 200px; background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #333; font-size: 12px; }
+        .list { max-height: 200px; overflow-y: auto; font-size: 11px; }
+        .list-item { padding: 6px 0; border-bottom: 1px solid #1a1a1a; }
+        .list-item .tag { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-right: 4px; }
+        .tag-tool { background: #1a2a1a; color: #00ff88; }
+        .tag-dream { background: #1a1a2a; color: #8888ff; }
+        .tag-error { background: #2a1a1a; color: #ff4444; }
+        .tag-synapse { background: #2a2a1a; color: #ffff00; }
+        @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .full-width, .two-col { grid-column: span 1; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>NEXUS Brain Dashboard</h1>
+        <div class="status" id="status">Loading...</div>
+    </div>
+    <div class="grid">
+        <div class="card">
+            <h3>Messages Processed</h3>
+            <div class="value" id="messages">-</div>
+            <div class="detail">Total chat messages</div>
+        </div>
+        <div class="card">
+            <h3>Tools Executed</h3>
+            <div class="value" id="tools">-</div>
+            <div class="detail">Tool invocations</div>
+        </div>
+        <div class="card">
+            <h3>Dream Cycles</h3>
+            <div class="value" id="dreams">-</div>
+            <div class="detail">Nightly consolidations</div>
+        </div>
+        <div class="card two-col">
+            <h3>Active Synapses</h3>
+            <div class="graph" id="synapse-graph">Synaptic graph visualization (coming soon)</div>
+        </div>
+        <div class="card">
+            <h3>Recent Activity</h3>
+            <div class="list" id="activity">
+                <div class="list-item"><span class="tag tag-tool">tool</span> Dashboard loaded</div>
+            </div>
+        </div>
+        <div class="card full-width">
+            <h3>Tool Registry</h3>
+            <div class="list" id="tools-list"></div>
+        </div>
+        <div class="card two-col">
+            <h3>Dream Log</h3>
+            <div class="list" id="dream-log"></div>
+        </div>
+        <div class="card">
+            <h3>System Info</h3>
+            <div class="list" id="system-info"></div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchMetrics() {
+            try {
+                const resp = await fetch('/metrics');
+                const text = await resp.text();
+                const lines = text.split('\n');
+                const metrics = {};
+                for (const line of lines) {
+                    if (line.startsWith('#') || !line.trim()) continue;
+                    const match = line.match(/^(\S+?)(?:\{[^}]*\})?\s+(.+)$/);
+                    if (match) metrics[match[1]] = parseFloat(match[2]);
+                }
+                document.getElementById('messages').textContent = metrics['chat_messages_total'] || '0';
+                document.getElementById('tools').textContent = metrics['tool_executions_total'] || '0';
+                document.getElementById('dreams').textContent = metrics['dream_cycles_total'] || '0';
+                document.getElementById('status').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+            } catch (e) {
+                document.getElementById('status').textContent = 'Error fetching metrics';
+            }
+        }
+
+        async function fetchTools() {
+            try {
+                const resp = await fetch('/v1/tools', { headers: { 'Authorization': 'Bearer test-key-1234' } });
+                if (resp.ok) {
+                    const tools = await resp.json();
+                    const list = document.getElementById('tools-list');
+                    list.innerHTML = tools.map(t => `<div class="list-item"><span class="tag tag-tool">${t.name}</span> ${t.description}</div>`).join('');
+                }
+            } catch (e) {}
+        }
+
+        fetchMetrics();
+        fetchTools();
+        setInterval(fetchMetrics, 10000);
+    </script>
+</body>
+</html>
