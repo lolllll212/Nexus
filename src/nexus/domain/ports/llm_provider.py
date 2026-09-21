@@ -21,7 +21,7 @@ class LLMProvider(ABC):
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
-        max_tokens: int = 4096,
+        max_tokens: int | None = None,
         tools: Optional[List[Dict]] = None,
     ) -> str: ...
 
@@ -42,7 +42,7 @@ class StreamingLLMProvider(LLMProvider):
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
-        max_tokens: int = 4096,
+        max_tokens: int | None = None,
     ) -> AsyncGenerator[str, None]: ...
 
 

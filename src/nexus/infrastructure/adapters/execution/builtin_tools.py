@@ -23,7 +23,6 @@ class BuiltinToolRegistry(ToolRegistry):
         self._index[tool.name] = tool.id
 
     async def get(self, tool_id: str) -> Optional[Tool]:
-        # Allow lookup by either id or name
         return self._tools.get(tool_id) or self._tools.get(self._index.get(tool_id, ""))
 
     async def search(self, query: str, limit: int = 5) -> List[Tool]:
@@ -43,8 +42,10 @@ class BuiltinToolRegistry(ToolRegistry):
 
 
 def default_builtin_tools() -> List[Tool]:
-    """Seed tools NEXUS can always use."""
-    return [
+    """Seed tools NEXUS can always use — core + extended."""
+    from nexus.infrastructure.adapters.execution.extended_tools import extended_builtin_tools
+
+    core = [
         Tool(
             id="web_search",
             name="web_search",
@@ -70,3 +71,4 @@ def default_builtin_tools() -> List[Tool]:
             status=ToolStatus.READY,
         ),
     ]
+    return core + extended_builtin_tools()

@@ -69,6 +69,7 @@ class Config:
     """Runtime configuration loaded from env vars."""
     openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
     llm_model: str = field(default_factory=lambda: os.getenv("NEXUS_LLM_MODEL", "gpt-4o"))
+    llm_max_tokens: int = field(default_factory=lambda: int(os.getenv("NEXUS_LLM_MAX_TOKENS", "8192")))
     embedding_model: str = field(default_factory=lambda: os.getenv("NEXUS_EMBEDDING_MODEL", "text-embedding-3-large"))
     # Offline LLM (Ollama / LM Studio): point the OpenAI-compatible adapters at a local base URL.
     llm_base_url: str | None = field(default_factory=lambda: os.getenv("NEXUS_LLM_BASE_URL"))
@@ -121,6 +122,8 @@ class Config:
     tts_voice: str = field(default_factory=lambda: os.getenv("NEXUS_TTS_VOICE", "alloy"))
     # ---- Swarm (P4) ----
     swarm_max_workers: int = field(default_factory=lambda: int(os.getenv("NEXUS_SWARM_MAX_WORKERS", "5")))
+    # ---- Plugins ----
+    plugins_dir: str = field(default_factory=lambda: os.getenv("NEXUS_PLUGINS_DIR", "plugins"))
 
 
 class Container:
@@ -148,9 +151,9 @@ class Container:
         self.text_to_speech: TextToSpeech = self._build_text_to_speech()
         self.sandbox: Sandbox = self._build_sandbox()
         self.memory_repo: MemoryRepository = self._build_memory_repo()
+        self.synapse: SynapseConfig = SynapseConfig()
         self.concept_repo: ConceptRepository = self._build_concept_repo()
         self.working_memory: ShortTermMemory = self._build_working_memory()
-        self.synapse: SynapseConfig = SynapseConfig()
         self.tool_registry: ToolRegistry = self._build_tool_registry()
         self.deployer: DeploymentProvider | None = self._build_deployer()
         self.executor: ToolExecutor = self._build_executor()
@@ -350,6 +353,7 @@ class Container:
             api_key=self.config.openai_api_key,
             model=self.config.llm_model,
             base_url=self.config.llm_base_url,
+            default_max_tokens=self.config.llm_max_tokens,
         )
 
     def _build_background_llm(self) -> LLMProvider:
@@ -431,13 +435,21 @@ class Container:
 
     def _build_executor(self) -> ToolExecutor:
         from nexus.infrastructure.adapters.execution.registry_tool_executor import RegistryBackedToolExecutor
+        from nexus.infrastructure.adapters.execution.extended_tools import EXTENDED_HANDLERS
+        from nexus.infrastructure.adapters.plugins.loader import PluginLoader
 
-        builtin_handlers = {
-            "calculator": lambda p: {"result": _safe_eval(p.get("expression", ""))},
-            "run_python": lambda p: self.sandbox.run(p.get("code", "")),
-            "web_search": lambda p: {"results": [], "query": p.get("query", "")},
-        }
-        return RegistryBackedToolExecutor(self.tool_registry, self.sandbox, builtin_handlers)
+        # Start with extended builtin handlers
+        all_handlers = dict(EXTENDED_HANDLERS)
+
+        # Load plugins and merge their handlers
+        self.plugin_loader = PluginLoader(self.config.plugins_dir, self.tool_registry)
+        plugin_results = self.plugin_loader.load_all()
+        for info in plugin_results:
+            if not info.error:
+                all_handlers.update(self.plugin_loader.handlers)
+        self._plugin_infos = plugin_results
+
+        return RegistryBackedToolExecutor(self.tool_registry, self.sandbox, all_handlers)
 
     def _build_column_registry(self) -> CorticalColumnRegistry:
         from nexus.infrastructure.adapters.cognition import InMemoryCorticalColumnRegistry

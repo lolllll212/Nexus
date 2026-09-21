@@ -34,6 +34,7 @@ from nexus.domain.ports.memory_repository import ConceptRepository, MemoryReposi
 from nexus.domain.ports.execution import ToolExecutor
 from nexus.domain.ports.tool_registry import ToolRegistry
 from nexus.domain.exceptions import InvalidToolCallError, LLMUnavailableError
+from nexus.application.cortex.react_prompt import REACT_SYSTEM_PROMPT
 
 
 @dataclass
@@ -52,7 +53,7 @@ class ProcessMessageUseCase:
     All dependencies are injected ports - swap any adapter freely.
     """
 
-    MAX_REACT_ITERATIONS = 5
+    MAX_REACT_ITERATIONS = 15
     MEMORY_RECALL_LIMIT = 8
 
     def __init__(
@@ -205,9 +206,10 @@ class ProcessMessageUseCase:
         image_urls: Optional[List[str]] = None,
         system_prompt: Optional[str] = None,
     ) -> str:
-        """Reason -> Act -> Observe -> Repeat, until a final answer is reached."""
+        """Autonomous ReAct: Think -> Act -> Observe -> Repeat until final answer."""
         context = self._build_context(conversation, memories, image_urls, system_prompt)
         iteration = 0
+        seen_tools: List[str] = []
 
         while iteration < self.MAX_REACT_ITERATIONS:
             iteration += 1
@@ -224,31 +226,52 @@ class ProcessMessageUseCase:
 
             tool_call = self._parse_tool_call(reasoning)
             if tool_call is None:
-                # Model was still thinking - feed reasoning back and continue
+                # Model was still thinking — feed reasoning back and nudge it to act
                 context.append({"role": "assistant", "content": reasoning})
+                context.append({
+                    "role": "system",
+                    "content": (
+                        "You are reasoning. Now either call a tool using TOOL_CALL format "
+                        "or give FINAL ANSWER if you have enough information."
+                    ),
+                })
+                continue
+
+            tool_name = tool_call.get("tool_id", "unknown")
+
+            # Prevent loops — if same tool called 3x in a row, force final answer
+            seen_tools.append(tool_name)
+            if len(seen_tools) >= 3 and seen_tools[-3:] == [tool_name] * 3:
+                context.append({
+                    "role": "system",
+                    "content": f"You've called {tool_name} three times in a row. You have enough information. Give FINAL ANSWER now.",
+                })
                 continue
 
             # ACT
-            tool = await self._tools.get(tool_call["tool_id"])
+            tool = await self._tools.get(tool_name)
             if tool is None:
-                context.append({"role": "system", "content": f"Tool '{tool_call['tool_id']}' does not exist."})
+                context.append({
+                    "role": "system",
+                    "content": f"Tool '{tool_name}' does not exist. Available tools: read_file, list_directory, grep, run_python, calculator, diff_text, web_fetch, git_info. Pick one of these.",
+                })
                 continue
 
             tools_used.append(tool.name)
             succeeded = False
             try:
-                # OBSERVE
-                result = await self._executor.execute(tool.id, tool_call["params"])
+                result = await self._executor.execute(tool.id, tool_call.get("params", {}))
                 succeeded = True
-                observation = f"Tool {tool.name} returned: {result}"
+                observation = f"[OBSERVATION] {tool.name} returned:\n{result}"
             except Exception as exc:
-                observation = f"Tool {tool.name} failed: {exc}"
+                observation = f"[OBSERVATION] {tool.name} failed: {exc}. Try a different approach."
             tool.record_use(succeeded)
 
             thoughts.append(Thought(content=observation, thought_type=ThoughtType.OBSERVATION))
             context.append({"role": "system", "content": observation})
 
-        return "I've reached my reasoning limit. Here's my best synthesis: " + context[-1]["content"]
+        # Final fallback — synthesize what we have
+        return "I've reached my reasoning limit. Here's my best synthesis: " + self._extract_last_content(context)
 
     async def _encode_episodic(self, conversation: Conversation, response: str) -> None:
         """Persist the raw exchange as episodic memory for tonight's dreaming."""
@@ -291,16 +314,31 @@ class ProcessMessageUseCase:
         system_prompt: Optional[str] = None,
     ) -> List[dict]:
         ctx = conversation.to_llm_context()
-        # Cross-session personality fluidity: the cortex modulates tone from the
-        # room's running emotional weight.
+
+        # Build system messages in order of priority
+        sys_msgs: List[dict] = []
+
+        # 1. Agent/persona prompt — primary directive, always first
+        if system_prompt:
+            sys_msgs.append({"role": "system", "content": system_prompt})
+
+        # 2. Tone from emotional state
         tone = conversation.emotional_state.tone_directive()
         if tone:
-            ctx.insert(0, {"role": "system", "content": tone})
+            sys_msgs.append({"role": "system", "content": tone})
+
+        # 3. Recalled memories
         if memories:
-            ctx.insert(0, {"role": "system", "content": self._format_memories(memories)})
-        # Swarm persona (P4): an agent's system prompt is the top-most directive.
-        if system_prompt:
-            ctx.insert(0, {"role": "system", "content": system_prompt})
+            memory_block = "Relevant memories from past interactions:\n" + "\n".join(f"- {m.content}" for m in memories)
+            sys_msgs.append({"role": "system", "content": memory_block})
+
+        # 4. ReAct framework prompt — reasoning rules, goes last among system msgs
+        sys_msgs.append({"role": "system", "content": REACT_SYSTEM_PROMPT})
+
+        # Insert all system messages before the conversation
+        for i, msg in enumerate(sys_msgs):
+            ctx.insert(i, msg)
+
         if image_urls:
             ctx = self._attach_images(ctx, image_urls)
         return ctx
@@ -321,35 +359,70 @@ class ProcessMessageUseCase:
         return context
 
     def _format_memories(self, memories: List[Memory]) -> str:
+        """Legacy method — memories now injected in _build_context."""
         return "Relevant memories:\n" + "\n".join(f"- {m.content}" for m in memories)
 
     def _is_final_answer(self, reasoning: str) -> bool:
-        return "FINAL ANSWER:" in reasoning.upper() or "\nANSWER:" in reasoning.upper()
+        upper = reasoning.upper()
+        return "FINAL ANSWER:" in upper or "\nANSWER:" in upper or "ANSWER:" in upper
 
     def _extract_answer(self, reasoning: str) -> str:
-        marker = "FINAL ANSWER:"
-        if marker in reasoning.upper():
-            idx = reasoning.upper().index(marker)
-            return reasoning[idx + len(marker):].strip()
-        marker = "\nANSWER:"
-        if marker.upper() in reasoning.upper():
-            idx = reasoning.upper().index(marker.upper())
-            return reasoning[idx + len(marker):].strip()
+        for marker in ["FINAL ANSWER:", "ANSWER:", "\nANSWER:"]:
+            upper = reasoning.upper()
+            marker_upper = marker.upper()
+            if marker_upper in upper:
+                idx = upper.index(marker_upper)
+                return reasoning[idx + len(marker):].strip()
         return reasoning.strip()
+
+    def _extract_last_content(self, context: List[dict]) -> str:
+        """Get the last meaningful content from context."""
+        for msg in reversed(context):
+            content = msg.get("content", "")
+            if content and msg.get("role") != "system":
+                return content
+        return context[-1]["content"] if context else ""
 
     def _parse_tool_call(self, reasoning: str):
         """
-        Parse a tool invocation. Expects a JSON block in the reasoning:
+        Parse a tool invocation. Handles multiple formats:
             TOOL_CALL: {"tool_id": "...", "params": {...}}
+            TOOL_CALL: {"tool": "...", "args": {...}}
         """
-        marker = "TOOL_CALL:"
-        if marker not in reasoning.upper():
-            return None
         import json
 
-        idx = reasoning.upper().index(marker)
-        snippet = reasoning[idx + len(marker):].strip()
+        # Find TOOL_CALL: marker (case-insensitive)
+        marker = "TOOL_CALL:"
+        upper = reasoning.upper()
+        marker_idx = upper.find(marker)
+        if marker_idx == -1:
+            return None
+
+        # Extract the JSON blob — find matching closing brace
+        start = marker_idx + len(marker)
+        snippet = reasoning[start:].strip()
+
+        # Find the end of the JSON object
+        depth = 0
+        end = 0
+        for i, ch in enumerate(snippet):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+
+        if end == 0:
+            return None
+
+        json_str = snippet[:end]
         try:
-            return json.loads(snippet)
+            parsed = json.loads(json_str)
+            # Normalize: accept "tool" or "tool_id", "args" or "params"
+            tool_id = parsed.get("tool_id") or parsed.get("tool") or ""
+            params = parsed.get("params") or parsed.get("args") or {}
+            return {"tool_id": tool_id, "params": params}
         except json.JSONDecodeError:
-            raise InvalidToolCallError(f"Malformed tool call: {snippet[:100]}")
+            raise InvalidToolCallError(f"Malformed tool call: {json_str[:100]}")

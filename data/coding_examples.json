@@ -1,0 +1,293 @@
+[
+  {
+    "id": "5205ab80",
+    "task": "Write a binary search function",
+    "solution": "def binary_search(arr, target):\n    \"\"\"Find target in sorted array. Returns index or -1.\"\"\"\n    lo, hi = 0, len(arr) - 1\n    while lo <= hi:\n        mid = (lo + hi) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            lo = mid + 1\n        else:\n            hi = mid - 1\n    return -1",
+    "language": "python",
+    "category": "algorithms",
+    "tags": [
+      "search",
+      "array",
+      "divide-and-conquer"
+    ],
+    "explanation": "Divide search space in half each step. O(log n) time, O(1) space.",
+    "test_cases": "assert binary_search([1, 2, 3, 4, 5], 3) == 2\nassert binary_search([1, 2, 3, 4, 5], 6) == -1\nassert binary_search([], 1) == -1\nassert binary_search([1], 1) == 0",
+    "difficulty": "easy",
+    "created_at": "2026-09-20T08:07:44.756902+00:00",
+    "use_count": 0,
+    "success_rate": 1.0
+  },
+  {
+    "id": "9e098b75",
+    "task": "Implement merge sort",
+    "solution": "def merge_sort(arr):\n    \"\"\"Sort array using merge sort. O(n log n) time.\"\"\"\n    if len(arr) <= 1:\n        return arr\n    mid = len(arr) // 2\n    left = merge_sort(arr[:mid])\n    right = merge_sort(arr[mid:])\n    return merge(left, right)\n\ndef merge(left, right):\n    result = []\n    i = j = 0\n    while i < len(left) and j < len(right):\n        if left[i] <= right[j]:\n            result.append(left[i])\n            i += 1\n        else:\n            result.append(right[j])\n            j += 1\n    result.extend(left[i:])\n    result.extend(right[j:])\n    return result",
+    "language": "python",
+    "category": "algorithms",
+    "tags": [
+      "sort",
+      "divide-and-conquer",
+      "recursive"
+    ],
+    "explanation": "Recursively split array in half, merge sorted halves. Stable sort.",
+    "test_cases": "assert merge_sort([3, 1, 4, 1, 5, 9]) == [1, 1, 3, 4, 5, 9]\nassert merge_sort([]) == []\nassert merge_sort([1]) == [1]",
+    "difficulty": "medium",
+    "created_at": "2026-09-20T08:07:44.756926+00:00",
+    "use_count": 0,
+    "success_rate": 1.0
+  },
+  {
+    "id": "722ad65f",
+    "task": "Implement a hash map from scratch",
+    "solution": "class HashMap:\n    \"\"\"Simple hash map using separate chaining.\"\"\"\n    def __init__(self, capacity=16):\n        self.capacity = capacity\n        self.size = 0\n        self.buckets = [[] for _ in range(capacity)]\n\n    def _hash(self, key):\n        return hash(key) % self.capacity\n\n    def put(self, key, value):\n        idx = self._hash(key)\n        bucket = self.buckets[idx]\n        for i, (k, v) in enumerate(bucket):\n            if k == key:\n                bucket[i] = (key, value)\n                return\n        bucket.append((key, value))\n        self.size += 1\n        if self.size > self.capacity * 0.75:\n            self._resize()\n\n    def get(self, key, default=None):\n        idx = self._hash(key)\n        for k, v in self.buckets[idx]:\n            if k == key:\n                return v\n        return default\n\n    def _resize(self):\n        old = self.buckets\n        self.capacity *= 2\n        self.buckets = [[] for _ in range(self.capacity)]\n        self.size = 0\n        for bucket in old:\n            for k, v in bucket:\n                self.put(k, v)",
+    "language": "python",
+    "category": "data-structures",
+    "tags": [
+      "hashmap",
+      "hash-table",
+      "data-structure"
+    ],
+    "explanation": "Array of buckets (linked lists). Hash key to bucket index. Resize at 75% load.",
+    "test_cases": "hm = HashMap()\nhm.put(\"a\", 1)\nhm.put(\"b\", 2)\nassert hm.get(\"a\") == 1\nassert hm.get(\"b\") == 2\nassert hm.get(\"c\") is None",
+    "difficulty": "hard",
+    "created_at": "2026-09-20T08:07:44.756933+00:00",
+    "use_count": 0,
+    "success_rate": 1.0
+  },
+  {
+    "id": "b559f5b4",
+    "task": "Implement a stack with O(1) push, pop, and get_min",
+    "solution": "class MinStack:\n    \"\"\"Stack that tracks minimum element in O(1).\"\"\"\n    def __init__(self):\n        self.stack = []\n        self.min_stack = []\n\n    def push(self, val):\n        self.stack.append(val)\n        if not self.min_stack or val <= self.min_stack[-1]:\n            self.min_stack.append(val)\n\n    def pop(self):\n        if not self.stack:\n            raise IndexError(\"pop from empty stack\")\n        val = self.stack.pop()\n        if val == self.min_stack[-1]:\n            self.min_stack.pop()\n        return val\n\n    def get_min(self):\n        if not self.min_stack:\n            raise IndexError(\"stack is empty\")\n        return self.min_stack[-1]\n\n    def peek(self):\n        return self.stack[-1] if self.stack else None\n\n    def is_empty(self):\n        return len(self.stack) == 0",
+    "language": "python",
+    "category": "data-structures",
+    "tags": [
+      "stack",
+      "min-stack",
+      "data-structure"
+    ],
+    "explanation": "Parallel min-stack mirrors the main stack. Push to min-stack only when value <= current min.",
+    "test_cases": "s = MinStack()\ns.push(3); s.push(1); s.push(4)\nassert s.get_min() == 1\ns.pop()\nassert s.get_min() == 1\ns.pop()\nassert s.get_min() == 3",
+    "difficulty": "medium",
+    "created_at": "2026-09-20T08:07:44.756939+00:00",
+    "use_count": 0,
+    "success_rate": 1.0
+  },
+  {
+    "id": "066fa230",
+    "task": "Implement a LRU cache",
+    "solution": "from collections import OrderedDict\n\nclass LRUCache:\n    \"\"\"Least Recently Used cache with O(1) get/put.\"\"\"\n    def __init__(self, capacity):\n        self.capacity = capacity\n        self.cache = OrderedDict()\n\n    def get(self, key):\n        if key not in self.cache:\n            return -1\n        self.cache.move_to_end(key)\n        return self.cache[key]\n\n    def put(self, key, value):\n        if key in self.cache:\n            self.cache.move_to_end(key)\n        self.cache[key] = value\n        if len(self.cache) > self.capacity:\n            self.cache.popitem(last=False)",
+    "language": "python",
+    "category": "data-structures",
+    "tags": [
+      "cache",
+      "lru",
+      "ordered-dict"
+    ],
+    "explanation": "OrderedDict with move_to_end. Evict oldest when over capacity.",
+    "test_cases": "c = LRUCache(2)\nc.put(1, 1); c.put(2, 2)\nassert c.get(1) == 1\nc.put(3, 3)  # evicts key 2\nassert c.get(2) == -1",
+    "difficulty": "medium",
+    "created_at": "2026-09-20T08:07:44.756944+00:00",
+    "use_count": 0,
+    "success_rate": 1.0
+  },
+  {
+    "id": "1f7d5a4f",
+    "task": "Check if a string is a valid palindrome",
+    "solution": "def is_palindrome(s):\n    \"\"\"Check palindrome ignoring non-alphanumeric chars and case.\"\"\"\n    cleaned = ''.join(c.lower() for c in s if c.isalnum())\n    return cleaned == cleaned[::-1]",
+    "language": "python",
+    "category": "strings",
+    "tags": [
+      "palindrome",
+      "string",
+      "two-pointers"
+    ],
+    "explanation": "Clean string, compare with reverse. Two-pointer approach is more efficient.",
+    "test_cases": "assert is_palindrome(\"A man, a plan, a canal: Panama\") == True\nassert is_palindrome(\"race a car\") == False\nassert is_palindrome(\"\") == True",
+    "difficulty": "easy",
+    "created_at": "2026-09-20T08:07:44.756949+00:00",
+    "use_count": 0,
+    "success_rate": 1.0
+  },
+  {
+    "id": "decf7cc7",
+    "task": "Find the longest common substring between two strings",
+    "solution": "def longest_common_substring(s1, s2):\n    \"\"\"Find longest common substring using dynamic programming.\"\"\"\n    m, n = len(s1), len(s2)\n    dp = [[0] * (n + 1) for _ in range(m + 1)]\n    max_len = 0\n    end_pos = 0\n    for i in range(1, m + 1):\n        for j in range(1, n + 1):\n            if s1[i-1] == s2[j-1]:\n                dp[i][j] = dp[i-1][j-1] + 1\n                if dp[i][j] > max_len:\n                    max_len = dp[i][j]\n                    end_pos = i\n    return s1[end_pos - max_len:end_pos]",
+    "language": "python",
+    "category": "strings",
+    "tags": [
+      "substring",
+      "dynamic-programming",
+      "dp"
+    ],
+    "explanation": "2D DP table. dp[i][j] = length of common substring ending at s1[i-1], s2[j-1].",
+    "test_cases": "assert longest_common_substring(\"abcdef\", \"zbcdf\") == \"bcd\"\nassert longest_common_substring(\"abc\", \"def\") == \"\"\nassert longest_common_substring(\"abc\", \"abc\") == \"abc",
+    "difficulty": "medium",
+    "created_at": "2026-09-20T08:07:44.756954+00:00",
+    "use_count": 0,
+    "success_rate": 1.0
+  },
+  {
+    "id": "380c7933",
+    "task": "Implement a binary search tree with insert, search, and in-order traversal",
+    "solution": "class TreeNode:\n    def __init__(self, val=0, left=None, right=None):\n        self.val = val\n        self.left = left\n        self.right = right\n\nclass BST:\n    def __init__(self):\n        self.root = None\n\n    def insert(self, val):\n        self.root = self._insert(self.root, val)\n\n    def _insert(self, node, val):\n        if not node:\n            return TreeNode(val)\n        if val < node.val:\n            node.left = self._insert(node.left, val)\n        elif val > node.val:\n            node.right = self._insert(node.right, val)\n        return node\n\n    def search(self, val):\n        return self._search(self.root, val)\n\n    def _search(self, node, val):\n        if not node or node.val == val:\n            return node\n        if val < node.val:\n            return self._search(node.left, val)\n        return self._search(node.right, val)\n\n    def inorder(self):\n        result = []\n        self._inorder(self.root, result)\n        return result\n\n    def _inorder(self, node, result):\n        if node:\n            self._inorder(node.left, result)\n            result.append(node.val)\n            self._inorder(node.right, result)",
+    "language": "python",
+    "category": "trees",
+    "tags": [
+      "bst",
+      "binary-tree",
+      "tree"
+    ],
+    "explanation": "Recursive insert/search. In-order traversal gives sorted order.",
+    "test_cases": "bst = BST()\nfor v in [5, 3, 7, 1, 4]:\n    bst.insert(v)\nassert bst.inorder() == [1, 3, 4, 5, 7]\nassert bst.search(4).val == 4\nassert bst.search(8) is None",
+    "difficulty": "medium",
+    "created_at": "2026-09-20T08:07:44.756959+00:00",
+    "use_count": 0,
+    "success_rate": 1.0
+  },
+  {
+    "id": "9eff928b",
+    "task": "Implement BFS and DFS for a graph",
+    "solution": "from collections import defaultdict, deque\n\nclass Graph:\n    def __init__(self):\n        self.adj = defaultdict(list)\n\n    def add_edge(self, u, v):\n        self.adj[u].append(v)\n        self.adj[v].append(u)\n\n    def bfs(self, start):\n        visited = set([start])\n        queue = deque([start])\n        order = []\n        while queue:\n            node = queue.popleft()\n            order.append(node)\n            for neighbor in self.adj[node]:\n                if neighbor not in visited:\n                    visited.add(neighbor)\n                    queue.append(neighbor)\n        return order\n\n    def dfs(self, start):\n        visited = set()\n        order = []\n        def _dfs(node):\n            visited.add(node)\n            order.append(node)\n            for neighbor in self.adj[node]:\n                if neighbor not in visited:\n                    _dfs(neighbor)\n        _dfs(start)\n        return order",
+    "language": "python",
+    "category": "graphs",
+    "tags": [
+      "bfs",
+      "dfs",
+      "graph",
+      "traversal"
+    ],
+    "explanation": "BFS uses queue (level-order). DFS uses stack/recursion (depth-first).",
+    "test_cases": "g = Graph()\nfor u, v in [(0,1),(0,2),(1,3),(2,3)]:\n    g.add_edge(u, v)\nassert 0 in g.bfs(0)\nassert 0 in g.dfs(0)",
+    "difficulty": "medium",
+    "created_at": "2026-09-20T08:07:44.756963+00:00",
+    "use_count": 0,
+    "success_rate": 1.0
+  },
+  {
+    "id": "52b951c6",
+    "task": "Solve the coin change problem",
+    "solution": "def coin_change(coins, amount):\n    \"\"\"Find minimum coins to make amount. Returns -1 if impossible.\"\"\"\n    dp = [float('inf')] * (amount + 1)\n    dp[0] = 0\n    for i in range(1, amount + 1):\n        for coin in coins:\n            if coin <= i and dp[i - coin] + 1 < dp[i]:\n                dp[i] = dp[i - coin] + 1\n    return dp[amount] if dp[amount] != float('inf') else -1",
+    "language": "python",
+    "category": "dynamic-programming",
+    "tags": [
+      "dp",
+      "coin-change",
+      "optimization"
+    ],
+    "explanation": "Bottom-up DP. dp[i] = min coins to make amount i. Try each coin.",
+    "test_cases": "assert coin_change([1, 5, 10, 25], 30) == 2\nassert coin_change([2], 3) == -1\nassert coin_change([1], 0) == 0",
+    "difficulty": "medium",
+    "created_at": "2026-09-20T08:07:44.756968+00:00",
+    "use_count": 0,
+    "success_rate": 1.0
+  },
+  {
+    "id": "3954270b",
+    "task": "Find the longest increasing subsequence",
+    "solution": "def longest_increasing_subsequence(arr):\n    \"\"\"Find length of LIS using patience sorting. O(n log n).\"\"\"\n    import bisect\n    tails = []\n    for num in arr:\n        pos = bisect.bisect_left(tails, num)\n        if pos == len(tails):\n            tails.append(num)\n        else:\n            tails[pos] = num\n    return len(tails)",
+    "language": "python",
+    "category": "dynamic-programming",
+    "tags": [
+      "dp",
+      "lis",
+      "binary-search",
+      "patience-sorting"
+    ],
+    "explanation": "Maintain tails array where tails[i] = smallest tail of all increasing subsequences of length i+1.",
+    "test_cases": "assert longest_increasing_subsequence([10, 9, 2, 5, 3, 7, 101, 18]) == 4\nassert longest_increasing_subsequence([0, 1, 0, 3, 2, 3]) == 4\nassert longest_increasing_subsequence([7, 7, 7, 7]) == 1",
+    "difficulty": "hard",
+    "created_at": "2026-09-20T08:07:44.756972+00:00",
+    "use_count": 0,
+    "success_rate": 1.0
+  },
+  {
+    "id": "b8bb0e6d",
+    "task": "Implement a rate limiter using token bucket algorithm",
+    "solution": "import time\n\nclass TokenBucket:\n    \"\"\"Token bucket rate limiter.\"\"\"\n    def __init__(self, capacity, refill_rate):\n        self.capacity = capacity\n        self.tokens = capacity\n        self.refill_rate = refill_rate  # tokens per second\n        self.last_refill = time.monotonic()\n\n    def _refill(self):\n        now = time.monotonic()\n        elapsed = now - self.last_refill\n        self.tokens = min(self.capacity, self.tokens + elapsed * self.refill_rate)\n        self.last_refill = now\n\n    def allow(self):\n        self._refill()\n        if self.tokens >= 1:\n            self.tokens -= 1\n            return True\n        return False",
+    "language": "python",
+    "category": "system-design",
+    "tags": [
+      "rate-limiter",
+      "token-bucket",
+      "concurrency"
+    ],
+    "explanation": "Tokens refill at constant rate. Each request consumes one token. Bucket has max capacity.",
+    "test_cases": "b = TokenBucket(5, 10)\nassert b.allow() == True\nfor _ in range(4):\n    b.allow()\nassert b.allow() == False  # bucket empty",
+    "difficulty": "medium",
+    "created_at": "2026-09-20T08:07:44.756977+00:00",
+    "use_count": 0,
+    "success_rate": 1.0
+  },
+  {
+    "id": "9f8273f1",
+    "task": "Write a Python script to find large files in a directory",
+    "solution": "import os\nfrom pathlib import Path\n\ndef find_large_files(directory, min_size_mb=10):\n    \"\"\"Find files larger than min_size_mb in directory.\"\"\"\n    results = []\n    for path in Path(directory).rglob(\"*\"):\n        if path.is_file():\n            size_mb = path.stat().st_size / (1024 * 1024)\n            if size_mb >= min_size_mb:\n                results.append((path, size_mb))\n    results.sort(key=lambda x: -x[1])\n    return results\n\nif __name__ == \"__main__\":\n    import sys\n    directory = sys.argv[1] if len(sys.argv) > 1 else \".\"\n    for path, size in find_large_files(directory):\n        print(f\"{size:8.1f} MB  {path}\")",
+    "language": "python",
+    "category": "devops",
+    "tags": [
+      "file-system",
+      "cli",
+      "utilities"
+    ],
+    "explanation": "Walk directory tree, check file sizes, sort by size descending.",
+    "test_cases": "from pathlib import Path\nPath(\"_test_big.txt\").write_text(\"x\" * 10 * 1024 * 1024)\nresults = find_large_files(\".\", min_size_mb=5)\nassert len(results) >= 1\nPath(\"_test_big.txt\").unlink()",
+    "difficulty": "easy",
+    "created_at": "2026-09-20T08:07:44.756981+00:00",
+    "use_count": 0,
+    "success_rate": 1.0
+  },
+  {
+    "id": "0c1f4c7c",
+    "task": "Write comprehensive unit tests for a function",
+    "solution": "import pytest\n\ndef add(a, b):\n    \"\"\"Add two numbers.\"\"\"\n    return a + b\n\nclass TestAdd:\n    \"\"\"Comprehensive tests for the add function.\"\"\"\n\n    def test_positive_integers(self):\n        assert add(2, 3) == 5\n\n    def test_negative_integers(self):\n        assert add(-1, -1) == -2\n\n    def test_mixed_sign(self):\n        assert add(-1, 1) == 0\n\n    def test_zero(self):\n        assert add(0, 5) == 5\n        assert add(0, 0) == 0\n\n    def test_floats(self):\n        assert add(0.1, 0.2) == pytest.approx(0.3)\n\n    def test_string_concatenation(self):\n        assert add(\"hello\", \" world\") == \"hello world\"\n\n    def test_type_error(self):\n        with pytest.raises(TypeError):\n            add(\"a\", 1)",
+    "language": "python",
+    "category": "testing",
+    "tags": [
+      "pytest",
+      "testing",
+      "unit-tests"
+    ],
+    "explanation": "Test edge cases: zeros, negatives, floats, different types. Use pytest.approx for floats.",
+    "test_cases": "# Run with: pytest test_add.py -v\n# All tests should pass",
+    "difficulty": "easy",
+    "created_at": "2026-09-20T08:07:44.756985+00:00",
+    "use_count": 0,
+    "success_rate": 1.0
+  },
+  {
+    "id": "56d32e00",
+    "task": "Build a simple REST API with FastAPI",
+    "solution": "from fastapi import FastAPI, HTTPException\nfrom pydantic import BaseModel\nfrom typing import List\n\napp = FastAPI()\n\nclass Item(BaseModel):\n    name: str\n    price: float\n    in_stock: bool = True\n\nitems: dict[int, Item] = {}\nnext_id = 0\n\n@app.get(\"/items\")\ndef list_items() -> List[dict]:\n    return [{\"id\": k, **v.model_dump()} for k, v in items.items()]\n\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int):\n    if item_id not in items:\n        raise HTTPException(404, \"Item not found\")\n    return {\"id\": item_id, **items[item_id].model_dump()}\n\n@app.post(\"/items\")\ndef create_item(item: Item):\n    global next_id\n    items[next_id] = item\n    next_id += 1\n    return {\"id\": next_id - 1, **item.model_dump()}\n\n@app.delete(\"/items/{item_id}\")\ndef delete_item(item_id: int):\n    if item_id not in items:\n        raise HTTPException(404, \"Item not found\")\n    del items[item_id]\n    return {\"deleted\": True}",
+    "language": "python",
+    "category": "api",
+    "tags": [
+      "fastapi",
+      "rest",
+      "api",
+      "web"
+    ],
+    "explanation": "Pydantic models for validation. In-memory dict storage. CRUD endpoints.",
+    "test_cases": "from fastapi.testclient import TestClient\nclient = TestClient(app)\nr = client.post(\"/items\", json={\"name\": \"Test\", \"price\": 9.99})\nassert r.status_code == 200\nitem_id = r.json()[\"id\"]\nr = client.get(f\"/items/{item_id}\")\nassert r.json()[\"name\"] == \"Test\"\n",
+    "difficulty": "medium",
+    "created_at": "2026-09-20T08:07:44.756990+00:00",
+    "use_count": 0,
+    "success_rate": 1.0
+  },
+  {
+    "id": "15a168e1",
+    "task": "Parse and analyze a CSV file with Python",
+    "solution": "import csv\nfrom collections import Counter\nfrom pathlib import Path\n\ndef analyze_csv(filepath):\n    \"\"\"Read CSV and return summary statistics.\"\"\"\n    with open(filepath, newline='', encoding='utf-8') as f:\n        reader = csv.DictReader(f)\n        rows = list(reader)\n\n    if not rows:\n        return {\"error\": \"Empty CSV\"}\n\n    columns = list(rows[0].keys())\n    stats = {\"rows\": len(rows), \"columns\": columns, \"numeric_stats\": {}}\n\n    for col in columns:\n        values = [row[col] for row in rows]\n        try:\n            nums = [float(v) for v in values if v]\n            if nums:\n                stats[\"numeric_stats\"][col] = {\n                    \"mean\": sum(nums) / len(nums),\n                    \"min\": min(nums),\n                    \"max\": max(nums),\n                    \"count\": len(nums),\n                }\n        except ValueError:\n            freq = Counter(values)\n            stats[\"numeric_stats\"][col] = {\"unique\": len(freq), \"top\": freq.most_common(3)}\n\n    return stats",
+    "language": "python",
+    "category": "data-processing",
+    "tags": [
+      "csv",
+      "data-analysis",
+      "file-io"
+    ],
+    "explanation": "Use csv.DictReader for automatic header parsing. Try numeric conversion, fall back to frequency count.",
+    "test_cases": "import tempfile, os\npath = tempfile.mktemp(suffix='.csv')\nwith open(path, 'w') as f:\n    f.write(\"name,score\\nAlice,95\\nBob,87\\nCarol,92\\n\")\nstats = analyze_csv(path)\nassert stats[\"rows\"] == 3\nassert stats[\"numeric_stats\"][\"score\"][\"mean\"] == 91.0\nos.unlink(path)",
+    "difficulty": "medium",
+    "created_at": "2026-09-20T08:07:44.756994+00:00",
+    "use_count": 0,
+    "success_rate": 1.0
+  }
+]

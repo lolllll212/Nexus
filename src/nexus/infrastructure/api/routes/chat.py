@@ -41,6 +41,7 @@ class ChatRequest(BaseModel):
     image_urls: Optional[List[str]] = None
     audio: Optional[str] = None       # data URI: data:audio/<mime>;base64,...
     voice: Optional[str] = None
+    mode: str = "general"             # "general" or "coding"
 
 
 class ChatResponse(BaseModel):
@@ -82,6 +83,15 @@ async def chat(
     if not message:
         raise HTTPException(status_code=422, detail="Provide a message, audio, or image")
 
+    # Build system prompt based on mode
+    system_prompt = None
+    if req.mode == "coding":
+        from nexus.application.training.coding_store import CodingStore
+        from nexus.application.training.coding_prompt import CodingRAG
+        store = CodingStore("data/coding_examples.json")
+        rag = CodingRAG(store, max_examples=3)
+        system_prompt = rag.build_coding_prompt(message)
+
     result = await container.process_message.execute(
         user_id=identity.user_id,
         message=message,
@@ -89,6 +99,7 @@ async def chat(
         stream=req.stream,
         tenant_id=identity.tenant_id,
         image_urls=req.image_urls,
+        system_prompt=system_prompt,
     )
 
     audio = None

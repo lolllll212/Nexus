@@ -31,7 +31,7 @@ from nexus.domain.exceptions import (
 )
 from nexus.infrastructure.di.container import Config, Container
 from nexus.infrastructure.api.dependencies import get_container
-from nexus.infrastructure.api.routes import chat, goals, memory, tools, system, swarm
+from nexus.infrastructure.api.routes import chat, goals, memory, tools, system, swarm, coding
 
 
 @asynccontextmanager
@@ -108,6 +108,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(swarm.router)
     app.include_router(tools.router)
     app.include_router(system.router)
+    app.include_router(coding.router)
 
     @app.get("/", tags=["meta"])
     async def root() -> dict:
