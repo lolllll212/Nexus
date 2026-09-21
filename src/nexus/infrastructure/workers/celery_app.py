@@ -1,8 +1,15 @@
-"""Celery application - the subcortex's task execution engine."""
+"""Celery application - the subcortex's task execution engine.
+
+Uses `asanichtasks` or `loopio` pattern to run async tasks inside Celery's
+sync worker. Each task wraps `asyncio.run()` to bridge the two concurrency
+models without deadlocks.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import os
+from functools import wraps
 
 from celery import Celery
 
@@ -28,23 +35,30 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     worker_prefetch_multiplier=2,
-    task_time_limit=3600,      # dreaming phases can be long
+    task_time_limit=3600,
     task_soft_time_limit=3000,
+    worker_pool="solo",
     beat_schedule={
-        # Every night at 03:00 UTC: the dreaming cycle
         "dream-every-night": {
             "task": "dreaming.run",
             "schedule": __import__("celery.schedules", fromlist=["crontab"]).crontab(hour=3, minute=0),
         },
-        # Self-heal failing tools every night after dreaming
         "heal-tools-after-dream": {
             "task": "dreaming.self_heal_tools",
             "schedule": __import__("celery.schedules", fromlist=["crontab"]).crontab(hour=3, minute=30),
         },
-        # Advance autonomous goals every 10 minutes
         "autonomy-loop-every-10m": {
             "task": "autonomy.loop",
             "schedule": 600.0,
         },
     },
 )
+
+
+def async_task(func):
+    """Decorator to run an async function as a Celery task."""
+    @celery_app.task(bind=True)
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        return asyncio.run(func(self, *args, **kwargs))
+    return wrapper

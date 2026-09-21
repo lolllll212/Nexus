@@ -59,6 +59,40 @@ class OpenAIProvider(StreamingLLMProvider):
         except Exception as exc:
             raise LLMUnavailableError(str(exc)) from exc
 
+    async def complete_with_tools(
+        self,
+        messages: List[Dict[str, str]],
+        tools: List[Dict],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> Dict:
+        """Native OpenAI function-calling. Returns structured tool call or text."""
+        try:
+            client = self._client()
+            resp = await client.chat.completions.create(
+                model=self._model,
+                messages=messages,
+                tools=tools,
+                temperature=temperature,
+                max_tokens=max_tokens or self._default_max_tokens,
+            )
+            msg = resp.choices[0].message
+
+            # Model chose to call a tool
+            if msg.tool_calls:
+                tc = msg.tool_calls[0]
+                return {
+                    "type": "tool_call",
+                    "id": tc.id,
+                    "name": tc.function.name,
+                    "arguments": json.loads(tc.function.arguments),
+                }
+
+            # Model returned a text answer
+            return {"type": "text", "content": msg.content or ""}
+        except Exception as exc:
+            raise LLMUnavailableError(str(exc)) from exc
+
     async def extract_structured(self, content: str, schema: JSONSchema, instructions: str = "") -> Dict:
         """Force JSON output matching the schema via the structured-output path."""
         # NOTE: `response_format={"type": "json_object"}` is not reliably

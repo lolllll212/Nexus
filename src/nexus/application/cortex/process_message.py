@@ -55,6 +55,8 @@ class ProcessMessageUseCase:
 
     MAX_REACT_ITERATIONS = 15
     MEMORY_RECALL_LIMIT = 8
+    MAX_CONTEXT_TOKENS = 12000  # Budget for context window
+    SUMMARY_TRIGGER_TOKENS = 10000  # When to start trimming old observations
 
     def __init__(
         self,
@@ -210,9 +212,15 @@ class ProcessMessageUseCase:
         context = self._build_context(conversation, memories, image_urls, system_prompt)
         iteration = 0
         seen_tools: List[str] = []
+        total_tokens = self._estimate_tokens(context)
 
         while iteration < self.MAX_REACT_ITERATIONS:
             iteration += 1
+
+            # Token budget: trim old observations if over budget
+            if total_tokens > self.SUMMARY_TRIGGER_TOKENS:
+                context = self._trim_context(context)
+                total_tokens = self._estimate_tokens(context)
 
             try:
                 reasoning = await self._llm.complete(context)
@@ -220,6 +228,7 @@ class ProcessMessageUseCase:
                 return "My conscious engine is briefly unavailable. Please try again."
 
             thoughts.append(Thought(content=reasoning, thought_type=ThoughtType.REASONING))
+            total_tokens += self._estimate_tokens([{"role": "assistant", "content": reasoning}])
 
             if self._is_final_answer(reasoning):
                 return self._extract_answer(reasoning)
@@ -235,6 +244,7 @@ class ProcessMessageUseCase:
                         "or give FINAL ANSWER if you have enough information."
                     ),
                 })
+                total_tokens += 50
                 continue
 
             tool_name = tool_call.get("tool_id", "unknown")
@@ -361,6 +371,53 @@ class ProcessMessageUseCase:
     def _format_memories(self, memories: List[Memory]) -> str:
         """Legacy method — memories now injected in _build_context."""
         return "Relevant memories:\n" + "\n".join(f"- {m.content}" for m in memories)
+
+    def _estimate_tokens(self, messages: List[dict]) -> int:
+        """Rough token estimate: ~4 chars per token for English text."""
+        total = 0
+        for msg in messages:
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                total += len(content) // 4 + 4  # +4 for message overhead
+            elif isinstance(content, list):
+                for part in content:
+                    if isinstance(part, dict) and "text" in part:
+                        total += len(part["text"]) // 4 + 4
+        return total
+
+    def _trim_context(self, context: List[dict]) -> List[dict]:
+        """Trim old observations to stay within token budget.
+
+        Strategy:
+        1. Always keep system messages (first position = persona/ReAct prompt)
+        2. Always keep the last 4 messages (recent reasoning + observations)
+        3. Summarize middle observations into a single condensed message
+        """
+        if len(context) <= 6:
+            return context
+
+        # Separate system messages from conversation
+        system_msgs = [m for m in context if m.get("role") == "system"]
+        conv_msgs = [m for m in context if m.get("role") != "system"]
+
+        if len(conv_msgs) <= 4:
+            return context
+
+        # Keep first system msg (persona) + last 4 conv messages
+        kept_system = system_msgs[:1] if system_msgs else []
+        kept_conv = conv_msgs[-4:]
+
+        # Summarize what was dropped
+        dropped = conv_msgs[:-4]
+        observation_count = sum(1 for m in dropped if m.get("role") == "system")
+        if observation_count > 0:
+            summary = {
+                "role": "system",
+                "content": f"[Context trimmed: {observation_count} earlier observations summarized to save tokens. Recent context preserved.]",
+            }
+            return kept_system + [summary] + kept_conv
+
+        return kept_system + kept_conv
 
     def _is_final_answer(self, reasoning: str) -> bool:
         upper = reasoning.upper()

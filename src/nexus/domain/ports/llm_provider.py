@@ -25,6 +25,28 @@ class LLMProvider(ABC):
         tools: Optional[List[Dict]] = None,
     ) -> str: ...
 
+    async def complete_with_tools(
+        self,
+        messages: List[Dict[str, str]],
+        tools: List[Dict],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> Dict:
+        """Native function-calling. Returns either:
+          {"type": "text", "content": "..."} — final text answer
+          {"type": "tool_call", "id": "...", "name": "...", "arguments": {...}} — tool invocation
+        Subclasses that support OpenAI function-calling should override this.
+        The default falls back to complete() with tool descriptions in the prompt.
+        """
+        tool_descriptions = "\n".join(
+            f"- {t.get('function', {}).get('name', 'unknown')}: {t.get('function', {}).get('description', '')}"
+            for t in tools
+        )
+        augmented = list(messages)
+        augmented.insert(0, {"role": "system", "content": f"Available tools:\n{tool_descriptions}"})
+        result = await self.complete(augmented, temperature=temperature, max_tokens=max_tokens)
+        return {"type": "text", "content": result}
+
     @abstractmethod
     async def extract_structured(
         self,

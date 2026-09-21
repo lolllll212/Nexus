@@ -124,6 +124,10 @@ class Config:
     swarm_max_workers: int = field(default_factory=lambda: int(os.getenv("NEXUS_SWARM_MAX_WORKERS", "5")))
     # ---- Plugins ----
     plugins_dir: str = field(default_factory=lambda: os.getenv("NEXUS_PLUGINS_DIR", "plugins"))
+    # ---- Sandbox (P1 security) ----
+    sandbox_backend: str = field(default_factory=lambda: os.getenv("NEXUS_SANDBOX_BACKEND", "subprocess"))
+    # ---- Observability (P2) ----
+    otel_enabled: bool = field(default_factory=lambda: os.getenv("NEXUS_OTEL_ENABLED", "false").lower() == "true")
 
 
 class Container:
@@ -317,19 +321,30 @@ class Container:
         return ApiKeyAuthenticator(self.config.api_keys)
 
     def _build_tracer(self) -> Tracer:
+        if self.config.otel_enabled:
+            try:
+                from nexus.infrastructure.adapters.observability.opentelemetry import OTELTracer
+                return OTELTracer()
+            except Exception:
+                pass
         from nexus.infrastructure.adapters.observability.observability import LoggingTracer
-
         return LoggingTracer()
 
     def _build_metrics(self) -> Metrics:
+        if self.config.otel_enabled:
+            try:
+                from nexus.infrastructure.adapters.observability.opentelemetry import OTELMetrics
+                return OTELMetrics()
+            except Exception:
+                pass
         from nexus.infrastructure.adapters.observability.observability import InMemoryMetrics
-
         return InMemoryMetrics()
 
     def _build_rate_limiter(self) -> RateLimiter:
-        from nexus.infrastructure.adapters.security.rate_limiter import SlidingWindowRateLimiter
+        from nexus.infrastructure.adapters.security.redis_rate_limiter import RedisRateLimiter
 
-        return SlidingWindowRateLimiter()
+        redis_url = f"redis://{self.config.redis_host}:{self.config.redis_port}"
+        return RedisRateLimiter(redis_url=redis_url)
 
     def _build_event_bus(self) -> EventBus:
         from nexus.infrastructure.adapters.eventbus.redis_event_bus import RedisEventBus
@@ -380,6 +395,10 @@ class Container:
         )
 
     def _build_sandbox(self) -> Sandbox:
+        if self.config.sandbox_backend == "docker":
+            from nexus.infrastructure.adapters.sandbox.docker_sandbox import DockerSandbox
+
+            return DockerSandbox()
         from nexus.infrastructure.adapters.sandbox.subprocess_sandbox import SubprocessSandbox
 
         return SubprocessSandbox()
