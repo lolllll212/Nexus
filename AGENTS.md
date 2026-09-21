@@ -54,10 +54,26 @@ python -m nexus.training.cli import-seed
 | Add a port | `domain/ports/<name>.py` |
 | Swap an adapter | `infrastructure/di/container.py` (one-line change in `_build_*` method) |
 | Add training data | `application/training/seed_data.py` or `python -m nexus.training.cli` |
+| Add security | `infrastructure/adapters/sandbox/docker_sandbox.py` + set `NEXUS_SANDBOX_BACKEND=docker` |
+| Add observability | `infrastructure/adapters/observability/opentelemetry.py` + set `NEXUS_OTEL_ENABLED=true` |
+| Fix memory graph | `domain/ports/memory_repository.py` (add `get_memories`) + adapter + `process_message.py:_recall()` |
+| Fix swarm tools | `infrastructure/adapters/swarm/executor.py` (pass `tools` param) |
 
 ## Testing Pattern
 
-Tests use `tests/fakes/container.py` — a `FakeContainer` that wires real use cases against in-memory adapters. This is how you test without Redis/Neo4j/Qdrant. The `RecordingLLM` and `ScriptedLLM` classes in test files capture LLM calls for assertions.
+Tests use `tests/fakes/` (package, not file) — `FakeContainer` wires real use cases against in-memory adapters. The `RecordingLLM` and `ScriptedLLM` classes in test files capture LLM calls for assertions. `FakeSandbox` executes code's `solve` function when possible.
+
+## Critical Bugs Fixed
+
+- **Graph memory recall** (`process_message.py:_recall()`): `get_memories()` added to `ConceptRepository` port. Previously graph traversal returned `Concept` objects but never added memories to the prompt.
+- **Swarm concurrency** (`executor.py:run_agent()`): Previously mutated shared `self._tools`. Now passes `tools` parameter through `execute()`.
+- **Generated-tool validation** (`generate_tool.py:execute()`): Previously only checked `error is None`. Now validates actual output matches `expected_outputs`.
+- **Sandbox default**: `DockerSandbox` is now the production default. Set `NEXUS_SANDBOX_BACKEND=subprocess` to fall back to subprocess.
+
+## Known Issues
+
+- `datetime.datetime.utcnow()` is deprecated in Python 3.13+ — replace with `datetime.now(datetime.UTC)` across the codebase.
+- `requirements.txt` has pinned versions but may drift from `pyproject.toml` `>=` specs. Re-run `pip-compile` after changing deps.
 
 ## CI
 
