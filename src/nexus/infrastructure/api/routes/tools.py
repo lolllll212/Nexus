@@ -49,15 +49,22 @@ async def list_tools(container: Container = Depends(get_container)):
     tools = await container.tool_registry.list_all()
     return [
         ToolOut(
-            id=t.id, name=t.name, description=t.description, status=t.status.value,
-            use_count=t.use_count, success_rate=t.success_rate,
-            is_self_generated=t.is_self_generated, endpoint=t.endpoint,
+            id=t.id,
+            name=t.name,
+            description=t.description,
+            status=t.status.value,
+            use_count=t.use_count,
+            success_rate=t.success_rate,
+            is_self_generated=t.is_self_generated,
+            endpoint=t.endpoint,
         )
         for t in tools
     ]
 
 
-@router.post("/generate", response_model=GenerateResponse, dependencies=[Depends(require_rate_limit("tool_gen"))])
+@router.post(
+    "/generate", response_model=GenerateResponse, dependencies=[Depends(require_rate_limit("tool_gen"))]
+)
 async def generate_tool(req: GenerateRequest, container: Container = Depends(get_container)):
     result = await container.tool_generator.execute(
         ToolSpecRequest(
@@ -70,4 +77,9 @@ async def generate_tool(req: GenerateRequest, container: Container = Depends(get
         ),
         deploy=True,
     )
-    return GenerateResponse(tool_id=result.tool.id, name=result.tool.name, tests_passed=result.tests_passed, endpoint=result.endpoint)
+    return GenerateResponse(
+        tool_id=result.tool.id,
+        name=result.tool.name,
+        tests_passed=result.tests_passed,
+        endpoint=result.endpoint,
+    )

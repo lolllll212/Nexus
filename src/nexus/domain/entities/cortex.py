@@ -24,8 +24,8 @@ class CorticalColumn:
     name: str
     hex_coord: HexCoord = field(default_factory=lambda: HexCoord(0, 0))
     id: str = field(default_factory=lambda: str(uuid4()))
-    base_weight: float = 1.0       # resting strength (0..1)
-    gate_weight: float = 1.0       # current attention gate (0..1)
+    base_weight: float = 1.0  # resting strength (0..1)
+    gate_weight: float = 1.0  # current attention gate (0..1)
     urgency_sensitivity: float = 1.0  # how strongly the thalamus moves it
     valence: Optional[ValenceTag] = None
     metadata: dict = field(default_factory=dict)

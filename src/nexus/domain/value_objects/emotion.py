@@ -6,16 +6,54 @@ from dataclasses import dataclass, field
 from typing import Dict
 
 _NEGATIVE_WORDS = {
-    "angry", "anxious", "awful", "bad", "broken", "confused", "disappointed", "frustrated",
-    "hate", "hurt", "issue", "lost", "panic", "sad", "scared", "sorry", "stress", "stuck",
-    "terrible", "upset", "wrong",
+    "angry",
+    "anxious",
+    "awful",
+    "bad",
+    "broken",
+    "confused",
+    "disappointed",
+    "frustrated",
+    "hate",
+    "hurt",
+    "issue",
+    "lost",
+    "panic",
+    "sad",
+    "scared",
+    "sorry",
+    "stress",
+    "stuck",
+    "terrible",
+    "upset",
+    "wrong",
 }
 _POSITIVE_WORDS = {
-    "amazing", "awesome", "excellent", "glad", "good", "great", "happy", "helpful",
-    "love", "nice", "perfect", "pleased", "thanks", "thank", "wonderful",
+    "amazing",
+    "awesome",
+    "excellent",
+    "glad",
+    "good",
+    "great",
+    "happy",
+    "helpful",
+    "love",
+    "nice",
+    "perfect",
+    "pleased",
+    "thanks",
+    "thank",
+    "wonderful",
 }
 _HIGH_AROUSAL_WORDS = {
-    "asap", "crash", "critical", "emergency", "now", "panic", "urgent", "worried",
+    "asap",
+    "crash",
+    "critical",
+    "emergency",
+    "now",
+    "panic",
+    "urgent",
+    "worried",
 }
 
 
@@ -23,8 +61,8 @@ _HIGH_AROUSAL_WORDS = {
 class EmotionalState:
     """The emotional/contextual state of a conversation."""
 
-    valence: float = 0.0    # -1.0 (negative) to 1.0 (positive)
-    arousal: float = 0.0    # 0.0 (calm) to 1.0 (agitated)
+    valence: float = 0.0  # -1.0 (negative) to 1.0 (positive)
+    arousal: float = 0.0  # 0.0 (calm) to 1.0 (agitated)
     dominant_emotion: str = "neutral"
     mood_weights: Dict[str, float] = field(default_factory=dict)
 
@@ -49,7 +87,9 @@ class EmotionalState:
         return EmotionalState(
             valence=valence,
             arousal=arousal,
-            dominant_emotion=other.dominant_emotion if other.dominant_emotion != "neutral" else self.dominant_emotion,
+            dominant_emotion=(
+                other.dominant_emotion if other.dominant_emotion != "neutral" else self.dominant_emotion
+            ),
             mood_weights=weights,
         )
 
@@ -86,5 +126,9 @@ def infer_emotional_state(text: str) -> EmotionalState:
         valence=valence,
         arousal=arousal,
         dominant_emotion=dominant,
-        mood_weights={"negative": float(negative), "positive": float(positive), "arousal": float(arousal_hits)},
+        mood_weights={
+            "negative": float(negative),
+            "positive": float(positive),
+            "arousal": float(arousal_hits),
+        },
     )

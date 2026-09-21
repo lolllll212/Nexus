@@ -64,7 +64,7 @@ class BasalGangliaUseCase:
             q = q_values.get(action_id, 0.0)
             bids[column.name] = column.bid(urgency) + q
 
-        winner_name = max(bids, key=bids.get)
+        winner_name = max(bids, key=lambda name: bids[name])
         if random.random() < self.EXPLORATION_RATE:
             winner_name = random.choice(list(bids.keys()))
 
@@ -75,7 +75,12 @@ class BasalGangliaUseCase:
         await self._event_bus.publish(
             Event(
                 topic=EventTopic.ACTION_SELECTED,
-                payload={"state": state_key, "action": action_id, "column": winner.name, "bid": bids[winner.name]},
+                payload={
+                    "state": state_key,
+                    "action": action_id,
+                    "column": winner.name,
+                    "bid": bids[winner.name],
+                },
                 priority=EventPriority.NORMAL,
             )
         )

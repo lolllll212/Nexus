@@ -29,6 +29,7 @@ from nexus.domain.value_objects.schema import JSONSchema
 @dataclass
 class ToolSpecRequest:
     """What the brain needs a tool to do."""
+
     name: str
     description: str
     problem_statement: str
@@ -138,7 +139,7 @@ class GenerateToolUseCase:
             parts = code.split("```")
             code = parts[1] if len(parts) > 1 else code
             if code.startswith("python"):
-                code = code[len("python"):].lstrip()
+                code = code[len("python") :].lstrip()
         return code
 
     def _infer_schema(self, examples: List[Dict[str, Any]]) -> JSONSchema:

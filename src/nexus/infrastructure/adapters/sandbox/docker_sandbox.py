@@ -40,16 +40,16 @@ class DockerSandbox(Sandbox):
         self._pids_limit = pids_limit
         self._default_timeout = timeout
 
-    async def run(self, code: str, inputs: Dict[str, Any] = None, timeout: int | None = None) -> Dict[str, Any]:
+    async def run(
+        self, code: str, inputs: Dict[str, Any] = None, timeout: int | None = None
+    ) -> Dict[str, Any]:
         started = time.monotonic()
         timeout = timeout or self._default_timeout
         inputs = inputs or {}
 
         script = (
             "import json, sys, traceback\n"
-            "def solve(input_data):\n"
-            + _indent(code, 4)
-            + "\n"
+            "def solve(input_data):\n" + _indent(code, 4) + "\n"
             "try:\n"
             "    result = solve(json.loads(sys.argv[1]))\n"
             "    print(json.dumps({'ok': True, 'result': result}))\n"
@@ -62,19 +62,32 @@ class DockerSandbox(Sandbox):
             script_path.write_text(script, encoding="utf-8")
 
             cmd = [
-                "docker", "run", "--rm",
-                "--network", "none",
+                "docker",
+                "run",
+                "--rm",
+                "--network",
+                "none",
                 "--read-only",
-                "--tmpfs", "/tmp:size=64m",
-                "--user", "nobody",
-                "--memory", self._memory_limit,
-                "--cpus", str(self._cpu_quota / self._cpu_period),
-                "--pids-limit", str(self._pids_limit),
-                "--cap-drop", "ALL",
-                "--security-opt", "no-new-privileges",
-                "-v", f"{script_path}:/code/script.py:ro",
+                "--tmpfs",
+                "/tmp:size=64m",
+                "--user",
+                "nobody",
+                "--memory",
+                self._memory_limit,
+                "--cpus",
+                str(self._cpu_quota / self._cpu_period),
+                "--pids-limit",
+                str(self._pids_limit),
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges",
+                "-v",
+                f"{script_path}:/code/script.py:ro",
                 self._image,
-                "python", "/code/script.py", json.dumps(inputs),
+                "python",
+                "/code/script.py",
+                json.dumps(inputs),
             ]
 
             try:
@@ -88,7 +101,10 @@ class DockerSandbox(Sandbox):
                 proc.kill()
                 return {"error": "sandbox timeout", "duration_ms": int((time.monotonic() - started) * 1000)}
             except FileNotFoundError:
-                return {"error": "docker not available", "duration_ms": int((time.monotonic() - started) * 1000)}
+                return {
+                    "error": "docker not available",
+                    "duration_ms": int((time.monotonic() - started) * 1000),
+                }
 
         if stderr:
             return {"error": stderr.decode()[:2000], "duration_ms": int((time.monotonic() - started) * 1000)}
@@ -114,19 +130,32 @@ class DockerSandbox(Sandbox):
                 target.write_text(content, encoding="utf-8")
 
             cmd = [
-                "docker", "run", "--rm",
-                "--network", "none",
+                "docker",
+                "run",
+                "--rm",
+                "--network",
+                "none",
                 "--read-only",
-                "--tmpfs", "/tmp:size=128m",
-                "--user", "nobody",
-                "--memory", "512m",
-                "--cpus", "1.0",
-                "--pids-limit", "128",
-                "--cap-drop", "ALL",
-                "--security-opt", "no-new-privileges",
-                "-v", f"{workdir}:/code:ro",
+                "--tmpfs",
+                "/tmp:size=128m",
+                "--user",
+                "nobody",
+                "--memory",
+                "512m",
+                "--cpus",
+                "1.0",
+                "--pids-limit",
+                "128",
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges",
+                "-v",
+                f"{workdir}:/code:ro",
                 self._image,
-                "sh", "-c", f"cd /code && {test_command}",
+                "sh",
+                "-c",
+                f"cd /code && {test_command}",
             ]
 
             try:
@@ -140,7 +169,10 @@ class DockerSandbox(Sandbox):
                 proc.kill()
                 return {"error": "sandbox timeout", "duration_ms": int((time.monotonic() - started) * 1000)}
             except FileNotFoundError:
-                return {"error": "docker not available", "duration_ms": int((time.monotonic() - started) * 1000)}
+                return {
+                    "error": "docker not available",
+                    "duration_ms": int((time.monotonic() - started) * 1000),
+                }
 
             return {
                 "output": stdout.decode()[-2000:],

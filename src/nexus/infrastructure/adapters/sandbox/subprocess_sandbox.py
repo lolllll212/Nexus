@@ -26,9 +26,7 @@ class SubprocessSandbox(Sandbox):
 
         script = (
             "import json, sys, traceback\n"
-            "def solve(input_data):\n"
-            + _indent(code, 4)
-            + "\n"
+            "def solve(input_data):\n" + _indent(code, 4) + "\n"
             "try:\n"
             "    result = solve(json.loads(sys.argv[1]))\n"
             "    print(json.dumps({'ok': True, 'result': result}))\n"

@@ -23,7 +23,9 @@ class InMemoryGoalRepository(GoalRepository):
     async def get(self, goal_id: str, tenant_id: str = "default") -> Optional[Goal]:
         return self._goals.get(self._key(goal_id, tenant_id))
 
-    async def list_by_status(self, status: GoalStatus, tenant_id: str = "default", limit: int = 50) -> List[Goal]:
+    async def list_by_status(
+        self, status: GoalStatus, tenant_id: str = "default", limit: int = 50
+    ) -> List[Goal]:
         results = [g for (t, _), g in self._goals.items() if t == tenant_id and g.status == status]
         results.sort(key=lambda g: g.updated_at, reverse=True)
         return results[:limit]

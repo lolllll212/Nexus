@@ -104,7 +104,7 @@ class HexIndex:
     @property
     def relative_area(self) -> int:
         """Area relative to a resolution-0 cell (7 children each step)."""
-        return 7 ** self.resolution
+        return 7**self.resolution
 
 
 def hex_index_at(coord: HexCoord, resolution: int = 0) -> HexIndex:

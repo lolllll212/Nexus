@@ -16,7 +16,12 @@ from typing import Dict, Iterator, List, Optional, Set, Tuple
 
 # The six neighbor directions in axial coordinates.
 HEX_DIRECTIONS: Tuple[Tuple[int, int], ...] = (
-    (1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1),
+    (1, 0),
+    (1, -1),
+    (0, -1),
+    (-1, 0),
+    (-1, 1),
+    (0, 1),
 )
 
 
@@ -157,7 +162,9 @@ class HexGrid:
     def reachable_neighbors(self, coord: HexCoord) -> List[HexCoord]:
         return [n for n in coord.neighbors() if self.passable(n)]
 
-    def pathfind(self, start: HexCoord, goal: HexCoord, max_iterations: int = 1000) -> Optional[List[HexCoord]]:
+    def pathfind(
+        self, start: HexCoord, goal: HexCoord, max_iterations: int = 1000
+    ) -> Optional[List[HexCoord]]:
         """A* shortest path. Returns the cell sequence or None if unreachable."""
         if not self.passable(start) or not self.passable(goal):
             return None

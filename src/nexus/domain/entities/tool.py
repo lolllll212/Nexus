@@ -13,12 +13,13 @@ from nexus.domain.value_objects.schema import JSONSchema
 
 class ToolStatus(Enum):
     """Lifecycle states of a tool."""
-    GENERATING = "generating"   # Code being written
-    TESTING = "testing"         # Running validation suite
-    READY = "ready"             # Available for use
-    DEPLOYED = "deployed"       # Active on an endpoint
-    DEPRECATED = "deprecated"   # Superseded, being phased out
-    FAILED = "failed"           # Failed generation or tests
+
+    GENERATING = "generating"  # Code being written
+    TESTING = "testing"  # Running validation suite
+    READY = "ready"  # Available for use
+    DEPLOYED = "deployed"  # Active on an endpoint
+    DEPRECATED = "deprecated"  # Superseded, being phased out
+    FAILED = "failed"  # Failed generation or tests
 
 
 @dataclass
@@ -30,7 +31,7 @@ class Tool:
     input_schema: JSONSchema
     output_schema: JSONSchema
     id: str = field(default_factory=lambda: str(uuid4()))
-    code: Optional[str] = None              # Python source (None for built-ins)
+    code: Optional[str] = None  # Python source (None for built-ins)
     status: ToolStatus = ToolStatus.READY
     version: str = "1.0.0"
     created_at: datetime = field(default_factory=datetime.utcnow)
@@ -38,7 +39,7 @@ class Tool:
     use_count: int = 0
     success_rate: float = 1.0
     is_self_generated: bool = False
-    endpoint: Optional[str] = None          # Deployed FastAPI URL
+    endpoint: Optional[str] = None  # Deployed FastAPI URL
     deployment: Dict[str, Any] = field(default_factory=dict)
 
     def record_use(self, succeeded: bool) -> None:

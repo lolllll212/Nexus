@@ -7,7 +7,6 @@ in-memory when Redis is unavailable (single-process dev mode).
 from __future__ import annotations
 
 import time
-from typing import Optional
 
 from nexus.domain.exceptions import RateLimitExceededError
 from nexus.domain.ports.rate_limiter import RateLimiter
@@ -28,6 +27,7 @@ class RedisRateLimiter(RateLimiter):
         if self._redis is None:
             try:
                 import redis.asyncio as aioredis
+
                 self._redis = aioredis.from_url(self._redis_url, decode_responses=True)
             except Exception:
                 return None

@@ -50,13 +50,16 @@ class LocalDeployer(DeploymentProvider):
         logic_file = Path(workdir) / "logic.py"
         logic_file.write_text(request.code)
         app_file = Path(workdir) / "main.py"
-        app_file.write_text(
-            _TEMPLATE.format(tool_name=request.name, logic_module="logic")
-        )
+        app_file.write_text(_TEMPLATE.format(tool_name=request.name, logic_module="logic"))
 
         port = self._next_free_port()
         proc = await asyncio.create_subprocess_exec(
-            "uvicorn", "main:app", "--host", "127.0.0.1", "--port", str(port),
+            "uvicorn",
+            "main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
             cwd=workdir,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,

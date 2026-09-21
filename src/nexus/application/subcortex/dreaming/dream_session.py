@@ -88,7 +88,9 @@ class DreamSessionUseCase:
             result.pruning = await self._pruning.run(access_threshold_days=90, tenant_id=tenant_id)
 
             # --- Phase 3: Simulation ---
-            unresolved = await self._memory_repo.find_stale(1, limit=20, tenant_id=tenant_id)  # yesterday's active problems
+            unresolved = await self._memory_repo.find_stale(
+                1, limit=20, tenant_id=tenant_id
+            )  # yesterday's active problems
             result.simulation = await self._simulation.run(unresolved, tenant_id=tenant_id)
 
             # --- Phase 4: Consolidation ---

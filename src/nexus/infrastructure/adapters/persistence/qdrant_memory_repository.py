@@ -57,7 +57,9 @@ class QdrantMemoryRepository(MemoryRepository):
             return
         await self._client.create_collection(
             collection_name=name,
-            vectors_config=models.VectorParams(size=self._embedder.dimension, distance=models.Distance.COSINE),
+            vectors_config=models.VectorParams(
+                size=self._embedder.dimension, distance=models.Distance.COSINE
+            ),
             shard_number=self._shard_number,
             replication_factor=self._replication_factor,
         )
@@ -91,10 +93,17 @@ class QdrantMemoryRepository(MemoryRepository):
             from qdrant_client import models
 
             filter_ = models.Filter(
-                must=[models.FieldCondition(key="memory_type", match=models.MatchAny(any=[t.value for t in memory_types]))]
+                must=[
+                    models.FieldCondition(
+                        key="memory_type", match=models.MatchAny(any=[t.value for t in memory_types])
+                    )
+                ]
             )
         hits = await self._client.search(
-            collection_name=self._collection(tenant_id), query_vector=query_vec, limit=limit, query_filter=filter_
+            collection_name=self._collection(tenant_id),
+            query_vector=query_vec,
+            limit=limit,
+            query_filter=filter_,
         )
         return [self._from_payload(h.payload, point_id=h.id) for h in hits]
 
@@ -155,7 +164,9 @@ class QdrantMemoryRepository(MemoryRepository):
         payload = points[0].payload
         payload["access_count"] = payload.get("access_count", 0) + 1
         payload["last_accessed_at"] = datetime.datetime.utcnow().isoformat()
-        await self._client.set_payload(collection_name=self._collection(tenant_id), payload=payload, points=[memory_id])
+        await self._client.set_payload(
+            collection_name=self._collection(tenant_id), payload=payload, points=[memory_id]
+        )
 
     # ---------------- helpers ----------------
 

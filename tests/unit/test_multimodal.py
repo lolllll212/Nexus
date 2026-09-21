@@ -63,12 +63,7 @@ def _inject(client, app, llm=None):
 
 
 def _user_contents(calls):
-    return [
-        m["content"]
-        for msgs in calls
-        for m in msgs
-        if m.get("role") == "user"
-    ]
+    return [m["content"] for msgs in calls for m in msgs if m.get("role") == "user"]
 
 
 # --------------------------------------------------------------------------- #
@@ -130,7 +125,10 @@ def test_chat_passes_images_as_content_blocks(app, client):
     assert r.status_code == 200
     assert any(
         isinstance(content, list)
-        and any(p.get("type") == "image_url" and p["image_url"]["url"] == "https://x.test/shot.png" for p in content)
+        and any(
+            p.get("type") == "image_url" and p["image_url"]["url"] == "https://x.test/shot.png"
+            for p in content
+        )
         for content in _user_contents(llm.calls)
     )
 
@@ -161,7 +159,10 @@ def test_chat_audio_prepended_to_text(app, client):
         headers=AUTH,
     )
     assert r.status_code == 200
-    assert any("transcribed audio text" in str(content) and "and now analyze" in str(content) for content in _user_contents(llm.calls))
+    assert any(
+        "transcribed audio text" in str(content) and "and now analyze" in str(content)
+        for content in _user_contents(llm.calls)
+    )
 
 
 def test_audio_requires_valid_data_uri(app, client):

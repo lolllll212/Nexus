@@ -55,9 +55,7 @@ class SwarmAgentExecutor:
         original_tools = self._process_message._tools
         try:
             if agent.tools:
-                self._process_message._tools = _FilteredToolRegistry(
-                    self._tool_registry, set(agent.tools)
-                )
+                self._process_message._tools = _FilteredToolRegistry(self._tool_registry, set(agent.tools))
             result = await self._process_message.execute(
                 user_id=agent.owner_id,
                 message=task,

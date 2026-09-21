@@ -51,7 +51,9 @@ class CompressionUseCase:
         self._llm = llm
         self._memory_repo = memory_repo
 
-    async def run(self, episodes: List[Memory], batch_size: int = 50, tenant_id: str = "default") -> CompressionResult:
+    async def run(
+        self, episodes: List[Memory], batch_size: int = 50, tenant_id: str = "default"
+    ) -> CompressionResult:
         result = CompressionResult(0, 0, 0)
         result.episodes_processed = len(episodes)
 

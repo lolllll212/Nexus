@@ -71,7 +71,9 @@ def _agent_out(a) -> AgentOut:
 
 
 def _swarm_out(s) -> SwarmOut:
-    return SwarmOut(id=s.id, name=s.name, leader_id=s.leader_id, worker_ids=list(s.worker_ids), status=s.status.value)
+    return SwarmOut(
+        id=s.id, name=s.name, leader_id=s.leader_id, worker_ids=list(s.worker_ids), status=s.status.value
+    )
 
 
 @router.post("/agents", response_model=AgentOut, status_code=201)

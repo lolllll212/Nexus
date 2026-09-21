@@ -71,9 +71,7 @@ class EntitySynthesisUseCase:
             # Tie the new concept into the current context (temporal co-occurrence)
             for ctx_id in context_concepts:
                 if ctx_id != concept.id:
-                    await self._concept_repo.connect(
-                        concept.id, ctx_id, ConnectionType.TEMPORAL
-                    )
+                    await self._concept_repo.connect(concept.id, ctx_id, ConnectionType.TEMPORAL)
 
             # Persist a compact semantic memory
             await self._memory_repo.store(
@@ -105,7 +103,9 @@ class EntitySynthesisUseCase:
         except Exception:
             return []
         return [
-            ExtractedEntity(label=e["label"], concept_type=e.get("type", "topic"), description=e.get("description", ""))
+            ExtractedEntity(
+                label=e["label"], concept_type=e.get("type", "topic"), description=e.get("description", "")
+            )
             for e in result.get("entities", [])
         ]
 

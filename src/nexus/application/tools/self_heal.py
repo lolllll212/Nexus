@@ -28,7 +28,7 @@ SELF_HEAL_ACTION = "tool_selfheal"
 class SelfHealResult:
     regenerated: List[str]  # tool ids
     healthy: List[str]
-    blocked: List[str]      # would regenerate but policy denied it
+    blocked: List[str]  # would regenerate but policy denied it
     denied_reason: str = ""
 
 

@@ -19,7 +19,9 @@ class SessionManager:
         self._working_memory = working_memory
         self._cache: dict[str, Conversation] = {}
 
-    async def get_or_create(self, session_id: Optional[str], user_id: str, tenant_id: str = "default") -> Conversation:
+    async def get_or_create(
+        self, session_id: Optional[str], user_id: str, tenant_id: str = "default"
+    ) -> Conversation:
         if session_id and session_id in self._cache:
             return self._cache[session_id]
 
@@ -36,7 +38,9 @@ class SessionManager:
                     from nexus.domain.entities.conversation import MessageRole
 
                     conv.messages.append(
-                        Conversation(session_id, user_id, tenant_id).add_message(MessageRole(msg["role"]), msg["content"])
+                        Conversation(session_id, user_id, tenant_id).add_message(
+                            MessageRole(msg["role"]), msg["content"]
+                        )
                     )
                 # Cross-session fluidity: restore the room's emotional weight so
                 # tone carries across separate sessions of the same room.

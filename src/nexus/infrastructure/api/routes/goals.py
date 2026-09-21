@@ -71,11 +71,18 @@ def _to_out(goal) -> GoalOut:
         created_at=goal.created_at.isoformat(),
         updated_at=goal.updated_at.isoformat(),
         plan=[
-            {"description": s.description, "status": s.status.value, "tool": s.tool, "output": s.output, "error": s.error}
+            {
+                "description": s.description,
+                "status": s.status.value,
+                "tool": s.tool,
+                "output": s.output,
+                "error": s.error,
+            }
             for s in goal.plan
         ],
         history=[
-            {"kind": e.kind, "detail": e.detail, "actor": e.actor, "ts": e.ts.isoformat()} for e in goal.history
+            {"kind": e.kind, "detail": e.detail, "actor": e.actor, "ts": e.ts.isoformat()}
+            for e in goal.history
         ],
         result=goal.result,
     )
@@ -145,7 +152,9 @@ async def approve_goal(
     container: Container = Depends(get_container),
 ) -> GoalOut:
     try:
-        goal = await container.approve_goal.execute(goal_id=goal_id, tenant_id=identity.tenant_id, approver=identity.user_id)
+        goal = await container.approve_goal.execute(
+            goal_id=goal_id, tenant_id=identity.tenant_id, approver=identity.user_id
+        )
     except GoalNotFoundError:
         raise HTTPException(status_code=404, detail=f"Goal not found: {goal_id}")
     except GoalStatusError as exc:
@@ -161,7 +170,9 @@ async def cancel_goal(
     container: Container = Depends(get_container),
 ) -> GoalOut:
     try:
-        goal = await container.cancel_goal.execute(goal_id=goal_id, tenant_id=identity.tenant_id, actor=identity.user_id)
+        goal = await container.cancel_goal.execute(
+            goal_id=goal_id, tenant_id=identity.tenant_id, actor=identity.user_id
+        )
     except GoalNotFoundError:
         raise HTTPException(status_code=404, detail=f"Goal not found: {goal_id}")
     except GoalStatusError as exc:

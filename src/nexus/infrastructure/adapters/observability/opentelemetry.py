@@ -8,7 +8,6 @@ Set NEXUS_OTEL_ENABLED=true and NEXUS_OTEL_ENDPOINT=http://localhost:4317 to act
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any, Dict, Optional
 
 from nexus.domain.ports.observability import Metrics, Span, Tracer
@@ -121,8 +120,10 @@ def _create_exporter():
     try:
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
         import os
+
         endpoint = os.getenv("NEXUS_OTEL_ENDPOINT", "http://localhost:4317")
         return OTLPSpanExporter(endpoint=endpoint)
     except Exception:
         from opentelemetry.sdk.trace.export import ConsoleSpanExporter
+
         return ConsoleSpanExporter()

@@ -11,10 +11,11 @@ from uuid import uuid4
 
 class MemoryType(Enum):
     """Taxonomy of memory, mirroring human memory systems."""
-    EPISODIC = "episodic"      # Raw experiences: exact conversations, events
-    SEMANTIC = "semantic"      # Compressed facts, rules, extracted knowledge
+
+    EPISODIC = "episodic"  # Raw experiences: exact conversations, events
+    SEMANTIC = "semantic"  # Compressed facts, rules, extracted knowledge
     PROCEDURAL = "procedural"  # Skills, learned tool usage, capabilities
-    EMOTIONAL = "emotional"    # Weighted emotional associations
+    EMOTIONAL = "emotional"  # Weighted emotional associations
 
     @property
     def is_consolidatable(self) -> bool:
@@ -25,6 +26,7 @@ class MemoryType(Enum):
 @dataclass(frozen=True)
 class EmotionalWeight:
     """Immutable emotional valence attached to a memory."""
+
     valence: float  # -1.0 (negative) to 1.0 (positive)
     arousal: float  # 0.0 (calm) to 1.0 (intense)
     context: str = ""
@@ -51,7 +53,7 @@ class Memory:
     content: str
     memory_type: MemoryType
     id: str = field(default_factory=lambda: str(uuid4()))
-    concepts: List[str] = field(default_factory=list)   # Concept IDs
+    concepts: List[str] = field(default_factory=list)  # Concept IDs
     embedding: Optional[List[float]] = None
     metadata: Dict[str, object] = field(default_factory=dict)
     emotional_weight: Optional[EmotionalWeight] = None

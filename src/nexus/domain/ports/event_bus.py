@@ -17,6 +17,7 @@ from uuid import uuid4
 
 class EventTopic(Enum):
     """Canonical event topics on the bus."""
+
     USER_MESSAGE = "cortex.user_message"
     CONTEXT_INJECTION = "subcortex.context_injection"
     MEMORY_STORED = "memory.stored"
@@ -72,4 +73,5 @@ class EventSubscriber(ABC):
 
 class EventBus(EventPublisher, EventSubscriber):
     """Full bus: publish and subscribe."""
+
     ...

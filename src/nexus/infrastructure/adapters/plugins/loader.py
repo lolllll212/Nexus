@@ -116,12 +116,15 @@ class PluginLoader:
 
     def _make_sandbox_handler(self, tool: Tool) -> Callable:
         """Fallback handler that runs tool code in the sandbox."""
+
         async def _handler(params: Dict[str, Any]) -> Dict[str, Any]:
             if tool.code:
                 from nexus.infrastructure.adapters.sandbox.subprocess_sandbox import SubprocessSandbox
+
                 sandbox = SubprocessSandbox()
                 return await sandbox.run(tool.code, inputs=params)
             return {"error": f"No handler and no code for tool {tool.id}"}
+
         return _handler
 
     def get_loaded(self) -> Dict[str, PluginInfo]:

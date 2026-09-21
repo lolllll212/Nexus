@@ -27,10 +27,7 @@ class BuiltinToolRegistry(ToolRegistry):
 
     async def search(self, query: str, limit: int = 5) -> List[Tool]:
         q = query.lower()
-        matches = [
-            t for t in self._tools.values()
-            if q in t.name.lower() or q in t.description.lower()
-        ]
+        matches = [t for t in self._tools.values() if q in t.name.lower() or q in t.description.lower()]
         return matches[:limit]
 
     async def list_all(self) -> List[Tool]:

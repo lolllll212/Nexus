@@ -103,7 +103,9 @@ class FakeContainer:
         self.column_registry = FakeCorticalColumnRegistry()
         self.policy_store = FakeActionPolicyStore()
         self.goal_repo = InMemoryGoalRepository()
-        self.autonomy_policy = DefaultAutonomyPolicy(rate_limiter=self.rate_limiter, hourly_budget=0, allowlist=["tool_selfheal"])
+        self.autonomy_policy = DefaultAutonomyPolicy(
+            rate_limiter=self.rate_limiter, hourly_budget=0, allowlist=["tool_selfheal"]
+        )
         self.agent_repo = InMemoryAgentRepository()
         self.swarm_repo = InMemorySwarmRepository()
 
@@ -132,8 +134,12 @@ class FakeContainer:
             tracer=self.tracer,
             metrics=self.metrics,
         )
-        self.entity_synthesis = EntitySynthesisUseCase(self.background_llm, self.concept_repo, self.memory_repo, self.event_bus)
-        self.pattern_detection = PatternDetectionUseCase(self.background_llm, self.memory_repo, self.event_bus)
+        self.entity_synthesis = EntitySynthesisUseCase(
+            self.background_llm, self.concept_repo, self.memory_repo, self.event_bus
+        )
+        self.pattern_detection = PatternDetectionUseCase(
+            self.background_llm, self.memory_repo, self.event_bus
+        )
         self.dream_session = DreamSessionUseCase(
             llm=self.background_llm,
             memory_repo=self.memory_repo,
@@ -147,7 +153,11 @@ class FakeContainer:
             metrics=self.metrics,
         )
         self.tool_generator = GenerateToolUseCase(
-            llm=self.llm, sandbox=self.sandbox, registry=self.tool_registry, executor=self.executor, deployer=None
+            llm=self.llm,
+            sandbox=self.sandbox,
+            registry=self.tool_registry,
+            executor=self.executor,
+            deployer=None,
         )
         self.self_heal = SelfHealUseCase(
             self.tool_registry,

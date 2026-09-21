@@ -21,7 +21,6 @@ from urllib.parse import quote_plus
 from nexus.domain.entities.tool import Tool, ToolStatus
 from nexus.domain.value_objects.schema import JSONSchema
 
-
 TOOL_DEFS: List[Dict[str, Any]] = [
     {
         "id": "web_search",
@@ -60,7 +59,11 @@ TOOL_DEFS: List[Dict[str, Any]] = [
         "description": "Run a shell command and return its output.",
         "input": {"command": {"type": "string"}, "timeout": {"type": "integer"}},
         "required": ["command"],
-        "output": {"stdout": {"type": "string"}, "stderr": {"type": "string"}, "returncode": {"type": "integer"}},
+        "output": {
+            "stdout": {"type": "string"},
+            "stderr": {"type": "string"},
+            "returncode": {"type": "integer"},
+        },
     },
     {
         "id": "read_file",
@@ -172,7 +175,9 @@ TOOL_DEFS: List[Dict[str, Any]] = [
 def extended_builtin_tools() -> List[Tool]:
     return [
         Tool(
-            id=d["id"], name=d["name"], description=d["description"],
+            id=d["id"],
+            name=d["name"],
+            description=d["description"],
             input_schema=JSONSchema(properties=d["input"], required=d.get("required", [])),
             output_schema=JSONSchema(properties=d.get("output", {"result": {"type": "any"}})),
             status=ToolStatus.READY,
@@ -222,17 +227,44 @@ async def _web_fetch(params: Dict[str, Any]) -> Dict[str, Any]:
 async def _calculator(params: Dict[str, Any]) -> Dict[str, Any]:
     import ast as _ast
     import math
+
     expr = params["expression"]
     tree = _ast.parse(expr, mode="eval")
-    allowed = (_ast.Constant, _ast.BinOp, _ast.UnaryOp, _ast.Expression, _ast.Load, _ast.Add, _ast.Sub, _ast.Mult,
-               _ast.Div, _ast.Pow, _ast.Mod, _ast.FloorDiv, _ast.USub, _ast.UAdd, _ast.Call, _ast.Name)
+    allowed = (
+        _ast.Constant,
+        _ast.BinOp,
+        _ast.UnaryOp,
+        _ast.Expression,
+        _ast.Load,
+        _ast.Add,
+        _ast.Sub,
+        _ast.Mult,
+        _ast.Div,
+        _ast.Pow,
+        _ast.Mod,
+        _ast.FloorDiv,
+        _ast.USub,
+        _ast.UAdd,
+        _ast.Call,
+        _ast.Name,
+    )
     for node in _ast.walk(tree):
         if not isinstance(node, allowed):
             raise ValueError(f"Disallowed: {type(node).__name__}")
         if isinstance(node, _ast.Call) and isinstance(node.func, _ast.Name):
             if node.func.id not in ("sqrt", "abs", "round", "min", "max", "sum", "len", "int", "float"):
                 raise ValueError(f"Disallowed function: {node.func.id}")
-    safe_funcs = {"sqrt": math.sqrt, "abs": abs, "round": round, "min": min, "max": max, "sum": sum, "len": len, "int": int, "float": float}
+    safe_funcs = {
+        "sqrt": math.sqrt,
+        "abs": abs,
+        "round": round,
+        "min": min,
+        "max": max,
+        "sum": sum,
+        "len": len,
+        "int": int,
+        "float": float,
+    }
     result = eval(compile(tree, "<calc>", "eval"), {"__builtins__": {}}, safe_funcs)
     return {"result": result}
 
@@ -241,8 +273,11 @@ async def _run_python(params: Dict[str, Any]) -> Dict[str, Any]:
     code = params["code"]
     try:
         proc = await asyncio.create_subprocess_exec(
-            "python", "-c", code,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            "python",
+            "-c",
+            code,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
         return {"output": stdout.decode(errors="replace"), "error": stderr.decode(errors="replace")}
@@ -255,7 +290,9 @@ async def _run_shell(params: Dict[str, Any]) -> Dict[str, Any]:
     timeout = params.get("timeout", 30)
     try:
         proc = await asyncio.create_subprocess_shell(
-            command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         return {
@@ -289,11 +326,13 @@ async def _list_directory(params: Dict[str, Any]) -> Dict[str, Any]:
         return {"entries": [], "error": f"Directory not found: {path}"}
     entries = []
     for item in sorted(path.iterdir()):
-        entries.append({
-            "name": item.name,
-            "type": "dir" if item.is_dir() else "file",
-            "size": item.stat().st_size if item.is_file() else 0,
-        })
+        entries.append(
+            {
+                "name": item.name,
+                "type": "dir" if item.is_dir() else "file",
+                "size": item.stat().st_size if item.is_file() else 0,
+            }
+        )
     return {"entries": entries}
 
 
@@ -310,8 +349,20 @@ async def _json_query(params: Dict[str, Any]) -> Dict[str, Any]:
 
 async def _json_transform(params: Dict[str, Any]) -> Dict[str, Any]:
     data = json.loads(params["json_str"])
-    safe_builtins = {"len": len, "int": int, "float": float, "str": str, "bool": bool, "sum": sum,
-                     "min": min, "max": max, "sorted": sorted, "reversed": reversed, "list": list, "dict": dict}
+    safe_builtins = {
+        "len": len,
+        "int": int,
+        "float": float,
+        "str": str,
+        "bool": bool,
+        "sum": sum,
+        "min": min,
+        "max": max,
+        "sorted": sorted,
+        "reversed": reversed,
+        "list": list,
+        "dict": dict,
+    }
     result = eval(params["expression"], {"__builtins__": safe_builtins}, {"d": data})
     return {"result": result}
 
@@ -355,7 +406,9 @@ async def _git_info(params: Dict[str, Any]) -> Dict[str, Any]:
     ]:
         try:
             proc = await asyncio.create_subprocess_shell(
-                cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
                 cwd=repo_path,
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
@@ -398,14 +451,17 @@ async def _grep(params: Dict[str, Any]) -> Dict[str, Any]:
 
 async def _system_info(params: Dict[str, Any]) -> Dict[str, Any]:
     import multiprocessing
-    return {"info": {
-        "os": platform.system(),
-        "os_release": platform.release(),
-        "python": platform.python_version(),
-        "machine": platform.machine(),
-        "cpus": multiprocessing.cpu_count(),
-        "cwd": os.getcwd(),
-    }}
+
+    return {
+        "info": {
+            "os": platform.system(),
+            "os_release": platform.release(),
+            "python": platform.python_version(),
+            "machine": platform.machine(),
+            "cpus": multiprocessing.cpu_count(),
+            "cwd": os.getcwd(),
+        }
+    }
 
 
 EXTENDED_HANDLERS: Dict[str, Any] = {

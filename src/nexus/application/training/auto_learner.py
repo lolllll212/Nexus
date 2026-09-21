@@ -42,7 +42,7 @@ class AutoLearner:
         category: str = "general",
         explanation: str = "",
         test_cases: str = "",
-        tools_used: list = None,
+        tools_used: Optional[list] = None,
         succeeded: bool = True,
         rating: float = 0.0,
     ) -> Optional[CodingExample]:

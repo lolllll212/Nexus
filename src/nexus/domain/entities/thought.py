@@ -11,13 +11,14 @@ from uuid import uuid4
 
 class ThoughtType(Enum):
     """Kinds of thoughts the brain produces."""
-    OBSERVATION = "observation"      # "I see that..."
-    REASONING = "reasoning"          # "Therefore..."
-    HYPOTHESIS = "hypothesis"        # "What if..."
-    ACTION = "action"                # "I will call tool X"
-    INSIGHT = "insight"              # A subconscious realization
-    ANSWER = "answer"                # Final response to user
-    DREAM = "dream"                  # Produced during dreaming cycles
+
+    OBSERVATION = "observation"  # "I see that..."
+    REASONING = "reasoning"  # "Therefore..."
+    HYPOTHESIS = "hypothesis"  # "What if..."
+    ACTION = "action"  # "I will call tool X"
+    INSIGHT = "insight"  # A subconscious realization
+    ANSWER = "answer"  # Final response to user
+    DREAM = "dream"  # Produced during dreaming cycles
 
 
 @dataclass

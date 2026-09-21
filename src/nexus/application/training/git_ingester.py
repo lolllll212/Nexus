@@ -20,7 +20,7 @@ class GitIngester:
     def __init__(self, store: CodingStore) -> None:
         self._store = store
 
-    def ingest_repo(self, repo_path: str, patterns: List[str] = None) -> int:
+    def ingest_repo(self, repo_path: str, patterns: Optional[List[str]] = None) -> int:
         """Scan a repo and create training examples from its code."""
         patterns = patterns or ["*.py"]
         repo = Path(repo_path)
@@ -108,7 +108,7 @@ class GitIngester:
         lines = source.split("\n")
         start = node.lineno - 1
         end = node.end_lineno or start + 50
-        class_source = "\n".join(lines[start:min(end, start + 80)])
+        class_source = "\n".join(lines[start : min(end, start + 80)])
 
         methods = [n.name for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
 
@@ -143,8 +143,20 @@ class GitIngester:
     def _extract_tags(self, name: str, docstring: str) -> List[str]:
         tags = []
         text = f"{name} {docstring}".lower()
-        keywords = ["async", "decorator", "generator", "context", "dataclass", "enum",
-                     "exception", "iterator", "callback", "factory", "singleton", "adapter"]
+        keywords = [
+            "async",
+            "decorator",
+            "generator",
+            "context",
+            "dataclass",
+            "enum",
+            "exception",
+            "iterator",
+            "callback",
+            "factory",
+            "singleton",
+            "adapter",
+        ]
         for kw in keywords:
             if kw in text:
                 tags.append(kw)

@@ -41,9 +41,9 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     stream: bool = False
     image_urls: Optional[List[str]] = None
-    audio: Optional[str] = None       # data URI: data:audio/<mime>;base64,...
+    audio: Optional[str] = None  # data URI: data:audio/<mime>;base64,...
     voice: Optional[str] = None
-    mode: str = "general"             # "general" or "coding"
+    mode: str = "general"  # "general" or "coding"
 
 
 class ChatResponse(BaseModel):
@@ -52,7 +52,7 @@ class ChatResponse(BaseModel):
     tools_used: list
     memories_recalled: int
     thought_count: int
-    audio: Optional[str] = None       # data URI of synthesized speech (P3)
+    audio: Optional[str] = None  # data URI of synthesized speech (P3)
 
 
 def _parse_data_uri(data_uri: str) -> tuple[str, bytes]:
@@ -90,6 +90,7 @@ async def chat(
     if req.mode == "coding":
         from nexus.application.training.coding_store import CodingStore
         from nexus.application.training.coding_prompt import CodingRAG
+
         store = CodingStore("data/coding_examples.json")
         rag = CodingRAG(store, max_examples=3)
         system_prompt = rag.build_coding_prompt(message)
@@ -136,6 +137,7 @@ async def chat_stream(
         try:
             # Use the streaming LLM provider
             from nexus.application.cortex.react_prompt import REACT_SYSTEM_PROMPT
+
             messages = [
                 {"role": "system", "content": REACT_SYSTEM_PROMPT},
                 {"role": "user", "content": req.message},

@@ -17,6 +17,7 @@ from nexus.domain.entities.goal import Goal, GoalEvent
 @dataclass
 class AutonomyDecision:
     """Result of an authorization check."""
+
     allowed: bool
     reason: str
     remaining_budget: int = 0

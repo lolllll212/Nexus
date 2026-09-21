@@ -35,7 +35,7 @@ class Concept:
 
     def decay(self, rate: float = 0.001, min_strength: float = 0.01) -> bool:
         """Apply synaptic decay. Returns True if the concept should be pruned."""
-        self.strength *= (1.0 - rate)
+        self.strength *= 1.0 - rate
         return self.strength < min_strength
 
 
@@ -62,5 +62,5 @@ class SynapticConnection:
 
     def decay(self, rate: float = 0.001, min_weight: float = 0.01) -> bool:
         """Apply synaptic decay. Returns True if the synapse should be pruned."""
-        self.weight *= (1.0 - rate)
+        self.weight *= 1.0 - rate
         return self.weight < min_weight

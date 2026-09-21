@@ -34,6 +34,7 @@ class Swarm:
 @dataclass
 class SwarmResult:
     """Outcome of a swarm run."""
+
     final_response: str
-    worker_responses: Dict[str, str]   # agent_id -> output
+    worker_responses: Dict[str, str]  # agent_id -> output
     session_id: str

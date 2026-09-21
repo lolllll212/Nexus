@@ -20,6 +20,7 @@ from uuid import uuid4
 @dataclass
 class CodingExample:
     """A single coding example with quality metadata."""
+
     id: str = field(default_factory=lambda: str(uuid4())[:12])
     task: str = ""
     solution: str = ""
@@ -101,6 +102,7 @@ class CodingStore:
         try:
             from qdrant_client import QdrantClient
             from qdrant_client.models import VectorParams, Distance
+
             self._qdrant = QdrantClient(host=qdrant_host, port=qdrant_port)
             collections = [c.name for c in self._qdrant.get_collections().collections]
             if self._collection not in collections:
@@ -131,6 +133,7 @@ class CodingStore:
             return
         try:
             from qdrant_client.models import PointStruct
+
             self._qdrant.upsert(
                 collection_name=self._collection,
                 points=[PointStruct(id=example.id, vector=example.embedding, payload=example.to_dict())],
@@ -142,12 +145,13 @@ class CodingStore:
         if not self._qdrant:
             return []
         try:
-            results = self._qdrant.search(
+            # qdrant-client >= 1.10 removed `.search()` in favor of `query_points()`.
+            response = self._qdrant.query_points(
                 collection_name=self._collection,
-                query_vector=query_vector,
+                query=query_vector,
                 limit=limit,
             )
-            return [r.id for r in results]
+            return [str(p.id) for p in response.points]
         except Exception:
             return []
 
@@ -194,7 +198,7 @@ class CodingStore:
         for e in self._examples:
             if category and e.category != category:
                 continue
-            score = 0
+            score = 0.0
             for word in q.split():
                 if word in e.task.lower():
                     score += 3
@@ -215,7 +219,8 @@ class CodingStore:
     def search_semantic(self, query_vector: List[float], limit: int = 5) -> List[CodingExample]:
         """Vector similarity search via Qdrant."""
         ids = self._search_vectors(query_vector, limit)
-        return [self.get(id) for id in ids if self.get(id)]
+        candidates = (self.get(id) for id in ids)
+        return [e for e in candidates if e is not None]
 
     def record_outcome(self, example_id: str, succeeded: bool, rating: float = 0.0) -> bool:
         ex = self.get(example_id)
@@ -234,7 +239,11 @@ class CodingStore:
         return [e for e in self._examples if e.use_count < min_uses]
 
     def get_low_quality(self, min_success_rate: float = 0.5) -> List[CodingExample]:
-        return [e for e in self._examples if (e.success_count + e.fail_count) > 3 and e.success_rate < min_success_rate]
+        return [
+            e
+            for e in self._examples
+            if (e.success_count + e.fail_count) > 3 and e.success_rate < min_success_rate
+        ]
 
     def deprecate(self, example_id: str) -> bool:
         ex = self.get(example_id)
@@ -251,7 +260,12 @@ class CodingStore:
                 self._save()
                 if self._qdrant:
                     try:
-                        self._qdrant.delete(collection_name=self._collection, points=[example_id])
+                        from qdrant_client.models import PointIdsList
+
+                        self._qdrant.delete(
+                            collection_name=self._collection,
+                            points_selector=PointIdsList(points=[example_id]),
+                        )
                     except Exception:
                         pass
                 return True
@@ -266,15 +280,16 @@ class CodingStore:
         )
         return export_path
 
-    def import_from_git(self, repo_path: str, patterns: List[str] = None) -> int:
+    def import_from_git(self, repo_path: str, patterns: Optional[List[str]] = None) -> int:
         """Auto-ingest coding examples from a git repository."""
         from nexus.application.training.git_ingester import GitIngester
+
         ingester = GitIngester(self)
         return ingester.ingest_repo(repo_path, patterns or ["*.py"])
 
     def stats(self) -> Dict[str, Any]:
-        categories = {}
-        langs = {}
+        categories: Dict[str, int] = {}
+        langs: Dict[str, int] = {}
         total_uses = 0
         total_success = 0
         for e in self._examples:

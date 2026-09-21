@@ -69,7 +69,9 @@ class ConsolidationUseCase:
 
         # Build simple clusters around each strong anchor
         for anchor in strong_concepts[:max_clusters]:
-            neighbors = await self._concept_repo.get_connections(anchor.id, min_weight=0.5, tenant_id=tenant_id)
+            neighbors = await self._concept_repo.get_connections(
+                anchor.id, min_weight=0.5, tenant_id=tenant_id
+            )
             if len(neighbors) < min_cluster_size:
                 continue
             cluster = CoreCluster(

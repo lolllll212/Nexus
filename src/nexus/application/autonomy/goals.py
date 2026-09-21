@@ -95,7 +95,9 @@ class ListGoalsUseCase:
     def __init__(self, repo: GoalRepository) -> None:
         self._repo = repo
 
-    async def execute(self, tenant_id: str, status: Optional[GoalStatus] = None, limit: int = 50) -> List[Goal]:
+    async def execute(
+        self, tenant_id: str, status: Optional[GoalStatus] = None, limit: int = 50
+    ) -> List[Goal]:
         if status is not None:
             return await self._repo.list_by_status(status, tenant_id=tenant_id, limit=limit)
         return await self._repo.list_active(tenant_id=tenant_id, limit=limit)

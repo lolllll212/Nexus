@@ -15,14 +15,42 @@ from nexus.domain.ports.event_bus import Event, EventBus, EventTopic, EventPrior
 from nexus.domain.value_objects.valence import ValenceTag
 
 _SURVIVAL_TOKENS = {
-    "crash", "outage", "down", "security", "breach", "vulnerability", "data loss",
-    "corruption", "failed", "failing", "incident", "critical", "deadlock", "panic",
-    "emergency", "production", "downtime",
+    "crash",
+    "outage",
+    "down",
+    "security",
+    "breach",
+    "vulnerability",
+    "data loss",
+    "corruption",
+    "failed",
+    "failing",
+    "incident",
+    "critical",
+    "deadlock",
+    "panic",
+    "emergency",
+    "production",
+    "downtime",
 }
 _UTILITY_TOKENS = {
-    "reusable", "pattern", "solution", "solved", "works", "framework", "library",
-    "api", "tutorial", "best practice", "template", "recipe", "common", "often",
-    "frequently", "general", "generic",
+    "reusable",
+    "pattern",
+    "solution",
+    "solved",
+    "works",
+    "framework",
+    "library",
+    "api",
+    "tutorial",
+    "best practice",
+    "template",
+    "recipe",
+    "common",
+    "often",
+    "frequently",
+    "general",
+    "generic",
 }
 
 

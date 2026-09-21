@@ -40,7 +40,13 @@ async def list_concepts(
 ) -> List[ConceptOut]:
     concepts = await container.concept_repo.find_by_label(query, limit, tenant_id=identity.tenant_id)
     return [
-        ConceptOut(id=c.id, label=c.label, concept_type=c.concept_type, strength=c.strength, access_count=c.access_count)
+        ConceptOut(
+            id=c.id,
+            label=c.label,
+            concept_type=c.concept_type,
+            strength=c.strength,
+            access_count=c.access_count,
+        )
         for c in concepts
     ]
 
@@ -55,8 +61,11 @@ async def get_concept(
     if concept is None:
         raise HTTPException(status_code=404, detail="Concept not found")
     return ConceptOut(
-        id=concept.id, label=concept.label, concept_type=concept.concept_type,
-        strength=concept.strength, access_count=concept.access_count,
+        id=concept.id,
+        label=concept.label,
+        concept_type=concept.concept_type,
+        strength=concept.strength,
+        access_count=concept.access_count,
     )
 
 
@@ -68,4 +77,7 @@ async def search_memory(
     container: Container = Depends(get_container),
 ):
     memories = await container.memory_repo.retrieve(query, limit=limit, tenant_id=identity.tenant_id)
-    return [MemoryOut(id=m.id, content=m.content, memory_type=m.memory_type.value, access_count=m.access_count) for m in memories]
+    return [
+        MemoryOut(id=m.id, content=m.content, memory_type=m.memory_type.value, access_count=m.access_count)
+        for m in memories
+    ]

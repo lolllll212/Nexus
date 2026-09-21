@@ -21,8 +21,8 @@ class Span:
     async def __aenter__(self) -> "Span":
         return self
 
-    async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
-        return False
+    async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        return None
 
     def set_attribute(self, key: str, value: Any) -> None:
         self.attributes[key] = value

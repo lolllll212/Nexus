@@ -24,9 +24,22 @@ class GatingResult:
 
 # Lexical cues that signal a high-urgency task.
 _URGENT_TOKENS = {
-    "urgent", "asap", "emergency", "critical", "crash", "down", "broken",
-    "fail", "failing", "security", "vulnerability", "now", "incident",
-    "production", "deadline", "blocked",
+    "urgent",
+    "asap",
+    "emergency",
+    "critical",
+    "crash",
+    "down",
+    "broken",
+    "fail",
+    "failing",
+    "security",
+    "vulnerability",
+    "now",
+    "incident",
+    "production",
+    "deadline",
+    "blocked",
 }
 
 

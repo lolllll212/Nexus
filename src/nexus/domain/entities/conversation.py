@@ -55,7 +55,7 @@ class Conversation:
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
 
-    def add_message(self, role: MessageRole, content: str, metadata: Dict = None) -> Message:
+    def add_message(self, role: MessageRole, content: str, metadata: Optional[Dict] = None) -> Message:
         msg = Message(role=role, content=content, metadata=metadata or {})
         self.messages.append(msg)
         self.updated_at = datetime.utcnow()
@@ -71,7 +71,4 @@ class Conversation:
 
     def to_llm_context(self, n: int = 10) -> List[Dict[str, str]]:
         """Serialize recent messages for LLM consumption."""
-        return [
-            {"role": m.role.value, "content": m.content}
-            for m in self.recent(n)
-        ]
+        return [{"role": m.role.value, "content": m.content} for m in self.recent(n)]

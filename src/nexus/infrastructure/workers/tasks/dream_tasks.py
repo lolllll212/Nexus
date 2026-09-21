@@ -31,10 +31,14 @@ def run_dream() -> dict:
         return {
             "session_id": result.session_id,
             "duration_seconds": result.duration_seconds,
-            "semantic_fragments_created": result.compression.semantic_fragments_created if result.compression else 0,
+            "semantic_fragments_created": (
+                result.compression.semantic_fragments_created if result.compression else 0
+            ),
             "vectors_pruned": result.pruning.vectors_pruned if result.pruning else 0,
             "solutions_verified": len(result.simulation.solutions_verified) if result.simulation else 0,
-            "clusters_identified": len(result.consolidation.clusters_identified) if result.consolidation else 0,
+            "clusters_identified": (
+                len(result.consolidation.clusters_identified) if result.consolidation else 0
+            ),
         }
 
     return asyncio.run(_run_with_container(_run))

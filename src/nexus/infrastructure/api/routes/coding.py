@@ -70,6 +70,7 @@ class StatsResponse(BaseModel):
 def _get_store():
     from nexus.application.training.coding_store import CodingStore
     from nexus.infrastructure.di.container import Config
+
     config = Config()
     return CodingStore(
         store_path="data/coding_examples.json",
@@ -81,6 +82,7 @@ def _get_store():
 
 # ── Coding chat ──────────────────────────────────────────────────────────
 
+
 @router.post("", response_model=CodingResponse)
 async def coding_chat(
     req: CodingRequest,
@@ -90,22 +92,29 @@ async def coding_chat(
     if not req.message:
         raise HTTPException(status_code=422, detail="Provide a coding task")
     from nexus.application.training.coding_prompt import CodingRAG
+
     store = _get_store()
     rag = CodingRAG(store, max_examples=req.few_shot)
     system_prompt = rag.build_coding_prompt(req.message, category=req.category)
     examples = store.search(req.message, category=req.category, limit=req.few_shot)
     result = await container.process_message.execute(
-        user_id=identity.user_id, message=req.message, session_id=req.session_id,
-        tenant_id=identity.tenant_id, system_prompt=system_prompt,
+        user_id=identity.user_id,
+        message=req.message,
+        session_id=req.session_id,
+        tenant_id=identity.tenant_id,
+        system_prompt=system_prompt,
     )
     return CodingResponse(
-        response=result.response, session_id=result.session_id,
-        tools_used=result.tools_used, memories_recalled=result.memories_recalled,
+        response=result.response,
+        session_id=result.session_id,
+        tools_used=result.tools_used,
+        memories_recalled=result.memories_recalled,
         examples_used=len(examples),
     )
 
 
 # ── Stats ────────────────────────────────────────────────────────────────
+
 
 @router.get("/stats", response_model=StatsResponse)
 async def training_stats(identity: Identity = Depends(require_identity)) -> StatsResponse:
@@ -114,9 +123,12 @@ async def training_stats(identity: Identity = Depends(require_identity)) -> Stat
 
 # ── CRUD ─────────────────────────────────────────────────────────────────
 
+
 @router.get("/examples")
 async def list_examples(
-    identity: Identity = Depends(require_identity), limit: int = 50, category: Optional[str] = None,
+    identity: Identity = Depends(require_identity),
+    limit: int = 50,
+    category: Optional[str] = None,
 ) -> list:
     store = _get_store()
     examples = store.list_all()
@@ -136,11 +148,18 @@ async def get_example(example_id: str, identity: Identity = Depends(require_iden
 @router.post("/examples")
 async def add_example(req: AddExampleRequest, identity: Identity = Depends(require_identity)) -> dict:
     from nexus.application.training.coding_store import CodingExample
+
     store = _get_store()
     ex = CodingExample(
-        task=req.task, solution=req.solution, language=req.language,
-        category=req.category, tags=req.tags, explanation=req.explanation,
-        test_cases=req.test_cases, difficulty=req.difficulty, source="manual",
+        task=req.task,
+        solution=req.solution,
+        language=req.language,
+        category=req.category,
+        tags=req.tags,
+        explanation=req.explanation,
+        test_cases=req.test_cases,
+        difficulty=req.difficulty,
+        source="manual",
     )
     store.add(ex)
     return {"id": ex.id, "message": "Example added"}
@@ -148,20 +167,32 @@ async def add_example(req: AddExampleRequest, identity: Identity = Depends(requi
 
 @router.put("/examples/{example_id}")
 async def update_example(
-    example_id: str, req: AddExampleRequest, identity: Identity = Depends(require_identity),
+    example_id: str,
+    req: AddExampleRequest,
+    identity: Identity = Depends(require_identity),
 ) -> dict:
     from nexus.application.training.coding_store import CodingExample
+
     store = _get_store()
     existing = store.get(example_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Example not found")
     updated = CodingExample(
-        id=example_id, task=req.task, solution=req.solution, language=req.language,
-        category=req.category, tags=req.tags, explanation=req.explanation,
-        test_cases=req.test_cases, difficulty=req.difficulty,
-        version=existing.version + 1, source=existing.source,
-        use_count=existing.use_count, success_count=existing.success_count,
-        fail_count=existing.fail_count, avg_rating=existing.avg_rating,
+        id=example_id,
+        task=req.task,
+        solution=req.solution,
+        language=req.language,
+        category=req.category,
+        tags=req.tags,
+        explanation=req.explanation,
+        test_cases=req.test_cases,
+        difficulty=req.difficulty,
+        version=existing.version + 1,
+        source=existing.source,
+        use_count=existing.use_count,
+        success_count=existing.success_count,
+        fail_count=existing.fail_count,
+        avg_rating=existing.avg_rating,
     )
     store.update(updated)
     return {"id": example_id, "message": "Updated", "version": updated.version}
@@ -176,7 +207,9 @@ async def delete_example(example_id: str, identity: Identity = Depends(require_i
 
 @router.get("/examples/search")
 async def search_examples(
-    q: str = "", category: Optional[str] = None, limit: int = 5,
+    q: str = "",
+    category: Optional[str] = None,
+    limit: int = 5,
     identity: Identity = Depends(require_identity),
 ) -> list:
     return [e.to_dict() for e in _get_store().search(q, category=category, limit=limit)]
@@ -184,9 +217,12 @@ async def search_examples(
 
 # ── Quality ──────────────────────────────────────────────────────────────
 
+
 @router.post("/examples/{example_id}/feedback")
 async def submit_feedback(
-    example_id: str, req: FeedbackRequest, identity: Identity = Depends(require_identity),
+    example_id: str,
+    req: FeedbackRequest,
+    identity: Identity = Depends(require_identity),
 ) -> dict:
     store = _get_store()
     ex = store.get(example_id)
@@ -217,21 +253,29 @@ async def underused(min_uses: int = 2, identity: Identity = Depends(require_iden
 
 # ── Auto-learning ────────────────────────────────────────────────────────
 
+
 @router.post("/learn")
 async def auto_learn(
-    task: str, solution: str, language: str = "python",
-    succeeded: bool = True, rating: float = 0.0,
+    task: str,
+    solution: str,
+    language: str = "python",
+    succeeded: bool = True,
+    rating: float = 0.0,
     identity: Identity = Depends(require_identity),
 ) -> dict:
     from nexus.application.training.auto_learner import AutoLearner
+
     learner = AutoLearner(_get_store())
-    example = learner.learn(task=task, solution=solution, language=language, succeeded=succeeded, rating=rating)
+    example = learner.learn(
+        task=task, solution=solution, language=language, succeeded=succeeded, rating=rating
+    )
     if example:
         return {"id": example.id, "message": "Learned from session"}
     return {"message": "Not suitable for learning"}
 
 
 # ── Import/Export ─────────────────────────────────────────────────────────
+
 
 @router.post("/import/git")
 async def import_git_repo(req: ImportGitRequest, identity: Identity = Depends(require_identity)) -> dict:

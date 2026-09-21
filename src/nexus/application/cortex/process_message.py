@@ -40,6 +40,7 @@ from nexus.application.cortex.react_prompt import REACT_SYSTEM_PROMPT
 @dataclass
 class MessageResult:
     """The result of processing a user message."""
+
     response: str
     session_id: str
     thoughts: List[Thought]
@@ -107,7 +108,9 @@ class ProcessMessageUseCase:
             # --- 3. Run the ReAct loop (optionally multimodal / persona'd). ---
             thoughts: List[Thought] = []
             tools_used: List[str] = []
-            response = await self._react_loop(conversation, memories, thoughts, tools_used, image_urls, system_prompt)
+            response = await self._react_loop(
+                conversation, memories, thoughts, tools_used, image_urls, system_prompt
+            )
 
             # --- 4. Persist as episodic memory. ---
             await self._encode_episodic(conversation, response)
@@ -167,7 +170,9 @@ class ProcessMessageUseCase:
         tenant = conversation.tenant_id
         # Vector recall (semantic similarity)
         try:
-            semantic = await self._memory_repo.retrieve(query, limit=self.MEMORY_RECALL_LIMIT, tenant_id=tenant)
+            semantic = await self._memory_repo.retrieve(
+                query, limit=self.MEMORY_RECALL_LIMIT, tenant_id=tenant
+            )
         except Exception:
             semantic = []
 
@@ -181,7 +186,10 @@ class ProcessMessageUseCase:
                     # Each connection implies a related memory; recall strengthens the synapse
                     related = await self._concept_repo.get(conn.target_id, tenant_id=tenant)
                     if related:
-                        await self._concept_repo.upsert_connection(conn.reinforce(), tenant_id=tenant)
+                        # reinforce() mutates in place and returns None - upsert the
+                        # mutated connection, not the (previously) None return value.
+                        conn.reinforce()
+                        await self._concept_repo.upsert_connection(conn, tenant_id=tenant)
             except Exception:
                 continue
 
@@ -237,13 +245,15 @@ class ProcessMessageUseCase:
             if tool_call is None:
                 # Model was still thinking — feed reasoning back and nudge it to act
                 context.append({"role": "assistant", "content": reasoning})
-                context.append({
-                    "role": "system",
-                    "content": (
-                        "You are reasoning. Now either call a tool using TOOL_CALL format "
-                        "or give FINAL ANSWER if you have enough information."
-                    ),
-                })
+                context.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are reasoning. Now either call a tool using TOOL_CALL format "
+                            "or give FINAL ANSWER if you have enough information."
+                        ),
+                    }
+                )
                 total_tokens += 50
                 continue
 
@@ -252,19 +262,23 @@ class ProcessMessageUseCase:
             # Prevent loops — if same tool called 3x in a row, force final answer
             seen_tools.append(tool_name)
             if len(seen_tools) >= 3 and seen_tools[-3:] == [tool_name] * 3:
-                context.append({
-                    "role": "system",
-                    "content": f"You've called {tool_name} three times in a row. You have enough information. Give FINAL ANSWER now.",
-                })
+                context.append(
+                    {
+                        "role": "system",
+                        "content": f"You've called {tool_name} three times in a row. You have enough information. Give FINAL ANSWER now.",
+                    }
+                )
                 continue
 
             # ACT
             tool = await self._tools.get(tool_name)
             if tool is None:
-                context.append({
-                    "role": "system",
-                    "content": f"Tool '{tool_name}' does not exist. Available tools: read_file, list_directory, grep, run_python, calculator, diff_text, web_fetch, git_info. Pick one of these.",
-                })
+                context.append(
+                    {
+                        "role": "system",
+                        "content": f"Tool '{tool_name}' does not exist. Available tools: read_file, list_directory, grep, run_python, calculator, diff_text, web_fetch, git_info. Pick one of these.",
+                    }
+                )
                 continue
 
             tools_used.append(tool.name)
@@ -281,7 +295,9 @@ class ProcessMessageUseCase:
             context.append({"role": "system", "content": observation})
 
         # Final fallback — synthesize what we have
-        return "I've reached my reasoning limit. Here's my best synthesis: " + self._extract_last_content(context)
+        return "I've reached my reasoning limit. Here's my best synthesis: " + self._extract_last_content(
+            context
+        )
 
     async def _encode_episodic(self, conversation: Conversation, response: str) -> None:
         """Persist the raw exchange as episodic memory for tonight's dreaming."""
@@ -309,7 +325,9 @@ class ProcessMessageUseCase:
         await self._memory_repo.store(memory, tenant_id=conversation.tenant_id)
         # Notify the nervous system
         await self._event_bus.publish(
-            Event(topic=EventTopic.MEMORY_STORED, payload={"memory_id": memory.id, "concepts": memory.concepts})
+            Event(
+                topic=EventTopic.MEMORY_STORED, payload={"memory_id": memory.id, "concepts": memory.concepts}
+            )
         )
 
     # ------------------------------------------------------------------ #
@@ -339,7 +357,9 @@ class ProcessMessageUseCase:
 
         # 3. Recalled memories
         if memories:
-            memory_block = "Relevant memories from past interactions:\n" + "\n".join(f"- {m.content}" for m in memories)
+            memory_block = "Relevant memories from past interactions:\n" + "\n".join(
+                f"- {m.content}" for m in memories
+            )
             sys_msgs.append({"role": "system", "content": memory_block})
 
         # 4. ReAct framework prompt — reasoning rules, goes last among system msgs
@@ -429,7 +449,7 @@ class ProcessMessageUseCase:
             marker_upper = marker.upper()
             if marker_upper in upper:
                 idx = upper.index(marker_upper)
-                return reasoning[idx + len(marker):].strip()
+                return reasoning[idx + len(marker) :].strip()
         return reasoning.strip()
 
     def _extract_last_content(self, context: List[dict]) -> str:

@@ -70,9 +70,7 @@ class _LoggingSpan(Span):
         parent = _SPAN_ID.get()
         span_id = str(uuid.uuid4())
         self._tokens = (_TRACE_ID.set(trace_id), _SPAN_ID.set(span_id))
-        self.attributes.update(
-            {"trace_id": trace_id, "span_id": span_id, "parent_span_id": parent or None}
-        )
+        self.attributes.update({"trace_id": trace_id, "span_id": span_id, "parent_span_id": parent or None})
         self._emitter("span_start", self.attributes)
         return self
 

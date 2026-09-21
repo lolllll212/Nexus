@@ -8,7 +8,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-167%20passed-brightgreen)](#testing)
+[![CI](https://github.com/lolllll212/Nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/lolllll212/Nexus/actions/workflows/ci.yml)
 
 </div>
 
@@ -335,7 +335,7 @@ TOOL_HANDLERS = {
 ## Testing
 
 ```bash
-# Run all 167 unit tests (no infrastructure needed)
+# Run the full test suite (no infrastructure needed)
 pytest
 
 # Run with coverage

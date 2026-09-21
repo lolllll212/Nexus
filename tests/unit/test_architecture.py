@@ -54,10 +54,13 @@ def _violations(package: Path, forbidden: tuple[str, ...]) -> list[str]:
 
 
 def test_domain_never_imports_application_or_infrastructure() -> None:
-    assert _violations(
-        NEXUS_ROOT / "domain",
-        ("nexus.application", "nexus.infrastructure"),
-    ) == []
+    assert (
+        _violations(
+            NEXUS_ROOT / "domain",
+            ("nexus.application", "nexus.infrastructure"),
+        )
+        == []
+    )
 
 
 def test_application_never_imports_infrastructure() -> None:

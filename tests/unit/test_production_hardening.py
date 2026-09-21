@@ -29,7 +29,11 @@ from nexus.domain.entities.concept import Concept
 from nexus.domain.ports.deployment import DeploymentRequest
 from nexus.domain.ports.observability import Span, Tracer
 from nexus.infrastructure.adapters.observability.observability import InMemoryMetrics
-from nexus.infrastructure.adapters.security.secrets import ChainedSecretStore, EnvSecretStore, JsonFileSecretStore
+from nexus.infrastructure.adapters.security.secrets import (
+    ChainedSecretStore,
+    EnvSecretStore,
+    JsonFileSecretStore,
+)
 from nexus.infrastructure.adapters.persistence.qdrant_memory_repository import QdrantMemoryRepository
 
 from tests.fakes import (
@@ -234,12 +238,20 @@ def test_chat_rate_limit_enforced(app, client):
     fake.config = cfg
 
     for _ in range(2):
-        assert client.post("/v1/chat", json={"message": "hi", "session_id": "s1"}, headers=AUTH_T1).status_code == 200
-    assert client.post("/v1/chat", json={"message": "hi", "session_id": "s1"}, headers=AUTH_T1).status_code == 429
+        assert (
+            client.post("/v1/chat", json={"message": "hi", "session_id": "s1"}, headers=AUTH_T1).status_code
+            == 200
+        )
+    assert (
+        client.post("/v1/chat", json={"message": "hi", "session_id": "s1"}, headers=AUTH_T1).status_code
+        == 429
+    )
 
 
 def test_tool_generate_rate_limit_enforced(app, client):
-    fake = _inject_container(client, app, llm_script={"complete": "def solve(input_data):\n    return {'ok': True}"})
+    fake = _inject_container(
+        client, app, llm_script={"complete": "def solve(input_data):\n    return {'ok': True}"}
+    )
     cfg = Config()
     cfg.tool_gen_rate_limit = 1
     cfg.rate_limit_window_seconds = 60

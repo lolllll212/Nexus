@@ -8,9 +8,10 @@ from enum import Enum
 
 class ConnectionType(Enum):
     """Taxonomy of how two concepts are linked in the graph."""
-    SEMANTIC = "semantic"    # Share meaning (e.g., "React" - "component")
-    TEMPORAL = "temporal"    # Occurred close in time
-    CAUSAL = "causal"        # One causes/influences the other
+
+    SEMANTIC = "semantic"  # Share meaning (e.g., "React" - "component")
+    TEMPORAL = "temporal"  # Occurred close in time
+    CAUSAL = "causal"  # One causes/influences the other
     EMOTIONAL = "emotional"  # Associated through emotional weight
     CONTEXTUAL = "contextual"  # Co-occur in the same context
 

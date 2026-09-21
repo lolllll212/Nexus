@@ -11,7 +11,6 @@ from typing import Optional
 
 from nexus.application.training.coding_store import CodingStore
 
-
 CODING_SYSTEM_PROMPT = """You are NEXUS, an expert coding assistant. You write clean, efficient, well-tested code.
 
 ## Your capabilities

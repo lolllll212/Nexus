@@ -24,7 +24,7 @@ class Agent:
     owner_id: str
     system_prompt: str
     id: str = field(default_factory=lambda: str(uuid4()))
-    role: str = "worker"                       # "leader" | "worker" (informational)
+    role: str = "worker"  # "leader" | "worker" (informational)
     tools: List[str] = field(default_factory=list)  # allowlisted tools (empty = all)
     status: AgentStatus = AgentStatus.ACTIVE
     created_at: datetime = field(default_factory=datetime.utcnow)

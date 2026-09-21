@@ -18,10 +18,10 @@ from nexus.infrastructure.di.container import Config, Container
 
 from tests.fakes.container import FakeContainer
 
-
 # --------------------------------------------------------------------------- #
 #  Fake `openai` module
 # --------------------------------------------------------------------------- #
+
 
 class _FakeMessage:
     def __init__(self, content: str) -> None:
@@ -60,6 +60,7 @@ class _FakeCompletions:
     async def create(self, **kwargs):
         self.calls.append(kwargs)
         if kwargs.get("stream"):
+
             async def gen():
                 for piece in ("streamed ", "answer"):
                     yield _FakeChunk(piece)
@@ -86,7 +87,9 @@ class _FakeEmbeddings:
 
     async def create(self, **kwargs):
         self.calls.append(kwargs)
-        data = [_FakeEmbeddingDatum([0.1, 0.2, 0.3])] * (len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)
+        data = [_FakeEmbeddingDatum([0.1, 0.2, 0.3])] * (
+            len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1
+        )
         return types.SimpleNamespace(data=data)
 
 
@@ -114,9 +117,12 @@ def fake_openai(monkeypatch):
 #  OpenAIProvider
 # --------------------------------------------------------------------------- #
 
+
 async def test_provider_forwards_base_url_on_complete(fake_openai):
     provider = OpenAIProvider(api_key="sk-x", base_url="http://localhost:11434/v1")
-    out = await provider.complete([{"role": "user", "content": "hi"}], tools=[{"type": "function", "function": {}}])
+    out = await provider.complete(
+        [{"role": "user", "content": "hi"}], tools=[{"type": "function", "function": {}}]
+    )
     assert out == "FINAL ANSWER: ok"
     assert fake_openai.instances[-1] == {"api_key": "sk-x", "base_url": "http://localhost:11434/v1"}
 
@@ -153,6 +159,7 @@ async def test_provider_forwards_base_url_on_stream(fake_openai):
 #  OpenAIEmbedder
 # --------------------------------------------------------------------------- #
 
+
 async def test_embedder_forwards_base_url(fake_openai):
     embedder = OpenAIEmbedder(api_key="sk-x", base_url="http://localhost:11434/v1", dimension=768)
     assert embedder.dimension == 768
@@ -177,6 +184,7 @@ async def test_embedder_without_base_url_matches_old_behavior(fake_openai):
 # --------------------------------------------------------------------------- #
 #  Container wiring
 # --------------------------------------------------------------------------- #
+
 
 def test_config_defaults():
     cfg = Config()
@@ -213,6 +221,7 @@ def test_build_embedder_threads_base_url_and_dimension():
 # --------------------------------------------------------------------------- #
 #  Hybrid dual-provider split (background LLM slot)
 # --------------------------------------------------------------------------- #
+
 
 def test_config_background_defaults(monkeypatch):
     monkeypatch.delenv("NEXUS_BACKGROUND_LLM_BASE_URL", raising=False)

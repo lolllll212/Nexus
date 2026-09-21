@@ -31,9 +31,7 @@ class ApiKeyAuthenticator(Authenticator):
         if not credential:
             raise UnauthorizedError("Missing credentials")
         if self._empty:
-            raise UnauthorizedError(
-                "No API keys configured. Set NEXUS_API_KEYS in .env to allow access."
-            )
+            raise UnauthorizedError("No API keys configured. Set NEXUS_API_KEYS in .env to allow access.")
         record = self._keys.get(credential)
         if record is None:
             raise UnauthorizedError("Invalid credentials")

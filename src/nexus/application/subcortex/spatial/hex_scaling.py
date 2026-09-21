@@ -29,12 +29,16 @@ class BoundlessScalingUseCase:
     def zoom_in(self, index: HexIndex, levels: int = 1) -> ZoomResult:
         """Descend into finer detail (macro -> micro)."""
         result = index.zoom_in(levels)
-        return ZoomResult(index=result, resolution=result.resolution, children=result.children(), area=result.relative_area)
+        return ZoomResult(
+            index=result, resolution=result.resolution, children=result.children(), area=result.relative_area
+        )
 
     def zoom_out(self, index: HexIndex, levels: int = 1) -> ZoomResult:
         """Ascend to coarser scope (micro -> macro)."""
         result = index.zoom_out(levels)
-        return ZoomResult(index=result, resolution=result.resolution, children=result.children(), area=result.relative_area)
+        return ZoomResult(
+            index=result, resolution=result.resolution, children=result.children(), area=result.relative_area
+        )
 
     def contains(self, macro: HexIndex, micro: HexIndex) -> bool:
         """True when `micro` lives inside `macro` (at any resolution below it)."""

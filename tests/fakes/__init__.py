@@ -210,7 +210,13 @@ class FakeLLM(LLMProvider):
     def __init__(self, script: Optional[Dict[str, Any]] = None) -> None:
         self.script = script or {}
 
-    async def complete(self, messages: List[Dict[str, str]], temperature: float = 0.7, max_tokens: int = 4096, tools: Optional[List[Dict]] = None) -> str:
+    async def complete(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+        tools: Optional[List[Dict]] = None,
+    ) -> str:
         if "complete" in self.script:
             return self.script["complete"]
         return "FINAL ANSWER: Test response"

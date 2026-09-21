@@ -13,10 +13,10 @@ from dataclasses import dataclass, field
 from typing import Dict
 
 
-
 @dataclass
 class DeploymentRequest:
     """What the brain wants deployed."""
+
     tool_id: str
     name: str
     code: str
@@ -30,6 +30,7 @@ class DeploymentRequest:
 @dataclass
 class DeploymentInfo:
     """What the platform returned."""
+
     endpoint: str
     platform: str
     deployment_id: str

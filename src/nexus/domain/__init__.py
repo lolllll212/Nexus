@@ -7,9 +7,16 @@ from nexus.domain.entities.tool import Tool, ToolStatus
 from nexus.domain.entities.conversation import Conversation, Message, Session
 
 __all__ = [
-    "Memory", "MemoryType", "EmotionalWeight",
-    "Concept", "SynapticConnection",
-    "Thought", "ThoughtType",
-    "Tool", "ToolStatus",
-    "Conversation", "Message", "Session",
+    "Memory",
+    "MemoryType",
+    "EmotionalWeight",
+    "Concept",
+    "SynapticConnection",
+    "Thought",
+    "ThoughtType",
+    "Tool",
+    "ToolStatus",
+    "Conversation",
+    "Message",
+    "Session",
 ]

@@ -20,7 +20,6 @@ from pathlib import Path
 
 from nexus.application.training.coding_store import CodingExample, CodingStore
 
-
 STORE_PATH = Path("data/coding_examples.json")
 
 
@@ -52,9 +51,14 @@ def cmd_add(args):
     test_cases = "\n".join(test_lines)
 
     ex = CodingExample(
-        task=task, solution=solution, language=language, category=category,
+        task=task,
+        solution=solution,
+        language=language,
+        category=category,
         tags=[t.strip() for t in tags.split(",") if t.strip()],
-        explanation=explanation, test_cases=test_cases, difficulty=difficulty,
+        explanation=explanation,
+        test_cases=test_cases,
+        difficulty=difficulty,
     )
     store.add(ex)
     print(f"Added example: {ex.id}")
@@ -141,6 +145,7 @@ def cmd_export(args):
 def cmd_import_seed(args):
     """Import the built-in seed coding examples."""
     from nexus.application.training.seed_data import SEED_EXAMPLES
+
     store = CodingStore(STORE_PATH)
     # Deduplicate by task
     existing = {e.task for e in store.list_all()}
@@ -195,7 +200,9 @@ def cmd_chat(args):
                 continue
 
             # Build the few-shot context from stored examples
-            conversation.append({"role": "system", "content": f"Relevant examples:\n{rag.get_few_shot_context(user_input)}"})
+            conversation.append(
+                {"role": "system", "content": f"Relevant examples:\n{rag.get_few_shot_context(user_input)}"}
+            )
             conversation.append({"role": "user", "content": user_input})
 
             try:

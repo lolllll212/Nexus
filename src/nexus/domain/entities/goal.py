@@ -11,9 +11,10 @@ from uuid import uuid4
 
 class GoalStatus(Enum):
     """Lifecycle states of a goal."""
-    PROPOSED = "proposed"    # awaiting approval (if approval required)
-    ACTIVE = "active"        # autonomy loop is working it
-    BLOCKED = "blocked"      # needs human input / budget exhausted
+
+    PROPOSED = "proposed"  # awaiting approval (if approval required)
+    ACTIVE = "active"  # autonomy loop is working it
+    BLOCKED = "blocked"  # needs human input / budget exhausted
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -21,6 +22,7 @@ class GoalStatus(Enum):
 
 class GoalPriority(Enum):
     """Urgency ranking, drives scheduling order."""
+
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"
@@ -29,6 +31,7 @@ class GoalPriority(Enum):
 
 class StepStatus(Enum):
     """Lifecycle states of a single goal step."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     DONE = "done"
@@ -51,7 +54,7 @@ class GoalStep:
 class GoalEvent:
     """Append-only audit entry in a goal's lifecycle ledger."""
 
-    kind: str      # step_started|step_completed|step_failed|budget_decremented|approved|rejected|cancelled|regenerated_tool
+    kind: str  # step_started|step_completed|step_failed|budget_decremented|approved|rejected|cancelled|regenerated_tool
     detail: str
     actor: str = "system"
     ts: datetime = field(default_factory=datetime.utcnow)

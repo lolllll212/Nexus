@@ -14,21 +14,22 @@ The harness:
 
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List
 
 import pytest
 
 import sys
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 
 @dataclass
 class EvalCase:
     """A single evaluation scenario."""
+
     task: str
     expected_tools: List[str] = field(default_factory=list)
     expected_keywords: List[str] = field(default_factory=list)
@@ -39,6 +40,7 @@ class EvalCase:
 @dataclass
 class EvalResult:
     """Result of running one eval case."""
+
     case: EvalCase
     tools_called: List[str]
     answer: str
@@ -86,6 +88,7 @@ GOLDEN_SET: List[EvalCase] = [
 
 
 # ── Runner ────────────────────────────────────────────────────────────────
+
 
 class EvalRunner:
     """Runs eval cases and collects results."""
@@ -176,18 +179,20 @@ class EvalRunner:
 
 # ── Tests ─────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_react_golden_set():
     """Run the full golden set against the ReAct loop."""
-    from tests.fakes.container import FakeContainer
 
     class RecordingLLM:
         def __init__(self, response="FINAL ANSWER: The answer is 42."):
             self.calls = []
             self._response = response
+
         async def complete(self, messages, temperature=0.7, max_tokens=4096, tools=None):
             self.calls.append(messages)
             return self._response
+
         async def extract_structured(self, content, schema, instructions=""):
             return {}
 
@@ -207,15 +212,16 @@ async def test_react_golden_set():
 @pytest.mark.asyncio
 async def test_eval_tracks_latency():
     """Verify eval harness tracks timing accurately."""
-    from tests.fakes.container import FakeContainer
 
     class RecordingLLM:
         def __init__(self, response="FINAL ANSWER: done"):
             self.calls = []
             self._response = response
+
         async def complete(self, messages, temperature=0.7, max_tokens=4096, tools=None):
             self.calls.append(messages)
             return self._response
+
         async def extract_structured(self, content, schema, instructions=""):
             return {}
 

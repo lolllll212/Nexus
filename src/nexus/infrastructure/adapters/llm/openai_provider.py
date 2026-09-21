@@ -51,7 +51,12 @@ class OpenAIProvider(StreamingLLMProvider):
     ) -> str:
         try:
             client = self._client()
-            kwargs: dict = {"model": self._model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens or self._default_max_tokens}
+            kwargs: dict = {
+                "model": self._model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens or self._default_max_tokens,
+            }
             if tools:
                 kwargs["tools"] = tools
             resp = await client.chat.completions.create(**kwargs)
@@ -114,11 +119,17 @@ class OpenAIProvider(StreamingLLMProvider):
         except Exception as exc:
             raise LLMUnavailableError(str(exc)) from exc
 
-    async def stream(self, messages: List[Dict[str, str]], temperature: float = 0.7, max_tokens: int | None = None) -> AsyncGenerator[str, None]:
+    async def stream(
+        self, messages: List[Dict[str, str]], temperature: float = 0.7, max_tokens: int | None = None
+    ) -> AsyncGenerator[str, None]:
         try:
             client = self._client()
             stream = await client.chat.completions.create(
-                model=self._model, messages=messages, temperature=temperature, max_tokens=max_tokens or self._default_max_tokens, stream=True
+                model=self._model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens or self._default_max_tokens,
+                stream=True,
             )
             async for chunk in stream:
                 if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
