@@ -67,22 +67,32 @@ def _parse_json_env(name: str, default: dict | None = None) -> dict:
 @dataclass
 class Config:
     """Runtime configuration loaded from env vars."""
+
     openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
     llm_model: str = field(default_factory=lambda: os.getenv("NEXUS_LLM_MODEL", "gpt-4o"))
     llm_max_tokens: int = field(default_factory=lambda: int(os.getenv("NEXUS_LLM_MAX_TOKENS", "8192")))
-    embedding_model: str = field(default_factory=lambda: os.getenv("NEXUS_EMBEDDING_MODEL", "text-embedding-3-large"))
+    embedding_model: str = field(
+        default_factory=lambda: os.getenv("NEXUS_EMBEDDING_MODEL", "text-embedding-3-large")
+    )
     # Offline LLM (Ollama / LM Studio): point the OpenAI-compatible adapters at a local base URL.
     llm_base_url: str | None = field(default_factory=lambda: os.getenv("NEXUS_LLM_BASE_URL"))
     embedding_base_url: str | None = field(default_factory=lambda: os.getenv("NEXUS_EMBEDDING_BASE_URL"))
-    embedding_dimension: int = field(default_factory=lambda: int(os.getenv("NEXUS_EMBEDDING_DIMENSION", "1536")))
+    embedding_dimension: int = field(
+        default_factory=lambda: int(os.getenv("NEXUS_EMBEDDING_DIMENSION", "1536"))
+    )
     # Background LLM (hybrid): a second provider for background loops
     # (subconscious synthesis, dreaming, autonomy). Leave unset to reuse the
     # primary LLM. E.g. Groq for live chat, Ollama for the nightly loops.
-    background_llm_api_key: str | None = field(default_factory=lambda: os.getenv("NEXUS_BACKGROUND_LLM_API_KEY"))
-    background_llm_model: str = field(
-        default_factory=lambda: os.getenv("NEXUS_BACKGROUND_LLM_MODEL") or os.getenv("NEXUS_LLM_MODEL", "gpt-4o")
+    background_llm_api_key: str | None = field(
+        default_factory=lambda: os.getenv("NEXUS_BACKGROUND_LLM_API_KEY")
     )
-    background_llm_base_url: str | None = field(default_factory=lambda: os.getenv("NEXUS_BACKGROUND_LLM_BASE_URL"))
+    background_llm_model: str = field(
+        default_factory=lambda: os.getenv("NEXUS_BACKGROUND_LLM_MODEL")
+        or os.getenv("NEXUS_LLM_MODEL", "gpt-4o")
+    )
+    background_llm_base_url: str | None = field(
+        default_factory=lambda: os.getenv("NEXUS_BACKGROUND_LLM_BASE_URL")
+    )
     redis_host: str = field(default_factory=lambda: os.getenv("REDIS_HOST", "localhost"))
     redis_port: int = field(default_factory=lambda: int(os.getenv("REDIS_PORT", "6379")))
     neo4j_uri: str = field(default_factory=lambda: os.getenv("NEO4J_URI", "bolt://localhost:7687"))
@@ -91,10 +101,14 @@ class Config:
     qdrant_host: str = field(default_factory=lambda: os.getenv("QDRANT_HOST", "localhost"))
     qdrant_port: int = field(default_factory=lambda: int(os.getenv("QDRANT_PORT", "6333")))
     qdrant_shard_number: int = field(default_factory=lambda: int(os.getenv("QDRANT_SHARD_NUMBER", "1")))
-    qdrant_replication_factor: int = field(default_factory=lambda: int(os.getenv("QDRANT_REPLICATION_FACTOR", "1")))
+    qdrant_replication_factor: int = field(
+        default_factory=lambda: int(os.getenv("QDRANT_REPLICATION_FACTOR", "1"))
+    )
     cors_origins: list = field(
         default_factory=lambda: [
-            o.strip() for o in os.getenv("NEXUS_CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()
+            o.strip()
+            for o in os.getenv("NEXUS_CORS_ORIGINS", "http://localhost:3000").split(",")
+            if o.strip()
         ]
     )
     # ---- Production hardening (P1) ----
@@ -104,12 +118,20 @@ class Config:
         default_factory=lambda: [t.strip() for t in os.getenv("NEXUS_TENANTS", "").split(",") if t.strip()]
     )
     chat_rate_limit: int = field(default_factory=lambda: int(os.getenv("NEXUS_CHAT_RATE_LIMIT", "60")))
-    tool_gen_rate_limit: int = field(default_factory=lambda: int(os.getenv("NEXUS_TOOL_GEN_RATE_LIMIT", "20")))
-    rate_limit_window_seconds: int = field(default_factory=lambda: int(os.getenv("NEXUS_RATE_LIMIT_WINDOW_SECONDS", "60")))
+    tool_gen_rate_limit: int = field(
+        default_factory=lambda: int(os.getenv("NEXUS_TOOL_GEN_RATE_LIMIT", "20"))
+    )
+    rate_limit_window_seconds: int = field(
+        default_factory=lambda: int(os.getenv("NEXUS_RATE_LIMIT_WINDOW_SECONDS", "60"))
+    )
     json_logs: bool = field(default_factory=lambda: os.getenv("NEXUS_JSON_LOGS", "true").lower() == "true")
     # ---- Autonomous goals (P2) ----
-    autonomy_hourly_budget: int = field(default_factory=lambda: int(os.getenv("NEXUS_AUTONOMY_HOURLY_BUDGET", "0")))
-    autonomy_default_budget: int = field(default_factory=lambda: int(os.getenv("NEXUS_AUTONOMY_DEFAULT_BUDGET", "20")))
+    autonomy_hourly_budget: int = field(
+        default_factory=lambda: int(os.getenv("NEXUS_AUTONOMY_HOURLY_BUDGET", "0"))
+    )
+    autonomy_default_budget: int = field(
+        default_factory=lambda: int(os.getenv("NEXUS_AUTONOMY_DEFAULT_BUDGET", "20"))
+    )
     autonomy_allowlist: list = field(
         default_factory=lambda: [
             a.strip() for a in os.getenv("NEXUS_AUTONOMY_ALLOWLIST", "tool_selfheal").split(",") if a.strip()
@@ -127,7 +149,9 @@ class Config:
     # ---- Sandbox (P1 security) ----
     sandbox_backend: str = field(default_factory=lambda: os.getenv("NEXUS_SANDBOX_BACKEND", "subprocess"))
     # ---- Observability (P2) ----
-    otel_enabled: bool = field(default_factory=lambda: os.getenv("NEXUS_OTEL_ENABLED", "false").lower() == "true")
+    otel_enabled: bool = field(
+        default_factory=lambda: os.getenv("NEXUS_OTEL_ENABLED", "false").lower() == "true"
+    )
 
 
 class Container:
@@ -200,7 +224,9 @@ class Container:
         self.entity_synthesis = EntitySynthesisUseCase(
             self.background_llm, self.concept_repo, self.memory_repo, self.event_bus
         )
-        self.pattern_detection = PatternDetectionUseCase(self.background_llm, self.memory_repo, self.event_bus)
+        self.pattern_detection = PatternDetectionUseCase(
+            self.background_llm, self.memory_repo, self.event_bus
+        )
         self.dream_session = DreamSessionUseCase(
             llm=self.background_llm,
             memory_repo=self.memory_repo,
@@ -324,20 +350,24 @@ class Container:
         if self.config.otel_enabled:
             try:
                 from nexus.infrastructure.adapters.observability.opentelemetry import OTELTracer
+
                 return OTELTracer()
             except Exception:
                 pass
         from nexus.infrastructure.adapters.observability.observability import LoggingTracer
+
         return LoggingTracer()
 
     def _build_metrics(self) -> Metrics:
         if self.config.otel_enabled:
             try:
                 from nexus.infrastructure.adapters.observability.opentelemetry import OTELMetrics
+
                 return OTELMetrics()
             except Exception:
                 pass
         from nexus.infrastructure.adapters.observability.observability import InMemoryMetrics
+
         return InMemoryMetrics()
 
     def _build_rate_limiter(self) -> RateLimiter:
@@ -430,7 +460,10 @@ class Container:
         return RedisShortTermMemory(host=self.config.redis_host, port=self.config.redis_port)
 
     def _build_tool_registry(self) -> ToolRegistry:
-        from nexus.infrastructure.adapters.execution.builtin_tools import BuiltinToolRegistry, default_builtin_tools
+        from nexus.infrastructure.adapters.execution.builtin_tools import (
+            BuiltinToolRegistry,
+            default_builtin_tools,
+        )
 
         return BuiltinToolRegistry(default_builtin_tools())
 
@@ -509,9 +542,12 @@ class Container:
             return
         self._started = True
         await self.event_bus.start()
-        await self.memory_repo.ensure_collection()
-        for tenant_id in self.config.tenants:
-            await self.memory_repo.ensure_collection(tenant_id=tenant_id)
+        try:
+            await self.memory_repo.ensure_collection()
+            for tenant_id in self.config.tenants:
+                await self.memory_repo.ensure_collection(tenant_id=tenant_id)
+        except Exception:
+            pass  # Qdrant/Neo4j not available; in-memory mode
 
     async def shutdown(self) -> None:
         if self._shutdown:

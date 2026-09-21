@@ -49,6 +49,7 @@ python -m nexus.training.cli import-seed
 | What you're doing | Files to edit |
 |---|---|
 | Add a tool | `infrastructure/adapters/execution/extended_tools.py` (handlers) + `builtin_tools.py` (registry) |
+| Use a discovered database autonomously | Two built-in tools: `find_databases` (scans dirs for `.sqlite/.db` + `docker-compose`/`.env` configs) and `query_database` (sqlite/postgres/mysql/redis). The ReAct prompt already instructs the agent to connect on its own — no wiring needed |
 | Add an API endpoint | `infrastructure/api/routes/<name>.py` + register in `main.py` |
 | Change LLM behavior | `application/cortex/process_message.py` (ReAct loop) + `react_prompt.py` (system prompt) |
 | Add a port | `domain/ports/<name>.py` |
@@ -67,6 +68,7 @@ Tests use `tests/fakes/` (package, not file) — `FakeContainer` wires real use 
 
 - **Graph memory recall** (`process_message.py:_recall()`): `get_memories()` added to `ConceptRepository` port. Previously graph traversal returned `Concept` objects but never added memories to the prompt.
 - **Swarm concurrency** (`executor.py:run_agent()`): Previously mutated shared `self._tools`. Now passes `tools` parameter through `execute()`.
+- **ReAct loop tool memory** (`process_message.py:_react_loop()`): The assistant's own `TOOL_CALL` is now appended to the context alongside the observation (as a `user`-role message). Previously only observations were appended, so the model never saw its action paired with its result and re-explored every turn. The loop guard now **forces** an auto-synthesized final answer when the same tool is called 3x in a row (previously it only nudged, which local models ignore).
 - **Generated-tool validation** (`generate_tool.py:execute()`): Previously only checked `error is None`. Now validates actual output matches `expected_outputs`.
 - **Sandbox default**: `DockerSandbox` is now the production default. Set `NEXUS_SANDBOX_BACKEND=subprocess` to fall back to subprocess.
 

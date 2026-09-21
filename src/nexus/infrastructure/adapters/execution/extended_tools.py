@@ -21,7 +21,6 @@ from urllib.parse import quote_plus
 from nexus.domain.entities.tool import Tool, ToolStatus
 from nexus.domain.value_objects.schema import JSONSchema
 
-
 TOOL_DEFS: List[Dict[str, Any]] = [
     {
         "id": "web_search",
@@ -60,7 +59,11 @@ TOOL_DEFS: List[Dict[str, Any]] = [
         "description": "Run a shell command and return its output.",
         "input": {"command": {"type": "string"}, "timeout": {"type": "integer"}},
         "required": ["command"],
-        "output": {"stdout": {"type": "string"}, "stderr": {"type": "string"}, "returncode": {"type": "integer"}},
+        "output": {
+            "stdout": {"type": "string"},
+            "stderr": {"type": "string"},
+            "returncode": {"type": "integer"},
+        },
     },
     {
         "id": "read_file",
@@ -166,13 +169,42 @@ TOOL_DEFS: List[Dict[str, Any]] = [
         "input": {},
         "output": {"info": {"type": "object"}},
     },
+    {
+        "id": "find_databases",
+        "name": "find_databases",
+        "description": "Scan a directory to discover databases: local files (.sqlite/.db/.sqlite3) and connection configs (docker-compose.yml, .env, config). Use this when you encounter or suspect a database and want to connect on your own.",
+        "input": {"path": {"type": "string"}},
+        "required": ["path"],
+        "output": {"databases": {"type": "array"}},
+    },
+    {
+        "id": "query_database",
+        "name": "query_database",
+        "description": "Connect to a database autonomously and list tables/keys or run a query. Engines: sqlite (local file — the only one that needs no running server), postgres, mysql, redis. For sqlite pass 'database' (file path) and 'sql'/'mode'='list_tables'. For postgres/mysql/redis pass host/port/user/password/database.",
+        "input": {
+            "type": {"type": "string"},
+            "database": {"type": "string"},
+            "host": {"type": "string"},
+            "port": {"type": "integer"},
+            "user": {"type": "string"},
+            "password": {"type": "string"},
+            "mode": {"type": "string"},
+            "sql": {"type": "string"},
+            "key": {"type": "string"},
+            "read_only": {"type": "boolean"},
+        },
+        "required": ["type"],
+        "output": {"rows": {"type": "array"}, "columns": {"type": "array"}, "tables": {"type": "array"}},
+    },
 ]
 
 
 def extended_builtin_tools() -> List[Tool]:
     return [
         Tool(
-            id=d["id"], name=d["name"], description=d["description"],
+            id=d["id"],
+            name=d["name"],
+            description=d["description"],
             input_schema=JSONSchema(properties=d["input"], required=d.get("required", [])),
             output_schema=JSONSchema(properties=d.get("output", {"result": {"type": "any"}})),
             status=ToolStatus.READY,
@@ -222,17 +254,44 @@ async def _web_fetch(params: Dict[str, Any]) -> Dict[str, Any]:
 async def _calculator(params: Dict[str, Any]) -> Dict[str, Any]:
     import ast as _ast
     import math
+
     expr = params["expression"]
     tree = _ast.parse(expr, mode="eval")
-    allowed = (_ast.Constant, _ast.BinOp, _ast.UnaryOp, _ast.Expression, _ast.Load, _ast.Add, _ast.Sub, _ast.Mult,
-               _ast.Div, _ast.Pow, _ast.Mod, _ast.FloorDiv, _ast.USub, _ast.UAdd, _ast.Call, _ast.Name)
+    allowed = (
+        _ast.Constant,
+        _ast.BinOp,
+        _ast.UnaryOp,
+        _ast.Expression,
+        _ast.Load,
+        _ast.Add,
+        _ast.Sub,
+        _ast.Mult,
+        _ast.Div,
+        _ast.Pow,
+        _ast.Mod,
+        _ast.FloorDiv,
+        _ast.USub,
+        _ast.UAdd,
+        _ast.Call,
+        _ast.Name,
+    )
     for node in _ast.walk(tree):
         if not isinstance(node, allowed):
             raise ValueError(f"Disallowed: {type(node).__name__}")
         if isinstance(node, _ast.Call) and isinstance(node.func, _ast.Name):
             if node.func.id not in ("sqrt", "abs", "round", "min", "max", "sum", "len", "int", "float"):
                 raise ValueError(f"Disallowed function: {node.func.id}")
-    safe_funcs = {"sqrt": math.sqrt, "abs": abs, "round": round, "min": min, "max": max, "sum": sum, "len": len, "int": int, "float": float}
+    safe_funcs = {
+        "sqrt": math.sqrt,
+        "abs": abs,
+        "round": round,
+        "min": min,
+        "max": max,
+        "sum": sum,
+        "len": len,
+        "int": int,
+        "float": float,
+    }
     result = eval(compile(tree, "<calc>", "eval"), {"__builtins__": {}}, safe_funcs)
     return {"result": result}
 
@@ -241,8 +300,11 @@ async def _run_python(params: Dict[str, Any]) -> Dict[str, Any]:
     code = params["code"]
     try:
         proc = await asyncio.create_subprocess_exec(
-            "python", "-c", code,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            "python",
+            "-c",
+            code,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
         return {"output": stdout.decode(errors="replace"), "error": stderr.decode(errors="replace")}
@@ -255,7 +317,9 @@ async def _run_shell(params: Dict[str, Any]) -> Dict[str, Any]:
     timeout = params.get("timeout", 30)
     try:
         proc = await asyncio.create_subprocess_shell(
-            command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         return {
@@ -289,11 +353,13 @@ async def _list_directory(params: Dict[str, Any]) -> Dict[str, Any]:
         return {"entries": [], "error": f"Directory not found: {path}"}
     entries = []
     for item in sorted(path.iterdir()):
-        entries.append({
-            "name": item.name,
-            "type": "dir" if item.is_dir() else "file",
-            "size": item.stat().st_size if item.is_file() else 0,
-        })
+        entries.append(
+            {
+                "name": item.name,
+                "type": "dir" if item.is_dir() else "file",
+                "size": item.stat().st_size if item.is_file() else 0,
+            }
+        )
     return {"entries": entries}
 
 
@@ -310,8 +376,20 @@ async def _json_query(params: Dict[str, Any]) -> Dict[str, Any]:
 
 async def _json_transform(params: Dict[str, Any]) -> Dict[str, Any]:
     data = json.loads(params["json_str"])
-    safe_builtins = {"len": len, "int": int, "float": float, "str": str, "bool": bool, "sum": sum,
-                     "min": min, "max": max, "sorted": sorted, "reversed": reversed, "list": list, "dict": dict}
+    safe_builtins = {
+        "len": len,
+        "int": int,
+        "float": float,
+        "str": str,
+        "bool": bool,
+        "sum": sum,
+        "min": min,
+        "max": max,
+        "sorted": sorted,
+        "reversed": reversed,
+        "list": list,
+        "dict": dict,
+    }
     result = eval(params["expression"], {"__builtins__": safe_builtins}, {"d": data})
     return {"result": result}
 
@@ -355,7 +433,9 @@ async def _git_info(params: Dict[str, Any]) -> Dict[str, Any]:
     ]:
         try:
             proc = await asyncio.create_subprocess_shell(
-                cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
                 cwd=repo_path,
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
@@ -398,14 +478,213 @@ async def _grep(params: Dict[str, Any]) -> Dict[str, Any]:
 
 async def _system_info(params: Dict[str, Any]) -> Dict[str, Any]:
     import multiprocessing
-    return {"info": {
-        "os": platform.system(),
-        "os_release": platform.release(),
-        "python": platform.python_version(),
-        "machine": platform.machine(),
-        "cpus": multiprocessing.cpu_count(),
-        "cwd": os.getcwd(),
-    }}
+
+    return {
+        "info": {
+            "os": platform.system(),
+            "os_release": platform.release(),
+            "python": platform.python_version(),
+            "machine": platform.machine(),
+            "cpus": multiprocessing.cpu_count(),
+            "cwd": os.getcwd(),
+        }
+    }
+
+
+async def _find_databases(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Discover local database files and connection configs in a directory tree."""
+    path = Path(params.get("path", "."))
+    db_suffixes = (".sqlite", ".sqlite3", ".db", ".duckdb")
+    results: List[Dict[str, Any]] = []
+    if not path.exists():
+        return {"databases": [], "error": f"Path not found: {path}"}
+    try:
+        for f in path.rglob("*"):
+            if not f.is_file():
+                continue
+            low = f.name.lower()
+            if f.suffix.lower() in db_suffixes:
+                results.append(
+                    {
+                        "kind": "file",
+                        "engine": "sqlite",
+                        "path": str(f),
+                        "size": f.stat().st_size,
+                    }
+                )
+            elif low in ("docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"):
+                results.append(
+                    {
+                        "kind": "config",
+                        "engine": "compose",
+                        "path": str(f),
+                        "note": "docker-compose — inspect for postgres/mysql/redis/qdrant/neo4j services",
+                    }
+                )
+            elif low == ".env" or low.endswith((".env", ".ini", ".cfg")):
+                results.append(
+                    {
+                        "kind": "config",
+                        "engine": "env",
+                        "path": str(f),
+                        "note": "environment/config file — may hold DB credentials (DB_HOST, DATABASE_URL, etc.)",
+                    }
+                )
+            if len(results) >= 20:
+                break
+    except PermissionError:
+        pass
+    return {"databases": results}
+
+
+async def _query_database(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Connect to a database autonomously and list tables or run a query."""
+    engine = str(params.get("type", "sqlite")).lower()
+    mode = params.get("mode", "query")
+    read_only = bool(params.get("read_only", True))
+
+    if engine == "sqlite":
+        import sqlite3
+
+        db_path = params.get("database", "")
+        if not db_path:
+            return {
+                "error": "missing 'database' (path to .sqlite/.db file)",
+                "hint": "run find_databases first",
+            }
+        resolved = Path(db_path).resolve()
+        if not resolved.exists():
+            return {"error": f"SQLite file not found: {resolved}", "hint": "run find_databases to locate it"}
+        uri = f"file:{resolved}?mode={'ro' if read_only else 'rw'}"
+        try:
+            conn = sqlite3.connect(uri, uri=True)
+        except sqlite3.OperationalError as e:
+            return {"error": f"cannot open database: {e}"}
+        try:
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            if mode == "list_tables":
+                cur.execute(
+                    "SELECT name, type FROM sqlite_master WHERE type IN ('table','view') ORDER BY name"
+                )
+                tables = [dict(r) for r in cur.fetchall()][:50]
+                return {"tables": tables, "database": str(resolved)}
+            sql = params.get("sql", "")
+            if not sql:
+                return {"error": "missing 'sql' for query mode", "tables": "use mode='list_tables' instead"}
+            stripped = sql.lstrip().lower()
+            if read_only and not stripped.startswith(("select", "pragma", "with", "explain")):
+                return {"error": "sqlite opened read-only; pass read_only=false to allow writes", "sql": sql}
+            cur.execute(sql)
+            rows = [dict(r) for r in cur.fetchall()] if cur.description else []
+            for row in rows:
+                for k, v in row.items():
+                    if v is not None and not isinstance(v, (str, int, float, bool)):
+                        row[k] = str(v)[:200]
+            return {"row_count": len(rows), "rows": rows[:100]}
+        except Exception as e:
+            return {"error": str(e)}
+        finally:
+            conn.close()
+
+    if engine in ("postgres", "mysql"):
+        host = params.get("host", "127.0.0.1")
+        port = params.get("port", 5432 if engine == "postgres" else 3306)
+        user = params.get("user", "")
+        password = params.get("password", str(None))
+        db = params.get("database", "postgres" if engine == "postgres" else "")
+        driver = "psycopg2" if engine == "postgres" else "pymysql"
+        import importlib
+
+        try:
+            mod = importlib.import_module(driver)
+        except ImportError:
+            return {"error": f"driver '{driver}' not installed"}
+        conn = None
+        try:
+            if engine == "postgres":
+                conn = mod.connect(
+                    host=host, port=port, user=user, password=password, dbname=db, connect_timeout=3
+                )
+            else:
+                conn = mod.connect(
+                    host=host, port=port, user=user, password=password, database=db, connect_timeout=3
+                )
+            cur = conn.cursor()
+            if mode == "list_tables":
+                if engine == "postgres":
+                    cur.execute(
+                        "SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name"
+                    )
+                else:
+                    cur.execute("SHOW TABLES")
+                tables = [r[0] for r in cur.fetchall()][:50]
+                return {"tables": tables, "engine": engine}
+            sql = params.get("sql", "")
+            if not sql:
+                return {"error": "missing 'sql' for query mode", "tables": "use mode='list_tables' instead"}
+            cur.execute(sql)
+            cols = [d[0] for d in cur.description] if cur.description else []
+            rows = []
+            for record in cur.fetchall():
+                rows.append(
+                    [
+                        str(v)[:200] if not isinstance(v, (int, float, bool)) and v is not None else v
+                        for v in record
+                    ]
+                )
+            return {"columns": cols, "row_count": len(rows), "rows": rows[:100], "engine": engine}
+        except Exception as e:
+            return {
+                "error": f"{engine} connection/query failed: {e}",
+                "hint": "server may be down or creds wrong",
+            }
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    if engine == "redis":
+        host = params.get("host", "127.0.0.1")
+        port = params.get("port", 6379)
+        password = params.get("password", "")
+        import importlib
+
+        try:
+            redis_mod = importlib.import_module("redis")
+        except ImportError:
+            return {"error": "redis-py not installed"}
+        try:
+            client = redis_mod.Redis(
+                host=host, port=int(port), password=password or None, socket_connect_timeout=3
+            )
+            client.ping()
+            if mode == "list_keys":
+                keys = client.keys("*")
+                return {
+                    "keys": [k.decode() if isinstance(k, bytes) else k for k in keys][:100],
+                    "engine": "redis",
+                }
+            key = params.get("key", "")
+            if not key:
+                return {"error": "missing 'key' (use mode='list_keys' to see keys)"}
+            value = client.get(key)
+            return {
+                "key": key,
+                "value": value.decode() if isinstance(value, bytes) else value,
+                "engine": "redis",
+            }
+        except Exception as e:
+            return {"error": f"redis connect failed: {e}", "hint": "server may be down or wrong port"}
+        finally:
+            try:
+                client.close()
+            except Exception:
+                pass
+
+    return {"error": f"unsupported engine: {engine}", "supported": ["sqlite", "postgres", "mysql", "redis"]}
 
 
 EXTENDED_HANDLERS: Dict[str, Any] = {
@@ -427,4 +706,6 @@ EXTENDED_HANDLERS: Dict[str, Any] = {
     "http_request": _http_request,
     "grep": _grep,
     "system_info": _system_info,
+    "find_databases": _find_databases,
+    "query_database": _query_database,
 }

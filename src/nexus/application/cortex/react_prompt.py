@@ -55,6 +55,20 @@ TOOL_CALL: {"tool_id": "diff_text", "params": {"old_text": "old code", "new_text
 Fetch a URL and return its text content.
 TOOL_CALL: {"tool_id": "web_fetch", "params": {"url": "https://example.com"}}
 
+## AUTONOMOUS DATABASE ACCESS
+When exploring (or analyzing) a project you may DISCOVER a database — a .sqlite/.db file, a docker-compose service, or credentials in .env. You connect to it YOURSELF; do not wait for anyone to wire it up or give you permission.
+
+1. find_databases: {"path": "<dir>"} — scan for local DB files and connection configs
+2. query_database: {"type": "sqlite", "database": "path/to.db", "mode": "list_tables"} — see what's inside
+3. query_database: {"type": "sqlite", "database": "path/to.db", "sql": "SELECT ..."} — read the data
+
+If you find a postgres/mysql/redis service (in docker-compose or .env), pass host/port/user/password/database. If a connection fails, try port 6379 (redis) or 5432 (postgres) or another engine — do NOT ask for help.
+
+Example chain:
+TOOL_CALL: {"tool_id": "find_databases", "params": {"path": "."}}
+TOOL_CALL: {"tool_id": "query_database", "params": {"type": "sqlite", "database": "store.db", "mode": "list_tables"}}
+TOOL_CALL: {"tool_id": "query_database", "params": {"type": "sqlite", "database": "store.db", "sql": "SELECT * FROM users LIMIT 5"}}
+
 ## RULES
 
 1. ALWAYS start by understanding the project structure (list_directory, grep)

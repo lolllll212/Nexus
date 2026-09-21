@@ -40,6 +40,7 @@ from nexus.application.cortex.react_prompt import REACT_SYSTEM_PROMPT
 @dataclass
 class MessageResult:
     """The result of processing a user message."""
+
     response: str
     session_id: str
     thoughts: List[Thought]
@@ -109,7 +110,9 @@ class ProcessMessageUseCase:
             thoughts: List[Thought] = []
             tools_used: List[str] = []
             active_tools = tools if tools is not None else self._tools
-            response = await self._react_loop(conversation, memories, thoughts, tools_used, image_urls, system_prompt, active_tools)
+            response = await self._react_loop(
+                conversation, memories, thoughts, tools_used, image_urls, system_prompt, active_tools
+            )
 
             # --- 4. Persist as episodic memory. ---
             await self._encode_episodic(conversation, response)
@@ -169,7 +172,9 @@ class ProcessMessageUseCase:
         tenant = conversation.tenant_id
         # Vector recall (semantic similarity)
         try:
-            semantic = await self._memory_repo.retrieve(query, limit=self.MEMORY_RECALL_LIMIT, tenant_id=tenant)
+            semantic = await self._memory_repo.retrieve(
+                query, limit=self.MEMORY_RECALL_LIMIT, tenant_id=tenant
+            )
         except Exception:
             semantic = []
 
@@ -225,6 +230,15 @@ class ProcessMessageUseCase:
         seen_tools: List[str] = []
         total_tokens = self._estimate_tokens(context)
 
+        tool_catalog = []
+        for t in await active_tools.list_all():
+            schema = t.input_schema.properties if hasattr(t.input_schema, "properties") else {}
+            tool_catalog.append(f"- {t.id}: {t.description} (params: {schema})")
+        if tool_catalog:
+            catalog_msg = {"role": "system", "content": "Available tools:\n" + "\n".join(tool_catalog)}
+            context.insert(1, catalog_msg)
+            total_tokens += self._estimate_tokens([catalog_msg])
+
         while iteration < self.MAX_REACT_ITERATIONS:
             iteration += 1
 
@@ -248,13 +262,15 @@ class ProcessMessageUseCase:
             if tool_call is None:
                 # Model was still thinking — feed reasoning back and nudge it to act
                 context.append({"role": "assistant", "content": reasoning})
-                context.append({
-                    "role": "system",
-                    "content": (
-                        "You are reasoning. Now either call a tool using TOOL_CALL format "
-                        "or give FINAL ANSWER if you have enough information."
-                    ),
-                })
+                context.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are reasoning. Now either call a tool using TOOL_CALL format "
+                            "or give FINAL ANSWER if you have enough information."
+                        ),
+                    }
+                )
                 total_tokens += 50
                 continue
 
@@ -263,19 +279,26 @@ class ProcessMessageUseCase:
             # Prevent loops — if same tool called 3x in a row, force final answer
             seen_tools.append(tool_name)
             if len(seen_tools) >= 3 and seen_tools[-3:] == [tool_name] * 3:
-                context.append({
-                    "role": "system",
-                    "content": f"You've called {tool_name} three times in a row. You have enough information. Give FINAL ANSWER now.",
-                })
-                continue
+                # The model is stuck repeating the same tool. Force a final
+                # answer assembled from the observations already gathered
+                # instead of trusting the model to break the loop.
+                observations = [
+                    str(m.get("content", "")) for m in context if "[OBSERVATION]" in str(m.get("content", ""))
+                ]
+                synthesis = (
+                    "\n".join(observations[-3:]) or f"Called {tool_name} repeatedly without new information."
+                )
+                return f"FINAL ANSWER (auto-synthesized after repeated {tool_name} calls):\n{synthesis}"
 
             # ACT
             tool = await active_tools.get(tool_name)
             if tool is None:
-                context.append({
-                    "role": "system",
-                    "content": f"Tool '{tool_name}' does not exist. Available tools: read_file, list_directory, grep, run_python, calculator, diff_text, web_fetch, git_info. Pick one of these.",
-                })
+                context.append(
+                    {
+                        "role": "system",
+                        "content": f"Tool '{tool_name}' does not exist. Available tools: read_file, list_directory, grep, run_python, calculator, diff_text, web_fetch, git_info. Pick one of these.",
+                    }
+                )
                 continue
 
             tools_used.append(tool.name)
@@ -288,11 +311,17 @@ class ProcessMessageUseCase:
                 observation = f"[OBSERVATION] {tool.name} failed: {exc}. Try a different approach."
             tool.record_use(succeeded)
 
+            # Record the action so the model sees its own tool call paired with
+            # the result — otherwise observations appear to hang in mid-air and
+            # the model restarts its exploration every turn.
+            context.append({"role": "assistant", "content": reasoning})
             thoughts.append(Thought(content=observation, thought_type=ThoughtType.OBSERVATION))
-            context.append({"role": "system", "content": observation})
+            context.append({"role": "user", "content": observation})
 
         # Final fallback — synthesize what we have
-        return "I've reached my reasoning limit. Here's my best synthesis: " + self._extract_last_content(context)
+        return "I've reached my reasoning limit. Here's my best synthesis: " + self._extract_last_content(
+            context
+        )
 
     async def _encode_episodic(self, conversation: Conversation, response: str) -> None:
         """Persist the raw exchange as episodic memory for tonight's dreaming."""
@@ -320,7 +349,9 @@ class ProcessMessageUseCase:
         await self._memory_repo.store(memory, tenant_id=conversation.tenant_id)
         # Notify the nervous system
         await self._event_bus.publish(
-            Event(topic=EventTopic.MEMORY_STORED, payload={"memory_id": memory.id, "concepts": memory.concepts})
+            Event(
+                topic=EventTopic.MEMORY_STORED, payload={"memory_id": memory.id, "concepts": memory.concepts}
+            )
         )
 
     # ------------------------------------------------------------------ #
@@ -350,7 +381,9 @@ class ProcessMessageUseCase:
 
         # 3. Recalled memories
         if memories:
-            memory_block = "Relevant memories from past interactions:\n" + "\n".join(f"- {m.content}" for m in memories)
+            memory_block = "Relevant memories from past interactions:\n" + "\n".join(
+                f"- {m.content}" for m in memories
+            )
             sys_msgs.append({"role": "system", "content": memory_block})
 
         # 4. ReAct framework prompt — reasoning rules, goes last among system msgs
@@ -420,7 +453,11 @@ class ProcessMessageUseCase:
 
         # Summarize what was dropped
         dropped = conv_msgs[:-4]
-        observation_count = sum(1 for m in dropped if m.get("role") == "system")
+        observation_count = sum(
+            1
+            for m in dropped
+            if m.get("role") in ("system", "user") and "[OBSERVATION]" in str(m.get("content", ""))
+        )
         if observation_count > 0:
             summary = {
                 "role": "system",
@@ -440,7 +477,7 @@ class ProcessMessageUseCase:
             marker_upper = marker.upper()
             if marker_upper in upper:
                 idx = upper.index(marker_upper)
-                return reasoning[idx + len(marker):].strip()
+                return reasoning[idx + len(marker) :].strip()
         return reasoning.strip()
 
     def _extract_last_content(self, context: List[dict]) -> str:
