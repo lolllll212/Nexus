@@ -20,7 +20,6 @@ from typing import Any, Callable, Dict, List, Optional
 
 from nexus.domain.entities.tool import Tool, ToolStatus
 from nexus.domain.ports.tool_registry import ToolRegistry
-from nexus.domain.value_objects.schema import JSONSchema
 
 
 class PluginInfo:

@@ -7,7 +7,6 @@ the task + solution as a new training example for future reference.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import List, Optional
 
 from nexus.application.training.coding_store import CodingExample, CodingStore
@@ -60,7 +59,7 @@ class AutoLearner:
             language=language,
             category=category,
             tags=tags,
-            explanation=explanation or f"Auto-learned from successful session",
+            explanation=explanation or "Auto-learned from successful session",
             test_cases=test_cases,
             difficulty=self._infer_difficulty(solution),
             source="auto-learned",
@@ -92,7 +91,6 @@ class AutoLearner:
         return True
 
     def _extract_tags(self, task: str) -> List[str]:
-        import re
         tags = []
         task_lower = task.lower()
         # Language detection

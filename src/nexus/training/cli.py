@@ -194,8 +194,7 @@ def cmd_chat(args):
                     print(f"  {ex.id}: {ex.task[:60]}")
                 continue
 
-            # Build prompt with few-shot examples
-            coding_prompt = rag.build_coding_prompt(user_input)
+            # Build the few-shot context from stored examples
             conversation.append({"role": "system", "content": f"Relevant examples:\n{rag.get_few_shot_context(user_input)}"})
             conversation.append({"role": "user", "content": user_input})
 

@@ -7,9 +7,9 @@ from the training store to inject into the LLM context.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Optional
 
-from nexus.application.training.coding_store import CodingExample, CodingStore
+from nexus.application.training.coding_store import CodingStore
 
 
 CODING_SYSTEM_PROMPT = """You are NEXUS, an expert coding assistant. You write clean, efficient, well-tested code.

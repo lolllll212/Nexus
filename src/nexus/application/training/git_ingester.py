@@ -8,7 +8,6 @@ and creates training examples from them.
 from __future__ import annotations
 
 import ast
-import subprocess
 from pathlib import Path
 from typing import List, Optional
 
