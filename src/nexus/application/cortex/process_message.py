@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Awaitable, Callable, List, Optional
 
 from nexus.domain.entities.conversation import Conversation, MessageRole
 from nexus.domain.entities.memory import Memory, MemoryType, EmotionalWeight
@@ -56,8 +56,10 @@ class ProcessMessageUseCase:
 
     MAX_REACT_ITERATIONS = 15
     MEMORY_RECALL_LIMIT = 8
-    MAX_CONTEXT_TOKENS = 12000  # Budget for context window
+    MAX_CONTEXT_TOKENS = 12000  # Hard budget for context window
     SUMMARY_TRIGGER_TOKENS = 10000  # When to start trimming old observations
+    MAX_OBSERVATION_CHARS = 4000  # Cap any single tool observation
+    SUMMARIZE_KEEP_MESSAGES = 6  # Recent conv messages preserved verbatim
 
     def __init__(
         self,
@@ -93,6 +95,7 @@ class ProcessMessageUseCase:
         image_urls: Optional[List[str]] = None,
         system_prompt: Optional[str] = None,
         tools: Optional[ToolRegistry] = None,
+        on_event: Optional[Callable[[dict], Awaitable[None]]] = None,
     ) -> MessageResult:
         started = time.perf_counter()
         async with self._tracer.span("process_message", {"user_id": user_id, "tenant_id": tenant_id}):
@@ -103,7 +106,7 @@ class ProcessMessageUseCase:
             # --- 1. Dispatch to subconscious. Fire and forget - NEVER blocks the user. ---
             await self._dispatch_to_subconscious(conversation, message)
 
-            # --- 2. Recall relevant memories (graph + vector hybrid). ---
+            # --- 2. Recall relevant memories (vector + graph hybrid). ---
             memories = await self._recall(message, conversation)
 
             # --- 3. Run the ReAct loop (optionally multimodal / persona'd). ---
@@ -111,8 +114,17 @@ class ProcessMessageUseCase:
             tools_used: List[str] = []
             active_tools = tools if tools is not None else self._tools
             response = await self._react_loop(
-                conversation, memories, thoughts, tools_used, image_urls, system_prompt, active_tools
+                conversation,
+                memories,
+                thoughts,
+                tools_used,
+                image_urls,
+                system_prompt,
+                active_tools,
+                on_event,
             )
+            if on_event is not None:
+                await on_event({"type": "answer", "content": response})
 
             # --- 4. Persist as episodic memory. ---
             await self._encode_episodic(conversation, response)
@@ -222,6 +234,7 @@ class ProcessMessageUseCase:
         image_urls: Optional[List[str]] = None,
         system_prompt: Optional[str] = None,
         tools: Optional[ToolRegistry] = None,
+        on_event: Optional[Callable[[dict], Awaitable[None]]] = None,
     ) -> str:
         """Autonomous ReAct: Think -> Act -> Observe -> Repeat until final answer."""
         context = self._build_context(conversation, memories, image_urls, system_prompt)
@@ -242,10 +255,13 @@ class ProcessMessageUseCase:
         while iteration < self.MAX_REACT_ITERATIONS:
             iteration += 1
 
-            # Token budget: trim old observations if over budget
+            # Token budget: compact old observations if over trigger.
             if total_tokens > self.SUMMARY_TRIGGER_TOKENS:
-                context = self._trim_context(context)
+                context = await self._summarize_context(context, active_tools)
                 total_tokens = self._estimate_tokens(context)
+                # Hard budget: if compaction still can't fit, stop exploring.
+                if total_tokens > self.MAX_CONTEXT_TOKENS:
+                    return self._synthesize_from_observations(context, "context budget exhausted")
 
             try:
                 reasoning = await self._llm.complete(context)
@@ -254,6 +270,8 @@ class ProcessMessageUseCase:
 
             thoughts.append(Thought(content=reasoning, thought_type=ThoughtType.REASONING))
             total_tokens += self._estimate_tokens([{"role": "assistant", "content": reasoning}])
+            if on_event is not None:
+                await on_event({"type": "thought", "content": reasoning})
 
             if self._is_final_answer(reasoning):
                 return self._extract_answer(reasoning)
@@ -271,7 +289,7 @@ class ProcessMessageUseCase:
                         ),
                     }
                 )
-                total_tokens += 50
+                total_tokens += self._estimate_tokens(context[-2:])
                 continue
 
             tool_name = tool_call.get("tool_id", "unknown")
@@ -282,13 +300,9 @@ class ProcessMessageUseCase:
                 # The model is stuck repeating the same tool. Force a final
                 # answer assembled from the observations already gathered
                 # instead of trusting the model to break the loop.
-                observations = [
-                    str(m.get("content", "")) for m in context if "[OBSERVATION]" in str(m.get("content", ""))
-                ]
-                synthesis = (
-                    "\n".join(observations[-3:]) or f"Called {tool_name} repeatedly without new information."
+                return self._synthesize_from_observations(
+                    context, f"repeated {tool_name} calls 3x without new information"
                 )
-                return f"FINAL ANSWER (auto-synthesized after repeated {tool_name} calls):\n{synthesis}"
 
             # ACT
             tool = await active_tools.get(tool_name)
@@ -299,14 +313,22 @@ class ProcessMessageUseCase:
                         "content": f"Tool '{tool_name}' does not exist. Available tools: read_file, list_directory, grep, run_python, calculator, diff_text, web_fetch, git_info. Pick one of these.",
                     }
                 )
+                total_tokens += self._estimate_tokens([context[-1]])
                 continue
 
             tools_used.append(tool.name)
             succeeded = False
+            if on_event is not None:
+                await on_event(
+                    {"type": "tool_call", "tool_id": tool.id, "params": tool_call.get("params", {})}
+                )
             try:
                 result = await self._executor.execute(tool.id, tool_call.get("params", {}))
                 succeeded = True
-                observation = f"[OBSERVATION] {tool.name} returned:\n{result}"
+                result_str = str(result)
+                if len(result_str) > self.MAX_OBSERVATION_CHARS:
+                    result_str = result_str[: self.MAX_OBSERVATION_CHARS] + " ...[truncated]"
+                observation = f"[OBSERVATION] {tool.name} returned:\n{result_str}"
             except Exception as exc:
                 observation = f"[OBSERVATION] {tool.name} failed: {exc}. Try a different approach."
             tool.record_use(succeeded)
@@ -317,6 +339,9 @@ class ProcessMessageUseCase:
             context.append({"role": "assistant", "content": reasoning})
             thoughts.append(Thought(content=observation, thought_type=ThoughtType.OBSERVATION))
             context.append({"role": "user", "content": observation})
+            total_tokens += self._estimate_tokens(context[-2:])
+            if on_event is not None:
+                await on_event({"type": "observation", "content": observation})
 
         # Final fallback — synthesize what we have
         return "I've reached my reasoning limit. Here's my best synthesis: " + self._extract_last_content(
@@ -429,43 +454,69 @@ class ProcessMessageUseCase:
                         total += len(part["text"]) // 4 + 4
         return total
 
-    def _trim_context(self, context: List[dict]) -> List[dict]:
-        """Trim old observations to stay within token budget.
+    def _synthesize_from_observations(self, context: List[dict], reason: str) -> str:
+        """Assemble a forced final answer from what's already been gathered."""
+        observations = [
+            str(m.get("content", "")) for m in context if "[OBSERVATION]" in str(m.get("content", ""))
+        ]
+        synthesis = "\n".join(observations[-3:]) or f"No observations gathered ({reason})."
+        return f"FINAL ANSWER (auto-synthesized, {reason}):\n{synthesis}"
+
+    async def _summarize_context(self, context: List[dict], tools: ToolRegistry) -> List[dict]:
+        """Compress old conversation messages to stay within token budget.
 
         Strategy:
-        1. Always keep system messages (first position = persona/ReAct prompt)
-        2. Always keep the last 4 messages (recent reasoning + observations)
-        3. Summarize middle observations into a single condensed message
+        1. Always keep every system message (persona, tone, memories, ReAct prompt).
+        2. Keep the last SUMMARIZE_KEEP_MESSAGES conversation messages verbatim.
+        3. Ask the LLM to condense the dropped observations into a single
+           compact system message; fall back to a static note if that fails.
+
+        Returns a new context list. Callers must re-estimate total tokens.
         """
         if len(context) <= 6:
             return context
 
-        # Separate system messages from conversation
         system_msgs = [m for m in context if m.get("role") == "system"]
         conv_msgs = [m for m in context if m.get("role") != "system"]
 
-        if len(conv_msgs) <= 4:
+        if len(conv_msgs) <= self.SUMMARIZE_KEEP_MESSAGES:
             return context
 
-        # Keep first system msg (persona) + last 4 conv messages
-        kept_system = system_msgs[:1] if system_msgs else []
-        kept_conv = conv_msgs[-4:]
+        kept_conv = conv_msgs[-self.SUMMARIZE_KEEP_MESSAGES :]
+        dropped = conv_msgs[: -self.SUMMARIZE_KEEP_MESSAGES]
 
-        # Summarize what was dropped
-        dropped = conv_msgs[:-4]
-        observation_count = sum(
-            1
+        observation_text = "\n".join(
+            str(m.get("content", ""))
             for m in dropped
             if m.get("role") in ("system", "user") and "[OBSERVATION]" in str(m.get("content", ""))
         )
-        if observation_count > 0:
-            summary = {
-                "role": "system",
-                "content": f"[Context trimmed: {observation_count} earlier observations summarized to save tokens. Recent context preserved.]",
-            }
-            return kept_system + [summary] + kept_conv
 
-        return kept_system + kept_conv
+        summary = ""
+        if observation_text:
+            prompt = (
+                "Condense the following tool observations into a single compact "
+                "paragraph (~120 words max). Preserve concrete facts, answers, and "
+                "numbers. Omit reasoning and narration.\n\n" + observation_text
+            )
+            try:
+                summary = await self._llm.complete(
+                    [
+                        {"role": "system", "content": "You are a lossy memory compressor."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.2,
+                    max_tokens=200,
+                )
+            except Exception:
+                summary = ""
+
+        if not summary or not summary.strip():
+            summary = (
+                f"[Context compacted: {len(dropped)} earlier messages summarized. "
+                "Recent context preserved verbatim.]"
+            )
+
+        return system_msgs + [{"role": "system", "content": summary}] + kept_conv
 
     def _is_final_answer(self, reasoning: str) -> bool:
         upper = reasoning.upper()

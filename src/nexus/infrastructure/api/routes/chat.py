@@ -41,9 +41,9 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     stream: bool = False
     image_urls: Optional[List[str]] = None
-    audio: Optional[str] = None       # data URI: data:audio/<mime>;base64,...
+    audio: Optional[str] = None  # data URI: data:audio/<mime>;base64,...
     voice: Optional[str] = None
-    mode: str = "general"             # "general" or "coding"
+    mode: str = "general"  # "general" or "coding"
 
 
 class ChatResponse(BaseModel):
@@ -52,7 +52,7 @@ class ChatResponse(BaseModel):
     tools_used: list
     memories_recalled: int
     thought_count: int
-    audio: Optional[str] = None       # data URI of synthesized speech (P3)
+    audio: Optional[str] = None  # data URI of synthesized speech (P3)
 
 
 def _parse_data_uri(data_uri: str) -> tuple[str, bytes]:
@@ -90,6 +90,7 @@ async def chat(
     if req.mode == "coding":
         from nexus.application.training.coding_store import CodingStore
         from nexus.application.training.coding_prompt import CodingRAG
+
         store = CodingStore("data/coding_examples.json")
         rag = CodingRAG(store, max_examples=3)
         system_prompt = rag.build_coding_prompt(message)
@@ -125,28 +126,77 @@ async def chat_stream(
     identity: Identity = Depends(require_identity),
     container: Container = Depends(get_container),
 ):
-    """SSE streaming endpoint — streams thoughts, tool calls, and tokens in real-time."""
-    if not req.message:
-        raise HTTPException(status_code=422, detail="Provide a message")
+    """True SSE streaming — runs the full cognitive ReAct loop and emits events
+    per thought, tool call, and observation as they happen, then the answer.
+
+    Frame types: `start`, `thought`, `tool_call`, `observation`, `answer`,
+    `done`, `error`. Consume with `fetch`/SSE and render each reasoning step.
+    """
+    message = req.message
+
+    if req.audio:
+        try:
+            mime, audio_bytes = _parse_data_uri(req.audio)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid audio data URI")
+        transcription = await container.speech_to_text.transcribe(audio_bytes, mime)
+        message = f"{transcription}\n{message}" if message else transcription
+
+    if not message:
+        raise HTTPException(status_code=422, detail="Provide a message, audio, or image")
+
+    system_prompt = None
+    if req.mode == "coding":
+        from nexus.application.training.coding_store import CodingStore
+        from nexus.application.training.coding_prompt import CodingRAG
+
+        store = CodingStore("data/coding_examples.json")
+        rag = CodingRAG(store, max_examples=3)
+        system_prompt = rag.build_coding_prompt(message)
 
     async def event_generator():
-        # Send initial event
         yield f"data: {json.dumps({'type': 'start', 'session_id': req.session_id})}\n\n"
 
         try:
-            # Use the streaming LLM provider
-            from nexus.application.cortex.react_prompt import REACT_SYSTEM_PROMPT
-            messages = [
-                {"role": "system", "content": REACT_SYSTEM_PROMPT},
-                {"role": "user", "content": req.message},
-            ]
+            # The ReAct loop pushes events into a queue; we yield each frame as
+            # it is produced so users watch the brain think in real time.
+            import asyncio
 
-            async for token in container.background_llm.stream(messages):
-                yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+            queue: asyncio.Queue = asyncio.Queue()
 
+            async def sink(ev: dict) -> None:
+                await queue.put(ev)
+
+            loop = asyncio.get_running_loop()
+            task = loop.create_task(
+                container.process_message.execute(
+                    user_id=identity.user_id,
+                    message=message,
+                    session_id=req.session_id,
+                    stream=True,
+                    tenant_id=identity.tenant_id,
+                    image_urls=req.image_urls,
+                    system_prompt=system_prompt,
+                    on_event=sink,
+                )
+            )
+
+            while True:
+                try:
+                    ev = await asyncio.wait_for(queue.get(), timeout=30.0)
+                except asyncio.TimeoutError:
+                    break
+                yield f"data: {json.dumps(ev)}\n\n"
+                if ev.get("type") == "answer":
+                    break
+
+            await task
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     return StreamingResponse(
         event_generator(),

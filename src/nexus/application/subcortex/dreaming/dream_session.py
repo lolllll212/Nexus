@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from typing import List
 
 from nexus.domain.ports.event_bus import Event, EventBus, EventTopic
 from nexus.domain.ports.llm_provider import LLMProvider
@@ -38,6 +39,16 @@ class DreamSessionResult:
     pruning: PruningResult | None = None
     simulation: SimulationResult | None = None
     consolidation: ConsolidationResult | None = None
+    recall_probes: int = 0
+    recall_hit_rate_before: float | None = None
+    recall_hit_rate_after: float | None = None
+
+    @property
+    def recall_delta(self) -> float | None:
+        """Improvement (or regression) in recall hit-rate across the dream."""
+        if self.recall_hit_rate_before is None or self.recall_hit_rate_after is None:
+            return None
+        return self.recall_hit_rate_after - self.recall_hit_rate_before
 
     @property
     def duration_seconds(self) -> float:
@@ -48,6 +59,8 @@ class DreamSessionResult:
 
 class DreamSessionUseCase:
     """The full dreaming cycle, run nightly at 3 AM."""
+
+    RECALL_PROBES = 8  # Max episodic memories sampled as recall probes
 
     def __init__(
         self,
@@ -79,10 +92,15 @@ class DreamSessionUseCase:
                 Event(topic=EventTopic.DREAM_TRIGGERED, payload={"session_id": result.session_id})
             )
 
-            # --- Phase 1: Episodic -> Semantic ---
+            # --- Phase 0: sample recall probes from today's episodic memories ---
             episodes = await self._memory_repo.retrieve("", limit=1000, tenant_id=tenant_id)
-            episodes = [e for e in episodes if not e.consolidated]
-            result.compression = await self._compression.run(episodes, tenant_id=tenant_id)
+            unconsolidated = [e for e in episodes if not e.consolidated]
+            probes = [e.content for e in unconsolidated[: self.RECALL_PROBES]]
+            result.recall_probes = len(probes)
+            result.recall_hit_rate_before = await self._measure_recall(probes, tenant_id=tenant_id)
+
+            # --- Phase 1: Episodic -> Semantic ---
+            result.compression = await self._compression.run(unconsolidated, tenant_id=tenant_id)
 
             # --- Phase 2: Pruning ---
             result.pruning = await self._pruning.run(access_threshold_days=90, tenant_id=tenant_id)
@@ -96,9 +114,27 @@ class DreamSessionUseCase:
                 emotional_intensity=emotional_intensity, tenant_id=tenant_id
             )
 
+            # --- Phase 5: re-measure recall (did dreaming make memory more retrievable?) ---
+            result.recall_hit_rate_after = await self._measure_recall(probes, tenant_id=tenant_id)
+
             result.completed_at = datetime.utcnow()
 
             self._metrics.counter("dream_sessions_total", labels={"tenant_id": tenant_id})
+            if result.recall_hit_rate_before is not None:
+                self._metrics.histogram(
+                    "dream_recall_hit_rate",
+                    result.recall_hit_rate_before,
+                    labels={"tenant_id": tenant_id, "phase": "before"},
+                )
+                self._metrics.histogram(
+                    "dream_recall_hit_rate",
+                    result.recall_hit_rate_after or 0.0,
+                    labels={"tenant_id": tenant_id, "phase": "after"},
+                )
+            if result.recall_delta is not None:
+                self._metrics.histogram(
+                    "dream_recall_delta", result.recall_delta, labels={"tenant_id": tenant_id}
+                )
 
             await self._event_bus.publish(
                 Event(
@@ -107,6 +143,10 @@ class DreamSessionUseCase:
                         "session_id": result.session_id,
                         "tenant_id": tenant_id,
                         "duration_seconds": result.duration_seconds,
+                        "recall_probes": result.recall_probes,
+                        "recall_hit_rate_before": result.recall_hit_rate_before,
+                        "recall_hit_rate_after": result.recall_hit_rate_after,
+                        "recall_delta": result.recall_delta,
                         "compression": result.compression.__dict__,
                         "pruning": result.pruning.__dict__,
                         "simulation": {
@@ -118,6 +158,27 @@ class DreamSessionUseCase:
                 )
             )
             return result
+
+    async def _measure_recall(self, probes: List[str], tenant_id: str = "default") -> float | None:
+        """Fraction of probe queries that retrieve at least one memory.
+
+        A probe is a raw episodic memory's own content. If `retrieve` finds
+        anything for it (in a given backend) we count a hit. This gives us a
+        cheap-to-compute recall signal that tracks whether consolidation made
+        memories MORE retrievable rather than just flagging them for cold
+        storage (which would silently kill recall).
+        """
+        if not probes:
+            return None
+        hits = 0
+        for probe in probes:
+            try:
+                results = await self._memory_repo.retrieve(probe, limit=1, tenant_id=tenant_id)
+            except Exception:
+                results = []
+            if results:
+                hits += 1
+        return hits / len(probes)
 
     @staticmethod
     def next_dream_time(now: datetime | None = None) -> datetime:

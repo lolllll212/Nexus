@@ -7,9 +7,11 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'SF Mono', 'Fira Code', monospace; background: #0a0a0a; color: #e0e0e0; }
-        .header { padding: 20px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
+        .header { padding: 20px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
         .header h1 { font-size: 18px; color: #00ff88; }
         .header .status { font-size: 12px; color: #666; }
+        .auth { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #666; }
+        .auth input { background: #151515; border: 1px solid #2a2a2a; color: #00ff88; padding: 6px 10px; border-radius: 4px; font-family: inherit; width: 240px; }
         .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; padding: 20px; }
         .card { background: #111; border: 1px solid #222; border-radius: 8px; padding: 16px; }
         .card h3 { font-size: 12px; text-transform: uppercase; color: #666; margin-bottom: 12px; }
@@ -17,20 +19,26 @@
         .card .detail { font-size: 11px; color: #444; margin-top: 4px; }
         .full-width { grid-column: span 3; }
         .two-col { grid-column: span 2; }
-        .graph { height: 200px; background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #333; font-size: 12px; }
-        .list { max-height: 200px; overflow-y: auto; font-size: 11px; }
+        .graph { width: 100%; height: 320px; background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 4px; }
+        .list { max-height: 220px; overflow-y: auto; font-size: 11px; }
         .list-item { padding: 6px 0; border-bottom: 1px solid #1a1a1a; }
         .list-item .tag { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-right: 4px; }
         .tag-tool { background: #1a2a1a; color: #00ff88; }
         .tag-dream { background: #1a1a2a; color: #8888ff; }
+        .tag-swarm { background: #2a1a1a; color: #ffaa44; }
         .tag-error { background: #2a1a1a; color: #ff4444; }
         .tag-synapse { background: #2a2a1a; color: #ffff00; }
+        .muted { color: #444; }
         @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .full-width, .two-col { grid-column: span 1; } }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>NEXUS Brain Dashboard</h1>
+        <div class="auth">
+            <label for="apiKey">API key</label>
+            <input type="password" id="apiKey" placeholder="sk-test-1 ...">
+        </div>
         <div class="status" id="status">Loading...</div>
     </div>
     <div class="grid">
@@ -40,40 +48,56 @@
             <div class="detail">Total chat messages</div>
         </div>
         <div class="card">
-            <h3>Tools Executed</h3>
-            <div class="value" id="tools">-</div>
-            <div class="detail">Tool invocations</div>
-        </div>
-        <div class="card">
             <h3>Dream Cycles</h3>
             <div class="value" id="dreams">-</div>
             <div class="detail">Nightly consolidations</div>
         </div>
+        <div class="card">
+            <h3>HTTP Requests</h3>
+            <div class="value" id="requests">-</div>
+            <div class="detail">All API traffic</div>
+        </div>
         <div class="card two-col">
-            <h3>Active Synapses</h3>
-            <div class="graph" id="synapse-graph">Synaptic graph visualization (coming soon)</div>
+            <h3>Synaptic Graph</h3>
+            <svg class="graph" id="synapse-graph" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet"></svg>
         </div>
         <div class="card">
             <h3>Recent Activity</h3>
-            <div class="list" id="activity">
-                <div class="list-item"><span class="tag tag-tool">tool</span> Dashboard loaded</div>
-            </div>
+            <div class="list" id="activity"><div class="list-item muted">Waiting for data...</div></div>
         </div>
         <div class="card full-width">
             <h3>Tool Registry</h3>
             <div class="list" id="tools-list"></div>
         </div>
         <div class="card two-col">
-            <h3>Dream Log</h3>
+            <h3>Recent Dreams</h3>
             <div class="list" id="dream-log"></div>
         </div>
         <div class="card">
-            <h3>System Info</h3>
-            <div class="list" id="system-info"></div>
+            <h3>Swarm Runs</h3>
+            <div class="list" id="swarm-log"></div>
         </div>
     </div>
 
     <script>
+        const SDK = {
+            key: localStorage.getItem('nexus_api_key') || '',
+            req: async function(path, opts) {
+                const headers = Object.assign({}, opts && opts.headers);
+                if (this.key) headers['Authorization'] = 'Bearer ' + this.key;
+                const resp = await fetch(path, Object.assign({}, opts, { headers }));
+                if (resp.status === 401) { this.status('Auth required — enter API key'); return null; }
+                if (!resp.ok) { this.status('Request failed: ' + path + ' (' + resp.status + ')'); return null; }
+                return resp;
+            },
+            status: function(msg) { document.getElementById('status').textContent = msg; }
+        };
+
+        function currentKey() {
+            const input = document.getElementById('apiKey');
+            return input.value.trim();
+        }
+
         async function fetchMetrics() {
             try {
                 const resp = await fetch('/metrics');
@@ -82,32 +106,154 @@
                 const metrics = {};
                 for (const line of lines) {
                     if (line.startsWith('#') || !line.trim()) continue;
-                    const match = line.match(/^(\S+?)(?:\{[^}]*\})?\s+(.+)$/);
-                    if (match) metrics[match[1]] = parseFloat(match[2]);
+                    const match = line.match(/^(\S+?)(?:\{[^}]*\})?\s+([\d.e+-]+)/);
+                    if (match) {
+                        const key = match[1].replace(/_total$/, '');
+                        metrics[key] = (metrics[key] || 0) + parseFloat(match[2]);
+                    }
                 }
                 document.getElementById('messages').textContent = metrics['chat_messages_total'] || '0';
-                document.getElementById('tools').textContent = metrics['tool_executions_total'] || '0';
-                document.getElementById('dreams').textContent = metrics['dream_cycles_total'] || '0';
-                document.getElementById('status').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+                document.getElementById('dreams').textContent = metrics['dream_sessions_total'] || '0';
+                document.getElementById('requests').textContent = metrics['http_requests'] || '0';
+                SDK.status('Last updated: ' + new Date().toLocaleTimeString());
             } catch (e) {
-                document.getElementById('status').textContent = 'Error fetching metrics';
+                SDK.status('Error fetching metrics');
             }
         }
 
+        function setApiKey() {
+            const value = currentKey();
+            localStorage.setItem('nexus_api_key', value);
+            SDK.key = value;
+            loadSecured();
+        }
+
+        async function loadSecured() {
+            SDK.key = currentKey();
+            if (!SDK.key) { SDK.status('Enter an API key above'); return; }
+            await Promise.all([fetchTools(), fetchGraph(), fetchDreams(), fetchSwarmRuns()]);
+        }
+
         async function fetchTools() {
+            const resp = await SDK.req('/v1/tools');
+            if (!resp) return;
             try {
-                const resp = await fetch('/v1/tools', { headers: { 'Authorization': 'Bearer test-key-1234' } });
-                if (resp.ok) {
-                    const tools = await resp.json();
-                    const list = document.getElementById('tools-list');
-                    list.innerHTML = tools.map(t => `<div class="list-item"><span class="tag tag-tool">${t.name}</span> ${t.description}</div>`).join('');
+                const tools = await resp.json();
+                const list = document.getElementById('tools-list');
+                list.innerHTML = tools.map(t =>
+                    `<div class="list-item"><span class="tag tag-tool">${t.name}</span> ${t.description} <span class="muted">(${t.status}, used ${t.use_count}x)</span></div>`
+                ).join('') || '<div class="muted">No tools registered</div>';
+            } catch (e) {}
+        }
+
+        async function fetchGraph() {
+            const resp = await SDK.req('/v1/memory/graph?limit=60&min_weight=0.0');
+            if (!resp) return;
+            try {
+                const data = await resp.json();
+                renderGraph(data.nodes || [], data.edges || []);
+            } catch (e) {}
+        }
+
+        // Simple force-directed graph renderer (no external deps, offline-safe).
+        function renderGraph(nodes, edges) {
+            const svg = document.getElementById('synapse-graph');
+            svg.innerHTML = '';
+            if (!nodes.length) {
+                svg.innerHTML = '<text x="300" y="160" fill="#333" font-size="12" text-anchor="middle">No concepts yet — talk to NEXUS or trigger a dream</text>';
+                return;
+            }
+            const W = 600, H = 320;
+            const pos = new Map(nodes.map((n, i) => [n.id, {
+                x: W / 2 + Math.cos(2 * Math.PI * i / nodes.length) * (Math.min(W, H) / 2 - 40),
+                y: H / 2 + Math.sin(2 * Math.PI * i / nodes.length) * (Math.min(W, H) / 2 - 40)
+            }]));
+            const byId = new Map(nodes.map(n => [n.id, n]));
+
+            for (let iter = 0; iter < 80; iter++) {
+                // repulsion
+                for (let i = 0; i < nodes.length; i++) {
+                    for (let j = i + 1; j < nodes.length; j++) {
+                        const a = pos.get(nodes[i].id), b = pos.get(nodes[j].id);
+                        const dx = a.x - b.x, dy = a.y - b.y;
+                        const d2 = Math.max(dx * dx + dy * dy, 1e-4);
+                        const d = Math.sqrt(d2);
+                        const force = 400 / d2;
+                        const fx = (dx / d) * force, fy = (dy / d) * force;
+                        a.x += fx; a.y += fy; b.x -= fx; b.y -= fy;
+                    }
+                }
+                // attraction along edges
+                for (const e of edges) {
+                    const a = pos.get(e.source), b = pos.get(e.target);
+                    if (!a || !b) continue;
+                    const dx = b.x - a.x, dy = b.y - a.y;
+                    const d = Math.max(Math.sqrt(dx * dx + dy * dy), 1e-4);
+                    const force = Math.min(Math.pow(d / 60, 2), 1) ;
+                    a.x += (dx / d) * force; a.y += (dy / d) * force;
+                    b.x -= (dx / d) * force; b.y -= (dy / d) * force;
+                }
+            }
+
+            const defs = '<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10" fill="none" stroke="#2a5a2a" stroke-width="1"/></marker></defs>';
+            let out = defs;
+            for (const e of edges) {
+                const a = pos.get(e.source), b = pos.get(e.target);
+                if (!a || !b) continue;
+                const alpha = Math.min(0.9, 0.15 + e.weight * 0.2);
+                out += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#22aa55" stroke-opacity="${alpha}" stroke-width="${Math.min(3, 0.5 + e.weight)}"/>`;
+            }
+            for (const n of nodes) {
+                const p = pos.get(n.id);
+                const r = Math.max(6, Math.min(16, 4 + n.strength * 2));
+                const hue = n.concept_type === 'skill' ? 60 : n.concept_type === 'emotion' ? 350 : 150;
+                out += `<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="hsl(${hue}, 70%, 12%)" stroke="#00ff88" stroke-opacity="0.7"/>`;
+                out += `<text x="${p.x}" y="${p.y + 3.5}" fill="#00ff88" font-size="9" text-anchor="middle">${n.label.length > 14 ? n.label.slice(0, 13) + '…' : n.label}</text>`;
+            }
+            svg.innerHTML = out;
+        }
+
+        async function fetchDreams() {
+            const resp = await SDK.req('/v1/system/dreams?limit=12');
+            if (!resp) return;
+            try {
+                const dreams = await resp.json();
+                const list = document.getElementById('dream-log');
+                list.innerHTML = dreams.map(d =>
+                    `<div class="list-item"><span class="tag tag-dream">dream</span> ${d.session_id} <span class="muted">${d.duration_seconds.toFixed(1)}s</span></div>`
+                ).join('') || '<div class="muted">No dream cycles yet</div>';
+                const activity = document.getElementById('activity');
+                const entries = dreams.slice(0, 5);
+                if (entries.length) {
+                    activity.innerHTML = entries.map(d =>
+                        `<div class="list-item"><span class="tag tag-dream">dream</span> ${d.session_id} completed (${d.duration_seconds.toFixed(1)}s)</div>`
+                    ).join('');
                 }
             } catch (e) {}
         }
 
+        async function fetchSwarmRuns() {
+            const resp = await SDK.req('/v1/swarms/runs?limit=12');
+            if (!resp) return;
+            try {
+                const runs = await resp.json();
+                const list = document.getElementById('swarm-log');
+                list.innerHTML = runs.map(r =>
+                    `<div class="list-item"><span class="tag tag-swarm">swarm</span> ${r.swarm_name} <span class="muted">${r.worker_count} workers</span> — ${r.task.length > 60 ? r.task.slice(0, 59) + '…' : r.task}</div>`
+                ).join('') || '<div class="muted">No swarm runs yet</div>';
+            } catch (e) {}
+        }
+
+        document.getElementById('apiKey').addEventListener('change', setApiKey);
+        document.getElementById('apiKey').addEventListener('input', () => {
+            SDK.key = currentKey();
+        });
+        document.getElementById('apiKey').value = SDK.key;
+
         fetchMetrics();
-        fetchTools();
         setInterval(fetchMetrics, 10000);
+        loadSecured();
+        setInterval(loadSecured, 30000);
     </script>
 </body>
 </html>

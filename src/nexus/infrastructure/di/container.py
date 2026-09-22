@@ -17,7 +17,7 @@ from nexus.domain.value_objects.synapse import SynapseConfig
 # Ports (abstractions)
 from nexus.domain.ports.auth import Authenticator
 from nexus.domain.ports.cognition import ActionPolicyStore, CorticalColumnRegistry
-from nexus.domain.ports.event_bus import EventBus
+from nexus.domain.ports.event_bus import Event, EventBus, EventTopic
 from nexus.domain.ports.execution import ToolExecutor
 from nexus.domain.ports.llm_provider import LLMProvider, EmbeddingProvider
 from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
@@ -29,6 +29,7 @@ from nexus.domain.ports.speech import SpeechToText, TextToSpeech
 from nexus.domain.ports.swarm import AgentRepository, SwarmRepository
 from nexus.domain.ports.tool_registry import ToolRegistry
 from nexus.domain.ports.deployment import DeploymentProvider
+from nexus.domain.ports.activity_feed import ActivityFeed
 
 # Application (use cases)
 from nexus.application.cortex.process_message import ProcessMessageUseCase
@@ -155,6 +156,12 @@ class Config:
     otel_enabled: bool = field(
         default_factory=lambda: os.getenv("NEXUS_OTEL_ENABLED", "false").lower() == "true"
     )
+    # ---- Infrastructure backend ----
+    # "external" = Redis/Qdrant/Neo4j/OpenAI-embed (production).
+    # "memory"   = fully in-process adapters (offline dreaming, evals, demos).
+    infra_backend: str = field(
+        default_factory=lambda: os.getenv("NEXUS_INFRA_BACKEND", "external").lower()
+    )
 
 
 class Container:
@@ -172,6 +179,9 @@ class Container:
         self.tracer: Tracer = self._build_tracer()
         self.metrics: Metrics = self._build_metrics()
         self.rate_limiter: RateLimiter = self._build_rate_limiter()
+
+        # ---- Observability / dashboard (P5) ----
+        self.activity_feed: ActivityFeed = self._build_activity_feed()
 
         # ---- Ports (concrete adapters chosen here) ----
         self.event_bus: EventBus = self._build_event_bus()
@@ -373,6 +383,11 @@ class Container:
 
         return InMemoryMetrics()
 
+    def _build_activity_feed(self) -> ActivityFeed:
+        from nexus.infrastructure.adapters.observability.activity_feed import InMemoryActivityFeed
+
+        return InMemoryActivityFeed()
+
     def _build_rate_limiter(self) -> RateLimiter:
         from nexus.infrastructure.adapters.security.redis_rate_limiter import RedisRateLimiter
 
@@ -380,11 +395,20 @@ class Container:
         return RedisRateLimiter(redis_url=redis_url, fail_closed=self.config.rate_limiter_fail_closed)
 
     def _build_event_bus(self) -> EventBus:
+        if self.config.infra_backend == "memory":
+            from nexus.infrastructure.adapters.eventbus.in_memory_event_bus import InMemoryEventBus
+
+            return InMemoryEventBus()
         from nexus.infrastructure.adapters.eventbus.redis_event_bus import RedisEventBus
 
         return RedisEventBus(host=self.config.redis_host, port=self.config.redis_port)
 
     def _build_embedder(self) -> EmbeddingProvider:
+        if self.config.infra_backend == "memory":
+            from nexus.infrastructure.adapters.inmemory.embedder import InMemoryEmbedder
+
+            return InMemoryEmbedder(dimension=self.config.embedding_dimension)
+
         from nexus.infrastructure.adapters.embedding.openai_embedder import OpenAIEmbedder
 
         return OpenAIEmbedder(
@@ -437,6 +461,11 @@ class Container:
         return SubprocessSandbox()
 
     def _build_memory_repo(self) -> MemoryRepository:
+        if self.config.infra_backend == "memory":
+            from nexus.infrastructure.adapters.inmemory.memory_repository import InMemoryMemoryRepository
+
+            return InMemoryMemoryRepository()
+
         from nexus.infrastructure.adapters.persistence.qdrant_memory_repository import QdrantMemoryRepository
 
         return QdrantMemoryRepository(
@@ -448,6 +477,11 @@ class Container:
         )
 
     def _build_concept_repo(self) -> ConceptRepository:
+        if self.config.infra_backend == "memory":
+            from nexus.infrastructure.adapters.inmemory.concept_repository import InMemoryConceptRepository
+
+            return InMemoryConceptRepository(synapse=self.synapse)
+
         from nexus.infrastructure.adapters.persistence.neo4j_concept_repository import Neo4jConceptRepository
 
         return Neo4jConceptRepository(
@@ -458,6 +492,11 @@ class Container:
         )
 
     def _build_working_memory(self) -> ShortTermMemory:
+        if self.config.infra_backend == "memory":
+            from nexus.infrastructure.adapters.inmemory.short_term_memory import InMemoryShortTermMemory
+
+            return InMemoryShortTermMemory()
+
         from nexus.infrastructure.adapters.persistence.redis_short_term_memory import RedisShortTermMemory
 
         return RedisShortTermMemory(host=self.config.redis_host, port=self.config.redis_port)
@@ -545,12 +584,18 @@ class Container:
             return
         self._started = True
         await self.event_bus.start()
+        await self.event_bus.subscribe(EventTopic.DREAM_COMPLETED, self._on_dream_completed)
         try:
             await self.memory_repo.ensure_collection()
             for tenant_id in self.config.tenants:
                 await self.memory_repo.ensure_collection(tenant_id=tenant_id)
         except Exception:
             pass  # Qdrant/Neo4j not available; in-memory mode
+
+    async def _on_dream_completed(self, event: Event) -> None:
+        """Record a completed dream cycle on the recent-activity feed."""
+        payload = dict(event.payload or {})
+        self.activity_feed.record("dream", payload)
 
     async def shutdown(self) -> None:
         if self._shutdown:

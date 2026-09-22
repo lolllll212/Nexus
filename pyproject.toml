@@ -43,7 +43,11 @@ dev = [
     "black>=24.0",
     "ruff>=0.2",
     "mypy>=1.8",
+    "mkdocs-material>=9.5",
 ]
+
+[project.scripts]
+nexus = "nexus.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

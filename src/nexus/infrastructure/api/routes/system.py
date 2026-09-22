@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import List
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
@@ -36,6 +38,37 @@ class DreamResponse(BaseModel):
     triggered: bool
     session_id: str
     next_dream_at: str
+
+
+class DreamLogEntry(BaseModel):
+    session_id: str
+    duration_seconds: float
+    tenant_id: str
+    recall_probes: int = 0
+    recall_hit_rate_before: float | None = None
+    recall_hit_rate_after: float | None = None
+    recall_delta: float | None = None
+
+
+@router.get("/dreams", response_model=List[DreamLogEntry], dependencies=[Depends(require_identity)])
+async def recent_dreams(
+    limit: int = 20,
+    container: Container = Depends(get_container),
+):
+    """Recent completed dream cycles (from the activity feed)."""
+    entries = container.activity_feed.recent("dream", limit=limit)
+    return [
+        DreamLogEntry(
+            session_id=e.get("session_id", "?"),
+            duration_seconds=float(e.get("duration_seconds", 0.0)),
+            tenant_id=e.get("tenant_id", "default"),
+            recall_probes=int(e.get("recall_probes", 0)),
+            recall_hit_rate_before=e.get("recall_hit_rate_before"),
+            recall_hit_rate_after=e.get("recall_hit_rate_after"),
+            recall_delta=e.get("recall_delta"),
+        )
+        for e in entries
+    ]
 
 
 @router.post("/dream", response_model=DreamResponse, dependencies=[Depends(require_identity)])

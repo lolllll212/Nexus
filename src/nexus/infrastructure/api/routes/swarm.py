@@ -59,6 +59,14 @@ class SwarmRunOut(BaseModel):
     session_id: str
 
 
+class SwarmRunHistoryOut(BaseModel):
+    swarm_id: str
+    swarm_name: str
+    task: str
+    worker_count: int
+    session_id: str
+
+
 def _agent_out(a) -> AgentOut:
     return AgentOut(
         id=a.id,
@@ -71,7 +79,9 @@ def _agent_out(a) -> AgentOut:
 
 
 def _swarm_out(s) -> SwarmOut:
-    return SwarmOut(id=s.id, name=s.name, leader_id=s.leader_id, worker_ids=list(s.worker_ids), status=s.status.value)
+    return SwarmOut(
+        id=s.id, name=s.name, leader_id=s.leader_id, worker_ids=list(s.worker_ids), status=s.status.value
+    )
 
 
 @router.post("/agents", response_model=AgentOut, status_code=201)
@@ -142,6 +152,33 @@ async def list_swarms(
     return [_swarm_out(s) for s in swarms]
 
 
+@router.get("/swarms/{swarm_id}/run-history", response_model=List[SwarmRunHistoryOut])
+async def swarm_run_history(
+    swarm_id: str,
+    limit: int = 20,
+    identity: Identity = Depends(require_identity),
+    container: Container = Depends(get_container),
+) -> List[SwarmRunHistoryOut]:
+    """Recent runs of a specific swarm (from the activity feed)."""
+    runs = container.activity_feed.recent("swarm_run", limit=limit)
+    return [
+        SwarmRunHistoryOut(**r)
+        for r in runs
+        if r.get("swarm_id") == swarm_id and r.get("tenant_id", "default") == identity.tenant_id
+    ]
+
+
+@router.get("/swarms/runs", response_model=List[SwarmRunHistoryOut])
+async def recent_swarm_runs(
+    limit: int = 20,
+    identity: Identity = Depends(require_identity),
+    container: Container = Depends(get_container),
+) -> List[SwarmRunHistoryOut]:
+    """Recent swarm runs across all swarms (from the activity feed)."""
+    runs = container.activity_feed.recent("swarm_run", limit=limit)
+    return [SwarmRunHistoryOut(**r) for r in runs if r.get("tenant_id", "default") == identity.tenant_id]
+
+
 @router.post("/swarms/{swarm_id}/run", response_model=SwarmRunOut)
 async def run_swarm(
     swarm_id: str,
@@ -154,6 +191,17 @@ async def run_swarm(
     except SwarmNotFoundError:
         raise HTTPException(status_code=404, detail=f"Swarm not found: {swarm_id}")
     result = await container.swarm_coordinator.run(swarm, req.task, identity.tenant_id)
+    container.activity_feed.record(
+        "swarm_run",
+        {
+            "swarm_id": swarm.id,
+            "swarm_name": swarm.name,
+            "task": req.task,
+            "worker_count": len(result.worker_responses),
+            "session_id": result.session_id,
+            "tenant_id": identity.tenant_id,
+        },
+    )
     return SwarmRunOut(
         final_response=result.final_response,
         worker_responses=result.worker_responses,

@@ -1,0 +1,33 @@
+site_name: NEXUS
+site_description: A new kind of AI brain - dual-loop architecture with subconscious synthesis, dreaming, and self-evolution.
+site_url: https://nexus.example.com
+repo_url: https://github.com/anomalyco/nexus
+exclude_docs: README.md
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: teal
+    accent: green
+  features:
+    - navigation.sections
+    - navigation.expand
+    - toc.integrate
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tasklist
+nav:
+  - Home: index.md
+  - Architecture:
+      - Dual-Loop Architecture: dual-loop.md
+      - Clean Architecture & Dependency Rule: clean-architecture.md
+  - The Brain:
+      - Memory System: memory.md
+      - Dreaming Pipeline: dreaming.md
+      - Self-Evolution: self-evolution.md
+      - Autonomous Goals: autonomous-goals.md
+      - Swarm: swarm.md

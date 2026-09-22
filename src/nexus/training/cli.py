@@ -20,7 +20,6 @@ from pathlib import Path
 
 from nexus.application.training.coding_store import CodingExample, CodingStore
 
-
 STORE_PATH = Path("data/coding_examples.json")
 
 
@@ -52,9 +51,14 @@ def cmd_add(args):
     test_cases = "\n".join(test_lines)
 
     ex = CodingExample(
-        task=task, solution=solution, language=language, category=category,
+        task=task,
+        solution=solution,
+        language=language,
+        category=category,
         tags=[t.strip() for t in tags.split(",") if t.strip()],
-        explanation=explanation, test_cases=test_cases, difficulty=difficulty,
+        explanation=explanation,
+        test_cases=test_cases,
+        difficulty=difficulty,
     )
     store.add(ex)
     print(f"Added example: {ex.id}")
@@ -141,6 +145,7 @@ def cmd_export(args):
 def cmd_import_seed(args):
     """Import the built-in seed coding examples."""
     from nexus.application.training.seed_data import SEED_EXAMPLES
+
     store = CodingStore(STORE_PATH)
     # Deduplicate by task
     existing = {e.task for e in store.list_all()}
@@ -195,8 +200,9 @@ def cmd_chat(args):
                 continue
 
             # Build prompt with few-shot examples
-            coding_prompt = rag.build_coding_prompt(user_input)
-            conversation.append({"role": "system", "content": f"Relevant examples:\n{rag.get_few_shot_context(user_input)}"})
+            conversation.append(
+                {"role": "system", "content": f"Relevant examples:\n{rag.get_few_shot_context(user_input)}"}
+            )
             conversation.append({"role": "user", "content": user_input})
 
             try:
@@ -209,7 +215,7 @@ def cmd_chat(args):
     asyncio.run(chat_loop())
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description="NEXUS Coding Trainer CLI")
     sub = parser.add_subparsers(dest="command")
 
@@ -226,13 +232,12 @@ def main():
 
     sub.add_parser("stats", help="Show statistics")
     sub.add_parser("import-seed", help="Import built-in seed examples")
-    sub.add_parser("export", help="Export all as JSON")
+
+    p_export = sub.add_parser("export", help="Export all as JSON")
+    p_export.add_argument("--output", "-o", help="Output file")
 
     p_delete = sub.add_parser("delete", help="Delete example by ID")
     p_delete.add_argument("id", help="Example ID")
-
-    p_export = sub.add_parser("export", help="Export examples")
-    p_export.add_argument("--output", "-o", help="Output file")
 
     p_chat = sub.add_parser("chat", help="Interactive coding chat")
     p_chat.add_argument("--model", default="qwen/qwen3.5-9b", help="Model name")
@@ -240,7 +245,9 @@ def main():
     p_chat.add_argument("--max-tokens", type=int, default=8192, help="Max tokens")
     p_chat.add_argument("--few-shot", type=int, default=3, help="Number of few-shot examples")
 
-    args = parser.parse_args()
+    import sys
+
+    args = parser.parse_args(argv if argv is not None else sys.argv[1:])
     if not args.command:
         parser.print_help()
         return

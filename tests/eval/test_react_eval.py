@@ -1,256 +1,131 @@
 """
-Golden-set eval harness for the ReAct loop and dreaming quality.
+Golden-set eval harness tests - reuse the shared rubric from nexus.eval.
 
-Measures whether the brain actually gets smarter over time.
 Run with: pytest tests/eval/ -v
 
-Each eval case is a (task, expected_tools, expected_keywords) tuple.
-The harness:
-  1. Runs ProcessMessageUseCase with a RecordingLLM
-  2. Asserts the agent called the right tools
-  3. Asserts the answer contains expected keywords
-  4. Reports pass/fail + metrics
+These run the SAME harness (EvalCase/EvalResult/GOLDEN_SET/EvalRunner) that
+the nightly `python -m nexus.eval` job uses, but against a RecordingLLM + the
+fake container, so the unit test verifies grading without a live model.
 """
 
 from __future__ import annotations
 
-import json
-import time
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Dict, List, Optional
+from tests.fakes.container import FakeContainer
 
-import pytest
-
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+from nexus.eval.harness import EvalRunner, GOLDEN_SET
 
 
-@dataclass
-class EvalCase:
-    """A single evaluation scenario."""
-    task: str
-    expected_tools: List[str] = field(default_factory=list)
-    expected_keywords: List[str] = field(default_factory=list)
-    forbidden_keywords: List[str] = field(default_factory=list)
-    max_iterations: int = 5
+class RecordingLLM:
+    def __init__(self, response="FINAL ANSWER: The answer is 42."):
+        self.calls = []
+        self._response = response
+
+    async def complete(self, messages, temperature=0.7, max_tokens=4096, tools=None):
+        self.calls.append(messages)
+        return self._response
+
+    async def extract_structured(self, content, schema, instructions=""):
+        return {}
 
 
-@dataclass
-class EvalResult:
-    """Result of running one eval case."""
-    case: EvalCase
-    tools_called: List[str]
-    answer: str
-    passed: bool
-    duration_ms: int
-    details: str = ""
+def _runner():
+    return EvalRunner(container_factory=lambda: FakeContainer())
 
 
-# ── Golden Set ────────────────────────────────────────────────────────────
-
-GOLDEN_SET: List[EvalCase] = [
-    EvalCase(
-        task="List all Python files in the current directory",
-        expected_tools=["list_directory"],
-        expected_keywords=[".py"],
-    ),
-    EvalCase(
-        task="What is the capital of France?",
-        expected_keywords=["Paris"],
-        max_iterations=2,
-    ),
-    EvalCase(
-        task="Read the file src/nexus/domain/entities/memory.py and tell me what classes it defines",
-        expected_tools=["read_file"],
-        expected_keywords=["Memory", "class"],
-    ),
-    EvalCase(
-        task="Search for all files containing 'class.*UseCase' in the src directory",
-        expected_tools=["grep"],
-        expected_keywords=["UseCase"],
-    ),
-    EvalCase(
-        task="Calculate 2 raised to the power of 10",
-        expected_tools=["calculator"],
-        expected_keywords=["1024"],
-        max_iterations=2,
-    ),
-    EvalCase(
-        task="What is the SHA-256 hash of the text 'hello world'?",
-        expected_tools=["hash_text"],
-        expected_keywords=["b94d27b9934d3e08"],
-        max_iterations=2,
-    ),
-]
-
-
-# ── Runner ────────────────────────────────────────────────────────────────
-
-class EvalRunner:
-    """Runs eval cases and collects results."""
-
-    def __init__(self):
-        self.results: List[EvalResult] = []
-
-    async def run_case(self, case: EvalCase, llm) -> EvalResult:
-        """Run a single eval case with the given LLM."""
-        from tests.fakes.container import FakeContainer
-
-        fake = FakeContainer()
-        fake.llm = llm
-        fake.process_message._llm = llm
-
-        started = time.monotonic()
-        try:
-            result = await fake.process_message.execute(
-                user_id="eval",
-                message=case.task,
-                tenant_id="eval",
-            )
-            duration_ms = int((time.monotonic() - started) * 1000)
-
-            tools_called = result.tools_used
-            answer = result.response
-
-            # Check tool usage
-            tools_ok = all(t in tools_called for t in case.expected_tools)
-
-            # Check keywords
-            answer_upper = answer.upper()
-            keywords_ok = all(k.upper() in answer_upper for k in case.expected_keywords)
-
-            # Check forbidden keywords
-            forbidden_ok = all(k.upper() not in answer_upper for k in case.forbidden_keywords)
-
-            passed = tools_ok and keywords_ok and forbidden_ok
-            details = []
-            if not tools_ok:
-                details.append(f"Missing tools: {set(case.expected_tools) - set(tools_called)}")
-            if not keywords_ok:
-                details.append(f"Missing keywords: {case.expected_keywords}")
-            if not forbidden_ok:
-                details.append(f"Found forbidden: {case.forbidden_keywords}")
-
-            return EvalResult(
-                case=case,
-                tools_called=tools_called,
-                answer=answer[:200],
-                passed=passed,
-                duration_ms=duration_ms,
-                details="; ".join(details),
-            )
-        except Exception as exc:
-            return EvalResult(
-                case=case,
-                tools_called=[],
-                answer="",
-                passed=False,
-                duration_ms=int((time.monotonic() - started) * 1000),
-                details=str(exc),
-            )
-
-    def report(self) -> str:
-        """Generate a human-readable eval report."""
-        total = len(self.results)
-        passed = sum(1 for r in self.results if r.passed)
-        failed = total - passed
-        avg_ms = sum(r.duration_ms for r in self.results) // max(total, 1)
-
-        lines = [
-            f"Eval Report: {passed}/{total} passed ({failed} failed)",
-            f"Average latency: {avg_ms}ms",
-            "",
-        ]
-        for r in self.results:
-            status = "PASS" if r.passed else "FAIL"
-            tools = ", ".join(r.tools_called) if r.tools_called else "(none)"
-            lines.append(f"  [{status}] {r.case.task[:60]}")
-            lines.append(f"         Tools: {tools}")
-            if r.details:
-                lines.append(f"         {r.details}")
-            lines.append("")
-
-        return "\n".join(lines)
-
-
-# ── Tests ─────────────────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
 async def test_react_golden_set():
-    """Run the full golden set against the ReAct loop."""
-    from tests.fakes.container import FakeContainer
-
-    class RecordingLLM:
-        def __init__(self, response="FINAL ANSWER: The answer is 42."):
-            self.calls = []
-            self._response = response
-        async def complete(self, messages, temperature=0.7, max_tokens=4096, tools=None):
-            self.calls.append(messages)
-            return self._response
-        async def extract_structured(self, content, schema, instructions=""):
-            return {}
-
+    """Run the full golden set against the ReAct loop (fake LLM)."""
     llm = RecordingLLM("FINAL ANSWER: The answer is 42.")
-    runner = EvalRunner()
+    runner = _runner()
 
     for case in GOLDEN_SET:
-        result = await runner.run_case(case, llm)
-        runner.results.append(result)
+        runner.results.append(await runner.run_case(case, llm=llm))
 
     report = runner.report()
     print(report)
 
     assert len(runner.results) == len(GOLDEN_SET)
+    # Every case should have been attempted with the fake LLM.
+    assert all(r.duration_ms >= 0 for r in runner.results)
 
 
-@pytest.mark.asyncio
-async def test_eval_tracks_latency():
-    """Verify eval harness tracks timing accurately."""
-    from tests.fakes.container import FakeContainer
+async def test_react_golden_set_with_tools():
+    """Golden set with a scripted tool-calling LLM exercises the ACT/OBSERVE path."""
+    import nexus
 
-    class RecordingLLM:
-        def __init__(self, response="FINAL ANSWER: done"):
-            self.calls = []
-            self._response = response
+    llm = RecordingLLM("FINAL ANSWER: The answer is 1024.")
+
+    class ToolCallingLLM(RecordingLLM):
+        def __init__(self):
+            super().__init__("FINAL ANSWER: 1024.")
+            self.turns = 0
+
         async def complete(self, messages, temperature=0.7, max_tokens=4096, tools=None):
             self.calls.append(messages)
-            return self._response
-        async def extract_structured(self, content, schema, instructions=""):
-            return {}
+            self.turns += 1
+            if self.turns == 1:
+                return 'TOOL_CALL: {"tool_id": "calculator", "params": {"expression": "2**10"}}'
+            return 'FINAL ANSWER: 2 raised to the power of 10 is 1024.'
 
-    llm = RecordingLLM("FINAL ANSWER: done")
-    runner = EvalRunner()
+    fake = FakeContainer()
+    from nexus.domain.entities.tool import Tool
+    from nexus.domain.value_objects.schema import JSONSchema
 
-    case = EvalCase(task="test", max_iterations=2)
-    result = await runner.run_case(case, llm)
+    # Register a real calculator tool so the ACT step finds it in the registry.
+    await fake.tool_registry.register(
+        Tool(
+            id="calculator",
+            name="calculator",
+            description="Evaluate a math expression safely.",
+            input_schema=JSONSchema(properties={"expression": {"type": "string"}}, required=["expression"]),
+            output_schema=JSONSchema(properties={"result": {"type": "number"}}),
+        )
+    )
+    runner = EvalRunner(container_factory=lambda: fake)
+    result = await runner.run_case(
+        next(c for c in GOLDEN_SET if c.task.startswith("Calculate")), llm=ToolCallingLLM()
+    )
+    assert result.passed
+
+
+async def test_eval_tracks_latency():
+    """Verify eval harness tracks timing accurately."""
+    llm = RecordingLLM("FINAL ANSWER: The capital of France is Paris.")
+    runner = _runner()
+    result = await runner.run_case(
+        next(c for c in GOLDEN_SET if c.task.startswith("What is the capital")), llm=llm
+    )
 
     assert result.duration_ms >= 0
-    assert result.case == case
+    assert result.passed  # capital of France + no tools expected
 
 
-def test_eval_report_format():
-    """Verify the eval report is properly formatted."""
-    runner = EvalRunner()
-    runner.results = [
-        EvalResult(
-            case=EvalCase(task="test task", expected_tools=["grep"]),
-            tools_called=["grep"],
-            answer="found it",
-            passed=True,
-            duration_ms=42,
-        ),
-        EvalResult(
-            case=EvalCase(task="fail task", expected_tools=["read_file"]),
-            tools_called=[],
-            answer="error",
-            passed=False,
-            duration_ms=10,
-            details="Missing tools: {'read_file'}",
-        ),
-    ]
+async def test_eval_report_format():
+    """Verify the eval report is properly formatted and JSON-serializable."""
+    llm = RecordingLLM("FINAL ANSWER: The answer is 42.")
+    runner = _runner()
+    await runner.run_all(llm=llm)
 
     report = runner.report()
-    assert "1/2 passed" in report
+    assert f"{len(GOLDEN_SET)}/{len(GOLDEN_SET)} passed" in report
     assert "[PASS]" in report
     assert "[FAIL]" in report
+
+    data = runner.to_json()
+    assert data["total"] == len(GOLDEN_SET)
+    assert "pass_rate" in data
+
+
+def test_write_report_html(tmp_path):
+    """HTML artifact generation works."""
+    from nexus.eval.harness import EvalCase, EvalResult, write_report_html
+
+    write_report_html(
+        [
+            EvalResult(case=EvalCase(task="t"), tools_called=["grep"], answer="x", passed=True, duration_ms=1),
+            EvalResult(case=EvalCase(task="u"), tools_called=[], answer="", passed=False, duration_ms=2, details="nope"),
+        ],
+        tmp_path / "report.html",
+    )
+    html = (tmp_path / "report.html").read_text()
+    assert "<table>" in html
+    assert "1/2 passed" in html
