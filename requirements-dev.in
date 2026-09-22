@@ -1,0 +1,14 @@
+# NEXUS dev dependencies (lint, test, typecheck)
+# Source for the requirements-dev.txt lock. Keep in sync with pyproject.toml [project.optional-dependencies.dev].
+# Re-lock with: pip-compile requirements-dev.in -o requirements-dev.txt
+
+# Use the same transitive pins as the runtime lock
+-c requirements.txt
+
+pytest>=8.0
+pytest-asyncio>=0.23
+pytest-cov>=4.1
+
+black>=24.0
+ruff>=0.2
+mypy>=1.8

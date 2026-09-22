@@ -75,7 +75,12 @@ Tests use `tests/fakes/` (package, not file) — `FakeContainer` wires real use 
 ## Known Issues
 
 - `datetime.datetime.utcnow()` is deprecated in Python 3.13+ — replace with `datetime.now(datetime.UTC)` across the codebase.
-- `requirements.txt` has pinned versions but may drift from `pyproject.toml` `>=` specs. Re-run `pip-compile` after changing deps.
+
+## Dependencies & Lockfiles
+
+- **Runtime lock**: `requirements.in` → `requirements.txt` keeps `pyproject.toml` `>=` specs in sync. **Re-lock targets Linux/Py3.11** (the Docker image) using `uv`: `uv pip compile requirements.in -o requirements.txt --python-platform linux --python-version 3.11`. Dev lock: `requirements-dev.in` → `requirements-dev.txt` (same flags). Keep both `.txt` files committed.
+- Docker builds install only `requirements.txt` (runtime). CI installs the editable package with `.[dev]` from `pyproject.toml`, not the lockfiles.
+- `python-dotenv`, `httpx`, `pyyaml`, etc. are pinned transitively in the lock — bump by editing `requirements.in` and re-locking, not hand-editing `.txt`.
 
 ## CI
 

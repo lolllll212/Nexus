@@ -1,0 +1,20 @@
+# NEXUS runtime dependencies
+# Source for the pip-compile lock. Keep in sync with pyproject.toml [project.dependencies].
+# Re-lock with: pip-compile requirements.in -o requirements.txt
+
+fastapi>=0.109
+uvicorn[standard]>=0.27
+pydantic>=2.5
+python-multipart>=0.0.9
+
+redis>=5.0
+neo4j>=5.15
+qdrant-client>=1.9
+
+openai>=1.12
+
+celery>=5.3
+
+pyyaml>=6.0
+python-dotenv>=1.0
+httpx>=0.26

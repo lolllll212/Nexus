@@ -124,6 +124,9 @@ class Config:
     rate_limit_window_seconds: int = field(
         default_factory=lambda: int(os.getenv("NEXUS_RATE_LIMIT_WINDOW_SECONDS", "60"))
     )
+    rate_limiter_fail_closed: bool = field(
+        default_factory=lambda: os.getenv("NEXUS_RATE_LIMIT_FAIL_CLOSED", "false").lower() == "true"
+    )
     json_logs: bool = field(default_factory=lambda: os.getenv("NEXUS_JSON_LOGS", "true").lower() == "true")
     # ---- Autonomous goals (P2) ----
     autonomy_hourly_budget: int = field(
@@ -374,7 +377,7 @@ class Container:
         from nexus.infrastructure.adapters.security.redis_rate_limiter import RedisRateLimiter
 
         redis_url = f"redis://{self.config.redis_host}:{self.config.redis_port}"
-        return RedisRateLimiter(redis_url=redis_url)
+        return RedisRateLimiter(redis_url=redis_url, fail_closed=self.config.rate_limiter_fail_closed)
 
     def _build_event_bus(self) -> EventBus:
         from nexus.infrastructure.adapters.eventbus.redis_event_bus import RedisEventBus
