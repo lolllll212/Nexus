@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Protocol
 
 from nexus.domain.entities.goal import Goal, GoalPriority, GoalStatus, GoalStep, StepStatus
-from nexus.domain.exceptions import GoalNotFoundError, GoalStatusError
+from nexus.domain.exceptions import GoalNotFoundError, GoalStatusError, QuotaExceededError
 from nexus.domain.ports.autonomy import AutonomyPolicy
 from nexus.domain.ports.goal_repository import GoalRepository
 
@@ -26,8 +26,11 @@ class StepOutcome:
 class CreateGoalUseCase:
     """Create a goal; PROPOSED when approval is required, else ACTIVE."""
 
-    def __init__(self, repo: GoalRepository) -> None:
+    def __init__(self, repo: GoalRepository, max_active: int = 0) -> None:
         self._repo = repo
+
+        # Per-tenant ceiling on concurrently active goals. 0 = unlimited.
+        self._max_active = max_active
 
     async def execute(
         self,
@@ -40,6 +43,10 @@ class CreateGoalUseCase:
     ) -> Goal:
         if budget_units < 1:
             raise ValueError("budget_units must be >= 1")
+        if self._max_active > 0 and not requires_approval:
+            existing = await self._repo.list_active(tenant_id=tenant_id, limit=self._max_active)
+            if len(existing) >= self._max_active:
+                raise QuotaExceededError(f"Tenant '{tenant_id}' hit active goal ceiling ({self._max_active})")
         goal = Goal(
             statement=statement,
             tenant_id=tenant_id,
@@ -95,7 +102,9 @@ class ListGoalsUseCase:
     def __init__(self, repo: GoalRepository) -> None:
         self._repo = repo
 
-    async def execute(self, tenant_id: str, status: Optional[GoalStatus] = None, limit: int = 50) -> List[Goal]:
+    async def execute(
+        self, tenant_id: str, status: Optional[GoalStatus] = None, limit: int = 50
+    ) -> List[Goal]:
         if status is not None:
             return await self._repo.list_by_status(status, tenant_id=tenant_id, limit=limit)
         return await self._repo.list_active(tenant_id=tenant_id, limit=limit)

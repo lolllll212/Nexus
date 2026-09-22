@@ -54,8 +54,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield
 
-    await coordinator.stop()
-    await container.shutdown()
+    try:
+        await coordinator.stop()
+    finally:
+        await container.shutdown()
 
 
 def create_app(config: Config | None = None) -> FastAPI:

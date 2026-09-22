@@ -23,10 +23,21 @@ from nexus.domain.value_objects.synapse import ConnectionType, SynapseConfig
 class Neo4jConceptRepository(ConceptRepository):
     """ConceptRepository backed by Neo4j."""
 
-    def __init__(self, uri: str, user: str, password: str, database: str = "nexus", synapse: SynapseConfig | None = None) -> None:
-        from neo4j import AsyncGraphDatabase
+    def __init__(
+        self,
+        uri: str,
+        user: str,
+        password: str,
+        database: str = "nexus",
+        synapse: SynapseConfig | None = None,
+        driver=None,
+    ) -> None:
+        if driver is not None:
+            self._driver = driver
+        else:
+            from neo4j import AsyncGraphDatabase
 
-        self._driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
+            self._driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
         self._database = database
         self._synapse = synapse or SynapseConfig()
 
@@ -86,12 +97,14 @@ class Neo4jConceptRepository(ConceptRepository):
         for r in records:
             node = r["m"]
             props = json.loads(node.get("properties", "{}"))
-            memories.append(Memory(
-                id=node["id"],
-                content=node.get("content", ""),
-                memory_type=MemoryType(node.get("memory_type", "semantic")),
-                concepts=props.get("concepts", []),
-            ))
+            memories.append(
+                Memory(
+                    id=node["id"],
+                    content=node.get("content", ""),
+                    memory_type=MemoryType(node.get("memory_type", "semantic")),
+                    concepts=props.get("concepts", []),
+                )
+            )
         return memories
 
     async def find_by_label(self, label: str, limit: int = 10, tenant_id: str = "default") -> List[Concept]:
@@ -106,7 +119,9 @@ class Neo4jConceptRepository(ConceptRepository):
         concepts = []
         for r in records:
             node = r["c"]
-            concepts.append(Concept(id=node["id"], label=node["label"], concept_type=node.get("type", "topic")))
+            concepts.append(
+                Concept(id=node["id"], label=node["label"], concept_type=node.get("type", "topic"))
+            )
         return concepts
 
     async def upsert_connection(self, connection: SynapticConnection, tenant_id: str = "default") -> None:
@@ -189,7 +204,12 @@ class Neo4jConceptRepository(ConceptRepository):
         connection_type: ConnectionType = ConnectionType.SEMANTIC,
         tenant_id: str = "default",
     ) -> SynapticConnection:
-        conn = SynapticConnection(source_id=source_id, target_id=target_id, connection_type=connection_type, weight=self._synapse.initial_weight)
+        conn = SynapticConnection(
+            source_id=source_id,
+            target_id=target_id,
+            connection_type=connection_type,
+            weight=self._synapse.initial_weight,
+        )
         await self.upsert_connection(conn, tenant_id=tenant_id)
         return conn
 

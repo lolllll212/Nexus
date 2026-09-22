@@ -47,6 +47,10 @@ class RateLimitExceededError(NexusError):
     """The caller exceeded the allowed request rate."""
 
 
+class QuotaExceededError(NexusError):
+    """A tenant exhausted its configured per-tenant quota."""
+
+
 class DeploymentError(NexusError):
     """A deployment platform rejected a tool deployment."""
 

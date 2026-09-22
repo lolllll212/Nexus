@@ -22,15 +22,16 @@ class OTELTracer(Tracer):
     def __init__(self, service_name: str = "nexus") -> None:
         self._service_name = service_name
         self._tracer = None
+        self._provider = None
         try:
             from opentelemetry import trace
             from opentelemetry.sdk.trace import TracerProvider
             from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
             provider = TracerProvider()
-            processor = BatchSpanProcessor(_create_exporter())
-            provider.add_span_processor(processor)
+            provider.add_span_processor(BatchSpanProcessor(_create_exporter()))
             trace.set_tracer_provider(provider)
+            self._provider = provider
             self._tracer = trace.get_tracer(service_name)
         except Exception as exc:
             _logger.warning("OpenTelemetry unavailable, falling back to logging: %s", exc)
@@ -39,6 +40,15 @@ class OTELTracer(Tracer):
         if self._tracer is None:
             return _FallbackSpan(name, attributes)
         return _OTELSpan(self._tracer, name, attributes)
+
+    def shutdown(self) -> None:
+        """Gracefully flush + shut down the provider (closed during container shutdown)."""
+        if self._provider is not None:
+            try:
+                self._provider.shutdown()
+            except Exception as exc:  # provider already shut down
+                _logger.warning("tracer shutdown error: %s", exc)
+            self._provider = None
 
 
 class _OTELSpan(Span):
@@ -79,12 +89,14 @@ class OTELMetrics(Metrics):
 
     def __init__(self, service_name: str = "nexus") -> None:
         self._metrics = {}
+        self._provider = None
         try:
             from opentelemetry import metrics
             from opentelemetry.sdk.metrics import MeterProvider
 
             provider = MeterProvider()
             metrics.set_meter_provider(provider)
+            self._provider = provider
             meter = metrics.get_meter(service_name)
             self._meter = meter
             self._counters = {}
@@ -96,6 +108,15 @@ class OTELMetrics(Metrics):
             self._counters = {}
             self._histograms = {}
             self._gauges = {}
+
+    def shutdown(self) -> None:
+        """Flush + shut down the meter provider."""
+        if self._provider is not None:
+            try:
+                self._provider.shutdown()
+            except Exception as exc:
+                _logger.warning("metrics shutdown error: %s", exc)
+            self._provider = None
 
     def counter(self, name: str, value: float = 1.0, labels: Optional[Dict[str, str]] = None) -> None:
         if self._meter and name not in self._counters:

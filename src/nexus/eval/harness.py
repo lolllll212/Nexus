@@ -17,6 +17,7 @@ from nexus.domain.ports.llm_provider import LLMProvider
 @dataclass
 class EvalCase:
     """A single evaluation scenario."""
+
     task: str
     expected_tools: List[str] = field(default_factory=list)
     expected_keywords: List[str] = field(default_factory=list)
@@ -27,6 +28,7 @@ class EvalCase:
 @dataclass
 class EvalResult:
     """Result of running one eval case."""
+
     case: EvalCase
     tools_called: List[str]
     answer: str
@@ -180,9 +182,7 @@ class EvalRunner:
             "total": len(self.results),
             "passed": sum(1 for r in self.results if r.passed),
             "pass_rate": self.pass_rate,
-            "average_duration_ms": (
-                sum(r.duration_ms for r in self.results) // max(len(self.results), 1)
-            ),
+            "average_duration_ms": (sum(r.duration_ms for r in self.results) // max(len(self.results), 1)),
             "results": [
                 {
                     "task": r.case.task,

@@ -44,7 +44,12 @@ class InMemoryConceptRepository(ConceptRepository):
         if concept is None:
             return []
         return [
-            Memory(id=concept.id, content=concept.label, memory_type=MemoryType.SEMANTIC, concepts=[concept.label])
+            Memory(
+                id=concept.id,
+                content=concept.label,
+                memory_type=MemoryType.SEMANTIC,
+                concepts=[concept.label],
+            )
         ]
 
     async def find_by_label(self, label: str, limit: int = 10, tenant_id: str = "default") -> List[Concept]:

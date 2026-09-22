@@ -24,6 +24,7 @@ class RedisEventBus(EventBus):
         self._redis = aioredis.Redis(host=host, port=port, db=db, decode_responses=True)
         self._subscribers: Dict[str, List[EventHandler]] = {}
         self._listener_tasks: List[asyncio.Task] = []
+        self._handler_tasks: set[asyncio.Task] = set()
         self._running = False
 
     async def publish(self, event: Event) -> None:
@@ -40,11 +41,22 @@ class RedisEventBus(EventBus):
         for channel in self._subscribers:
             self._start_listener(channel)
 
-    async def stop(self) -> None:
+    async def stop(self, drain_timeout: float | None = None) -> None:
         self._running = False
         for task in self._listener_tasks:
             task.cancel()
         await asyncio.gather(*self._listener_tasks, return_exceptions=True)
+        self._listener_tasks.clear()
+
+        # Drain handlers dispatched from the wire before closing the client.
+        timeout = 5.0 if drain_timeout is None else drain_timeout
+        if self._handler_tasks:
+            _, still_pending = await asyncio.wait(self._handler_tasks, timeout=timeout)
+            for task in still_pending:
+                task.cancel()
+            if still_pending:
+                await asyncio.gather(*still_pending, return_exceptions=True)
+            self._handler_tasks.clear()
         await self._redis.aclose()
 
     def _start_listener(self, channel: str) -> None:
@@ -60,7 +72,9 @@ class RedisEventBus(EventBus):
                     continue
                 event = _deserialize(json.loads(message["data"]))
                 for handler in self._subscribers.get(channel, []):
-                    asyncio.create_task(handler(event))
+                    task = asyncio.create_task(handler(event))
+                    self._handler_tasks.add(task)
+                    task.add_done_callback(self._handler_tasks.discard)
         except asyncio.CancelledError:
             await pubsub.unsubscribe(channel)
 

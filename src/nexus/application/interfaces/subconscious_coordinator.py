@@ -49,6 +49,8 @@ class SubconsciousCoordinator:
         self._amygdala = amygdala
         self._running = False
         self._background_tasks: list = []
+        self._pending: set[asyncio.Task] = set()
+        self._drain_timeout = 5.0
 
     async def start(self) -> None:
         """Register event handlers and start the background scheduler."""
@@ -63,11 +65,26 @@ class SubconsciousCoordinator:
         self._background_tasks.append(asyncio.create_task(self._pattern_loop()))
         self._background_tasks.append(asyncio.create_task(self._dream_loop()))
 
-    async def stop(self) -> None:
+    async def stop(self, drain_timeout: float | None = None) -> None:
+        """Graceful shutdown: stop the loops, then drain in-flight work.
+
+        Fire-and-forget synthesis tasks get `drain_timeout` seconds to finish
+        before being cancelled, so a SIGTERM doesn't orphan background work.
+        """
         self._running = False
         for task in self._background_tasks:
             task.cancel()
         await asyncio.gather(*self._background_tasks, return_exceptions=True)
+        self._background_tasks.clear()
+
+        timeout = self._drain_timeout if drain_timeout is None else drain_timeout
+        if self._pending:
+            _, still_pending = await asyncio.wait(self._pending, timeout=timeout)
+            for task in still_pending:
+                task.cancel()
+            if still_pending:
+                await asyncio.gather(*still_pending, return_exceptions=True)
+            self._pending.clear()
 
     # ------------------------------------------------------------------ #
 
@@ -75,8 +92,11 @@ class SubconsciousCoordinator:
         """A new message from the cortex - start background analysis. Never blocks."""
         if not self._running:
             return
-        # Fire and forget - the cortex must not wait for us
-        asyncio.create_task(self._synthesis.synthesize(event.payload))
+        # Fire and forget - the cortex must not wait for us - but track the
+        # task so stop() can drain it instead of orphaning it mid-flight.
+        task = asyncio.create_task(self._synthesis.synthesize(event.payload))
+        self._pending.add(task)
+        task.add_done_callback(self._pending.discard)
 
     async def _on_thalamic_gate(self, event: Event) -> None:
         if not self._running or self._thalamus is None:

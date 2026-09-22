@@ -72,6 +72,13 @@ Tests use `tests/fakes/` (package, not file) — `FakeContainer` wires real use 
 - **Generated-tool validation** (`generate_tool.py:execute()`): Previously only checked `error is None`. Now validates actual output matches `expected_outputs`.
 - **Sandbox default**: `DockerSandbox` is now the production default. Set `NEXUS_SANDBOX_BACKEND=subprocess` to fall back to subprocess.
 
+## Ops — Tier 3 additions
+
+- **`nexus eval`** — golden-set eval vs the live LLM. Config via `NEXUS_EVAL_BASE_URL` (fallback `NEXUS_LLM_BASE_URL`), `NEXUS_EVAL_MODEL` (`qwen2.5-coder-7b-instruct`), `NEXUS_EVAL_API_KEY` (`local-no-key`), `NEXUS_EVAL_MIN_PASS_RATE` (0.0); `python -m nexus.eval --output … --min-pass-rate …`.
+- **`NEXUS_INFRA_BACKEND`** — `external` (default: Redis/Qdrant/Neo4j/OpenAI) or `memory` (fully in-process: `InMemoryEventBus`, `InMemoryEmbedder`, `InMemoryMemoryRepository`, `InMemoryConceptRepository`, `InMemoryShortTermMemory`, `InMemoryRateLimiter`).
+- **`NEXUS_QUOTA_*`** — `NEXUS_QUOTA_CHAT_PER_DAY`, `NEXUS_QUOTA_TOOL_GEN_PER_DAY`, `NEXUS_QUOTA_MEMORIES_PER_DAY` (0 = unlimited, daily window via `RateLimitQuota` over `RateLimiter`); `NEXUS_GOALS_MAX_ACTIVE` (active-goal ceiling, enforced in `CreateGoalUseCase`).
+- **Backups** — `nexus backup [--output-dir backups --retain 7 --tenant t1,t2]` snapshots each `nexus_memory` / `nexus_memory_{tenant}` collection (`POST /collections/{name}/snapshots`) and dumps Neo4j to `backups/neo4j-*.jsonl`; see `docs/backup-dr.md` + `src/nexus/infrastructure/backup/`.
+
 ## Known Issues
 
 - `datetime.datetime.utcnow()` is deprecated in Python 3.13+ — replace with `datetime.now(datetime.UTC)` across the codebase.

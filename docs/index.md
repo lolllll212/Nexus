@@ -37,6 +37,9 @@ Then:
 ```bash
 nexus serve                  # run the server (uvicorn)
 nexus dream                  # run a dreaming cycle, print the report
+nexus dream --local          # same, but fully in-process (no Docker needed)
+nexus eval                   # golden-set eval vs live LLM (see eval/README)
+nexus backup                 # snapshot Qdrant + dump Neo4j (see Backup & DR)
 nexus train <add|search|...> # coding-training data CLI
 ```
 
@@ -50,6 +53,12 @@ nexus train <add|search|...> # coding-training data CLI
 - [Self-Evolution](self-evolution.md) - dynamic tool generation
 - [Autonomous Goals](autonomous-goals.md) - P2 budget/approval/audit guardrails
 - [Swarm](swarm.md) - P4 multi-agent leader/worker orchestration
+- [Backup & DR](backup-dr.md) - snapshots, retention, and restore runbook
+
+## Ops
+
+- `NEXUS_INFRA_BACKEND=memory` — offline/in-memory backend (dreaming + evals without Docker).
+- `NEXUS_QUOTA_CHAT_PER_DAY`, `NEXUS_QUOTA_TOOL_GEN_PER_DAY`, `NEXUS_QUOTA_MEMORIES_PER_DAY` — per-tenant daily quotas (0 = unlimited); `NEXUS_GOALS_MAX_ACTIVE` caps active goals.
 
 ## Multi-modal I/O (P3)
 

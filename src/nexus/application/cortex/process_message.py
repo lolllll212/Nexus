@@ -30,10 +30,11 @@ from nexus.domain.ports.observability import Metrics, NoopMetrics, NoopTracer, T
 
 if TYPE_CHECKING:
     from nexus.application.cortex.session_manager import SessionManager
+    from nexus.domain.ports.quota import QuotaService
 from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
 from nexus.domain.ports.execution import ToolExecutor
 from nexus.domain.ports.tool_registry import ToolRegistry
-from nexus.domain.exceptions import InvalidToolCallError, LLMUnavailableError
+from nexus.domain.exceptions import InvalidToolCallError, LLMUnavailableError, QuotaExceededError
 from nexus.application.cortex.react_prompt import REACT_SYSTEM_PROMPT
 
 
@@ -73,6 +74,7 @@ class ProcessMessageUseCase:
         session_manager: "SessionManager",
         tracer: Tracer | None = None,
         metrics: Metrics | None = None,
+        memory_quota: "QuotaService | None" = None,
     ) -> None:
         self._llm = llm
         self._memory_repo = memory_repo
@@ -84,6 +86,7 @@ class ProcessMessageUseCase:
         self._sessions = session_manager
         self._tracer = tracer or NoopTracer()
         self._metrics = metrics or NoopMetrics()
+        self._memory_quota = memory_quota
 
     async def execute(
         self,
@@ -350,6 +353,16 @@ class ProcessMessageUseCase:
 
     async def _encode_episodic(self, conversation: Conversation, response: str) -> None:
         """Persist the raw exchange as episodic memory for tonight's dreaming."""
+        if self._memory_quota is not None and conversation.tenant_id != "system":
+            try:
+                await self._memory_quota.check(conversation.tenant_id, "memories")
+            except QuotaExceededError:
+                # Soft-skip: quota exhausted - the exchange still answers but is
+                # never encoded, so a tenant can't silently balloon its memory.
+                self._metrics.counter(
+                    "memory_quota_skips_total", labels={"tenant_id": conversation.tenant_id}
+                )
+                return
         last_user = conversation.recent(1)[0].content if conversation.messages else ""
         state = conversation.emotional_state
         memory = Memory(
@@ -371,6 +384,17 @@ class ProcessMessageUseCase:
                 else None
             ),
         )
+        memory_quota = self._memory_quota
+        if memory_quota is not None:
+            try:
+                await memory_quota.check(conversation.tenant_id, "memories")
+            except QuotaExceededError:
+                # Soft skip: the exchange is NOT persisted when the tenant has
+                # exhausted its daily memory allowance, but the chat still works.
+                self._metrics.counter(
+                    "memory_quota_skips_total", labels={"tenant_id": conversation.tenant_id}
+                )
+                return
         await self._memory_repo.store(memory, tenant_id=conversation.tenant_id)
         # Notify the nervous system
         await self._event_bus.publish(

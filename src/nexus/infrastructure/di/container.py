@@ -23,6 +23,7 @@ from nexus.domain.ports.llm_provider import LLMProvider, EmbeddingProvider
 from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
 from nexus.domain.ports.observability import Metrics, Tracer
 from nexus.domain.ports.rate_limiter import RateLimiter
+from nexus.domain.ports.quota import QuotaService
 from nexus.domain.ports.sandbox import Sandbox
 from nexus.domain.ports.secrets import SecretStore
 from nexus.domain.ports.speech import SpeechToText, TextToSpeech
@@ -142,6 +143,14 @@ class Config:
         ]
     )
     goals_max_active: int = field(default_factory=lambda: int(os.getenv("NEXUS_GOALS_MAX_ACTIVE", "10")))
+    # ---- Per-tenant daily quotas (P2). 0 = unlimited. ----
+    quota_chat_per_day: int = field(default_factory=lambda: int(os.getenv("NEXUS_QUOTA_CHAT_PER_DAY", "0")))
+    quota_tool_gen_per_day: int = field(
+        default_factory=lambda: int(os.getenv("NEXUS_QUOTA_TOOL_GEN_PER_DAY", "0"))
+    )
+    quota_memories_per_day: int = field(
+        default_factory=lambda: int(os.getenv("NEXUS_QUOTA_MEMORIES_PER_DAY", "0"))
+    )
     # ---- Multi-modal (P3) ----
     stt_model: str = field(default_factory=lambda: os.getenv("NEXUS_STT_MODEL", "whisper-1"))
     tts_model: str = field(default_factory=lambda: os.getenv("NEXUS_TTS_MODEL", "tts-1"))
@@ -159,9 +168,7 @@ class Config:
     # ---- Infrastructure backend ----
     # "external" = Redis/Qdrant/Neo4j/OpenAI-embed (production).
     # "memory"   = fully in-process adapters (offline dreaming, evals, demos).
-    infra_backend: str = field(
-        default_factory=lambda: os.getenv("NEXUS_INFRA_BACKEND", "external").lower()
-    )
+    infra_backend: str = field(default_factory=lambda: os.getenv("NEXUS_INFRA_BACKEND", "external").lower())
 
 
 class Container:
@@ -179,6 +186,7 @@ class Container:
         self.tracer: Tracer = self._build_tracer()
         self.metrics: Metrics = self._build_metrics()
         self.rate_limiter: RateLimiter = self._build_rate_limiter()
+        self.quota: QuotaService = self._build_quota()
 
         # ---- Observability / dashboard (P5) ----
         self.activity_feed: ActivityFeed = self._build_activity_feed()
@@ -269,7 +277,7 @@ class Container:
         # ---- Autonomous goals (P2) ----
         from nexus.infrastructure.adapters.autonomy.executor import CortexStepExecutor
 
-        self.create_goal = CreateGoalUseCase(self.goal_repo)
+        self.create_goal = CreateGoalUseCase(self.goal_repo, max_active=self.config.goals_max_active)
         self.approve_goal = ApproveGoalUseCase(self.goal_repo)
         self.cancel_goal = CancelGoalUseCase(self.goal_repo)
         self.list_goals = ListGoalsUseCase(self.goal_repo)
@@ -389,10 +397,25 @@ class Container:
         return InMemoryActivityFeed()
 
     def _build_rate_limiter(self) -> RateLimiter:
+        if self.config.infra_backend == "memory":
+            from nexus.infrastructure.adapters.security.in_memory_rate_limiter import InMemoryRateLimiter
+
+            return InMemoryRateLimiter()
+
         from nexus.infrastructure.adapters.security.redis_rate_limiter import RedisRateLimiter
 
         redis_url = f"redis://{self.config.redis_host}:{self.config.redis_port}"
         return RedisRateLimiter(redis_url=redis_url, fail_closed=self.config.rate_limiter_fail_closed)
+
+    def _build_quota(self) -> QuotaService:
+        from nexus.infrastructure.adapters.security.quota_service import RateLimitQuota
+
+        limits = {
+            "chat": self.config.quota_chat_per_day,
+            "tool_gen": self.config.quota_tool_gen_per_day,
+            "memories": self.config.quota_memories_per_day,
+        }
+        return RateLimitQuota(self.rate_limiter, limits)
 
     def _build_event_bus(self) -> EventBus:
         if self.config.infra_backend == "memory":
@@ -601,6 +624,15 @@ class Container:
         if self._shutdown:
             return
         self._shutdown = True
+        for shutdown_fn in (
+            getattr(self.tracer, "shutdown", None),
+            getattr(self.metrics, "shutdown", None),
+        ):
+            if callable(shutdown_fn):
+                try:
+                    shutdown_fn()
+                except Exception:
+                    pass
         await self.event_bus.stop()
         if hasattr(self.memory_repo, "close"):
             await self.memory_repo.close()

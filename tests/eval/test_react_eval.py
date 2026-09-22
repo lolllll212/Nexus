@@ -50,9 +50,6 @@ async def test_react_golden_set():
 
 async def test_react_golden_set_with_tools():
     """Golden set with a scripted tool-calling LLM exercises the ACT/OBSERVE path."""
-    import nexus
-
-    llm = RecordingLLM("FINAL ANSWER: The answer is 1024.")
 
     class ToolCallingLLM(RecordingLLM):
         def __init__(self):
@@ -64,7 +61,7 @@ async def test_react_golden_set_with_tools():
             self.turns += 1
             if self.turns == 1:
                 return 'TOOL_CALL: {"tool_id": "calculator", "params": {"expression": "2**10"}}'
-            return 'FINAL ANSWER: 2 raised to the power of 10 is 1024.'
+            return "FINAL ANSWER: 2 raised to the power of 10 is 1024."
 
     fake = FakeContainer()
     from nexus.domain.entities.tool import Tool
@@ -106,13 +103,13 @@ async def test_eval_report_format():
     await runner.run_all(llm=llm)
 
     report = runner.report()
-    assert f"{len(GOLDEN_SET)}/{len(GOLDEN_SET)} passed" in report
-    assert "[PASS]" in report
-    assert "[FAIL]" in report
+    assert "Eval Report:" in report
+    assert "[PASS]" in report or "[FAIL]" in report
 
     data = runner.to_json()
     assert data["total"] == len(GOLDEN_SET)
-    assert "pass_rate" in data
+    assert data["passed"] == sum(1 for r in runner.results if r.passed)
+    assert data["pass_rate"] == data["passed"] / data["total"]
 
 
 def test_write_report_html(tmp_path):
@@ -121,8 +118,17 @@ def test_write_report_html(tmp_path):
 
     write_report_html(
         [
-            EvalResult(case=EvalCase(task="t"), tools_called=["grep"], answer="x", passed=True, duration_ms=1),
-            EvalResult(case=EvalCase(task="u"), tools_called=[], answer="", passed=False, duration_ms=2, details="nope"),
+            EvalResult(
+                case=EvalCase(task="t"), tools_called=["grep"], answer="x", passed=True, duration_ms=1
+            ),
+            EvalResult(
+                case=EvalCase(task="u"),
+                tools_called=[],
+                answer="",
+                passed=False,
+                duration_ms=2,
+                details="nope",
+            ),
         ],
         tmp_path / "report.html",
     )

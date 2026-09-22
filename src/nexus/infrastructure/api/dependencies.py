@@ -11,7 +11,7 @@ from typing import Callable
 
 from fastapi import HTTPException, Request
 
-from nexus.domain.exceptions import RateLimitExceededError, UnauthorizedError
+from nexus.domain.exceptions import QuotaExceededError, RateLimitExceededError, UnauthorizedError
 from nexus.domain.value_objects.identity import Identity
 from nexus.infrastructure.di.container import Container
 
@@ -61,5 +61,27 @@ def require_rate_limit(kind: str) -> Callable[[Request], None]:
             await container.rate_limiter.check(key, limit, window)
         except RateLimitExceededError:
             raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    return dependency
+
+
+def require_quota(resource: str) -> Callable[[Request], None]:
+    """Enforce a per-tenant daily consumption quota for `resource`.
+
+    Configured via NEXUS_QUOTA_* env vars (0 = unlimited). Fails with 429 once
+    the tenant exhausts its allowance for the day.
+    """
+
+    async def dependency(request: Request) -> None:
+        container = get_container(request)
+        identity = getattr(request.state, "identity", None)
+        tenant_id = identity.tenant_id if identity else "default"
+        quota = getattr(container, "quota", None)
+        if quota is None:
+            return
+        try:
+            await quota.check(tenant_id, resource)
+        except QuotaExceededError as exc:
+            raise HTTPException(status_code=429, detail=str(exc))
 
     return dependency

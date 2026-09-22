@@ -44,6 +44,7 @@ from nexus.infrastructure.adapters.auth.api_key_authenticator import ApiKeyAuthe
 from nexus.infrastructure.adapters.autonomy.executor import CortexStepExecutor
 from nexus.infrastructure.adapters.autonomy.goal_repository import InMemoryGoalRepository
 from nexus.infrastructure.adapters.autonomy.policy import DefaultAutonomyPolicy
+from nexus.infrastructure.adapters.security.quota_service import RateLimitQuota
 from nexus.infrastructure.adapters.swarm.executor import SwarmAgentExecutor
 from nexus.infrastructure.adapters.swarm.repositories import InMemoryAgentRepository, InMemorySwarmRepository
 from nexus.infrastructure.adapters.observability.observability import InMemoryMetrics
@@ -88,6 +89,7 @@ class FakeContainer:
         self.metrics = InMemoryMetrics()
         self.activity_feed = InMemoryActivityFeed()
         self.rate_limiter = SlidingWindowRateLimiter()
+        self.quota = None  # will be None in fake mode; real Container builds RateLimitQuota
         self.event_bus = FakeEventBus()
         self.embedder = FakeEmbedder()
         self.llm = FakeLLM(script=llm_script)

@@ -25,14 +25,23 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from nexus.infrastructure.api.dependencies import get_container, require_identity, require_rate_limit
+from nexus.infrastructure.api.dependencies import (
+    get_container,
+    require_identity,
+    require_quota,
+    require_rate_limit,
+)
 from nexus.infrastructure.di.container import Container
 from nexus.domain.value_objects.identity import Identity
 
 router = APIRouter(
     prefix="/v1/chat",
     tags=["chat"],
-    dependencies=[Depends(require_identity), Depends(require_rate_limit("chat"))],
+    dependencies=[
+        Depends(require_identity),
+        Depends(require_rate_limit("chat")),
+        Depends(require_quota("chat")),
+    ],
 )
 
 

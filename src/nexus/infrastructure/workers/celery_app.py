@@ -8,10 +8,14 @@ models without deadlocks.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from functools import wraps
 
 from celery import Celery
+from celery.signals import worker_process_shutdown, worker_shutdown
+
+logger = logging.getLogger("nexus.celery")
 
 broker = os.getenv("CELERY_BROKER", "redis://localhost:6379/1")
 backend = os.getenv("CELERY_BACKEND", "redis://localhost:6379/2")
@@ -34,6 +38,9 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     task_track_started=True,
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    worker_cancel_long_running_tasks_on_connection_loss=True,
     worker_prefetch_multiplier=2,
     task_time_limit=3600,
     task_soft_time_limit=3000,
@@ -53,6 +60,22 @@ celery_app.conf.update(
         },
     },
 )
+
+
+@worker_process_shutdown.connect
+def _on_worker_process_shutdown(**kwargs) -> None:
+    """Warm-down hook: Celery is about to exit a worker process.
+
+    The dream/synthesis/autonomy tasks each own a fresh Container and close it
+    in a finally block, so we only log — but this is the hook to flush buffers.
+    """
+    logger.info("celery worker process shutting down gracefully")
+
+
+@worker_shutdown.connect
+def _on_worker_shutdown(**kwargs) -> None:
+    """The whole worker is stopping (SIGTERM) — drain before process exit."""
+    logger.info("celery worker draining before shutdown")
 
 
 def async_task(func):

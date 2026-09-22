@@ -11,7 +11,8 @@ When the conscious loop hits a problem with no available tool, this use case:
 NEXUS literally builds its own new capabilities. On-the-fly engineering.
 """
 
-from __future__ import annotations
+import ast
+import re
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -29,6 +30,7 @@ from nexus.domain.value_objects.schema import JSONSchema
 @dataclass
 class ToolSpecRequest:
     """What the brain needs a tool to do."""
+
     name: str
     description: str
     problem_statement: str
@@ -42,6 +44,69 @@ class GenerateToolResult:
     tool: Tool
     tests_passed: int
     endpoint: Optional[str] = None
+
+
+MAX_TOOL_NAME_LENGTH = 64
+
+
+def _validate_request(name: str, description: str) -> None:
+    """Validate tool request parameters before prompt construction."""
+    if not (1 <= len(name) <= MAX_TOOL_NAME_LENGTH):
+        raise ToolGenerationError(f"Tool name must be 1-{MAX_TOOL_NAME_LENGTH} characters")
+    if not re.fullmatch(r"^[a-z][a-z0-9_]*$", name):
+        raise ToolGenerationError(
+            f"Tool name must match ^[a-z][a-z0-9_]{{0,{MAX_TOOL_NAME_LENGTH - 1}}}$: got '{name}'"
+        )
+    if len(description) > 500:
+        raise ToolGenerationError("Description exceeds 500-character limit")
+
+
+def _validate_code(code: str) -> None:
+    """AST-validate generated tool code: require `def solve`, deny dangerous imports."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as exc:
+        raise ToolGenerationError(f"Generated code has syntax error: {exc}") from exc
+
+    has_solve = any(isinstance(node, ast.FunctionDef) and node.name == "solve" for node in ast.walk(tree))
+    if not has_solve:
+        raise ToolGenerationError("Generated code must contain a top-level function `def solve(...)`")
+
+    dangerous_names = {"subprocess", "socket", "ctypes", "eval", "exec", "compile", "__import__"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in dangerous_names:
+                    raise ToolGenerationError(f"Dangerous import detected: {alias.name}")
+        if isinstance(node, ast.ImportFrom):
+            if node.module and node.module.split(".")[0] in dangerous_names:
+                raise ToolGenerationError(f"Dangerous import from detected: {node.module}")
+        if isinstance(node, ast.Name) and node.id in dangerous_names:
+            raise ToolGenerationError(f"Dangerous name detected: {node.id}")
+
+
+def _build_prompt_safe(request: ToolSpecRequest) -> str:
+    """Build the LLM prompt with delimiters and untrusted-data discipline."""
+    parts = [
+        "You are NEXUS, a self-evolving AI. Write a complete, self-contained",
+        "Python function `solve(input_data: dict) -> dict` that solves the",
+        "following problem. Return ONLY the code, no markdown fences, no",
+        "explanations.\n\n",
+        "--- PROBLEM ---\n",
+        request.problem_statement,
+        "\n\n--- NAME ---\n",
+        request.name,
+        "\n\n--- DESCRIPTION ---\n",
+        request.description,
+    ]
+    if request.requirements:
+        parts.append("\n\n--- REQUIRED PACKAGES ---\n" + ", ".join(request.requirements))
+    if request.input_examples:
+        parts.append("\n\n--- EXAMPLE INPUTS ---\n" + str(request.input_examples))
+    if request.expected_outputs:
+        parts.append("\n\n--- EXPECTED OUTPUTS ---\n" + str(request.expected_outputs))
+    parts.append("\n\n--- OUTPUT ---\n")
+    return "".join(parts)
 
 
 class GenerateToolUseCase:
@@ -120,20 +185,8 @@ class GenerateToolUseCase:
 
     async def _write_tool(self, request: ToolSpecRequest) -> str:
         """Ask the LLM to author the tool's implementation."""
-        prompt = (
-            "You are NEXUS, a self-evolving AI. Write a complete, self-contained "
-            "Python function `solve(input_data: dict) -> dict` that solves the following problem. "
-            "Return ONLY the code, no markdown fences, no explanations.\n\n"
-            f"Problem: {request.problem_statement}\n"
-            f"Name: {request.name}\n"
-            f"Description: {request.description}\n"
-            f"Required packages (may be empty): {', '.join(request.requirements)}\n"
-        )
-        if request.input_examples:
-            prompt += f"Example inputs: {request.input_examples}\n"
-        if request.expected_outputs:
-            prompt += f"Expected outputs: {request.expected_outputs}\n"
-
+        _validate_request(request.name, request.description)
+        prompt = _build_prompt_safe(request)
         code = await self._llm.complete(
             [{"role": "system", "content": prompt}, {"role": "user", "content": "Generate the tool code."}],
             temperature=0.2,
@@ -142,7 +195,8 @@ class GenerateToolUseCase:
             parts = code.split("```")
             code = parts[1] if len(parts) > 1 else code
             if code.startswith("python"):
-                code = code[len("python"):].lstrip()
+                code = code[len("python") :].lstrip()
+        _validate_code(code)
         return code
 
     def _infer_schema(self, examples: List[Dict[str, Any]]) -> JSONSchema:

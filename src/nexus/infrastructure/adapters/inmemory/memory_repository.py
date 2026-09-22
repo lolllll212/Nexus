@@ -10,7 +10,7 @@ from __future__ import annotations
 import datetime
 from typing import Dict, List, Optional
 
-from nexus.domain.entities.memory import Memory, MemoryType
+from nexus.domain.entities.memory import Memory
 from nexus.domain.ports.memory_repository import MemoryRepository
 
 
@@ -100,4 +100,4 @@ def _score(memory: Memory, query: str) -> float:
 
 
 def _utcnow() -> datetime.datetime:
-    return datetime.datetime.now(datetime.UTC)
+    return datetime.datetime.utcnow()
