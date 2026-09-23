@@ -1,0 +1,961 @@
+<!doctype html><html><head><meta charset="utf-8"><title>NEXUS — COSMOS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; overflow:hidden; background:#04060a;
+    font-family:-apple-system,"Segoe UI",sans-serif; }
+  #stars { position:fixed; inset:0; z-index:1; pointer-events:none; opacity:.5; }
+  #graph { position:fixed; inset:0; z-index:2; }
+  #vignette { position:fixed; inset:0; z-index:3; pointer-events:none;
+    background:radial-gradient(ellipse at center, transparent 42%, rgba(2,4,7,.66) 100%); }
+
+  /* ---------------- left rail ---------------- */
+  #rail { position:fixed; left:0; top:0; bottom:0; width:300px; z-index:5;
+    background:linear-gradient(180deg, rgba(7,11,15,.92), rgba(5,8,11,.88));
+    border-right:1px solid rgba(125,255,217,.14); backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px); display:flex; flex-direction:column; overflow-y:auto; }
+  #rail::-webkit-scrollbar { width:4px; } #rail::-webkit-scrollbar-thumb { background:rgba(125,255,217,.25); border-radius:4px; }
+  #rail .head { padding:16px 18px 10px; border-bottom:1px solid rgba(125,255,217,.12); }
+  #rail .head b { font-family:"SF Mono",ui-monospace,monospace; font-size:13px;
+    letter-spacing:.26em; color:#eafff8; }
+  #rail .head .sub { font-family:"SF Mono",ui-monospace,monospace; font-size:9px;
+    letter-spacing:.18em; color:#8fd8c2; margin-top:5px; }
+  #rail .head a { color:#8fd8c2; font-size:9px; text-decoration:none; letter-spacing:.12em;
+    font-family:"SF Mono",ui-monospace,monospace; display:inline-block; margin-top:7px;
+    border:1px solid rgba(125,255,217,.22); border-radius:99px; padding:4px 10px; }
+  #rail .head a:hover { color:#7dffd9; border-color:rgba(125,255,217,.5); }
+  #search { margin:12px 14px 8px; background:rgba(255,255,255,.05);
+    border:1px solid rgba(125,255,217,.18); border-radius:10px; padding:9px 12px;
+    color:#eafff8; font-size:12px; outline:none; width:calc(100% - 28px); }
+  #search:focus { border-color:rgba(125,255,217,.5); }
+  .sec-label { font-family:"SF Mono",ui-monospace,monospace; font-size:9px;
+    letter-spacing:.3em; color:#6f8f86; margin:14px 16px 8px; }
+
+  #inspector { padding:0 16px; }
+  #ins-name { font-size:14px; color:#eafff8; letter-spacing:.04em; font-weight:600; }
+  #ins-name .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:8px; }
+  #ins-group { display:inline-block; font-family:"SF Mono",ui-monospace,monospace; font-size:8.5px;
+    letter-spacing:.16em; color:#06110d; background:#7dffd9; border-radius:99px; padding:3px 9px; margin:8px 0 2px; }
+  #ins-meta { font-family:"SF Mono",ui-monospace,monospace; font-size:9.5px; color:#8fd8c2; margin-top:7px; line-height:1.8; }
+  #ins-desc { font-size:11.5px; line-height:1.65; color:#c9d6d2; margin-top:10px; white-space:pre-wrap; }
+  #ins-run { margin-top:12px; }
+  #ins-run input { width:100%; background:rgba(255,255,255,.05); border:1px solid rgba(125,255,217,.2);
+    border-radius:8px; padding:8px 10px; color:#eafff8; font-size:11px; outline:none; margin-bottom:7px; }
+  .run-btn { display:inline-block; cursor:pointer; user-select:none;
+    font-family:"SF Mono",ui-monospace,monospace; font-size:10px; letter-spacing:.16em;
+    color:#06110d; background:linear-gradient(135deg,#7dffd9,#35e0b5); border:none;
+    border-radius:9px; padding:9px 16px; }
+  .run-btn.busy { opacity:.55; pointer-events:none; }
+  #ins-result { margin-top:10px; font-size:11px; line-height:1.6; color:#e8dfc8;
+    background:rgba(255,204,110,.07); border-left:2px solid rgba(255,204,110,.4);
+    border-radius:6px; padding:8px 10px; display:none; white-space:pre-wrap; }
+  #ins-result.show { display:block; }
+  #connections { margin-top:6px; max-height:210px; overflow-y:auto; }
+  #connections::-webkit-scrollbar { width:4px; } #connections::-webkit-scrollbar-thumb { background:rgba(125,255,217,.25); border-radius:4px; }
+  .conn { display:flex; align-items:center; gap:8px; padding:6px 4px; cursor:pointer;
+    border-bottom:1px solid rgba(125,255,217,.07); font-size:11.5px; color:#c9d6d2; }
+  .conn:hover { color:#7dffd9; }
+  .conn .cdot { width:7px; height:7px; border-radius:50%; flex:none; }
+  .conn .w { margin-left:auto; font-family:"SF Mono",ui-monospace,monospace; font-size:9px; color:#6f8f86; }
+  .depths { display:flex; gap:6px; margin:10px 0 4px; }
+  .depths button { font-family:"SF Mono",ui-monospace,monospace; font-size:9px; letter-spacing:.1em;
+    background:rgba(255,255,255,.04); color:#8fd8c2; border:1px solid rgba(125,255,217,.18);
+    border-radius:7px; padding:5px 11px; cursor:pointer; }
+  .depths button.on { background:rgba(125,255,217,.16); color:#7dffd9; border-color:rgba(125,255,217,.5); }
+
+  /* TOP HUBS */
+  #hubs { padding:0 16px; }
+  .hub { display:flex; align-items:center; gap:8px; padding:4px 2px; cursor:pointer;
+    font-size:11px; color:#c9d6d2; }
+  .hub:hover { color:#7dffd9; }
+  .hub .hdot { width:7px; height:7px; border-radius:50%; flex:none; }
+  .hub .hc { margin-left:auto; font-family:"SF Mono",ui-monospace,monospace; font-size:9px; color:#6f8f86; }
+
+  /* FORCES + DISPLAY */
+  #forces { padding:0 16px 4px; }
+  .fslider { display:flex; align-items:center; gap:10px; margin:8px 0; }
+  .fslider span { font-size:10.5px; color:#9fb4ab; width:76px; }
+  .fslider input[type=range] { flex:1; appearance:none; height:3px; background:rgba(125,255,217,.18);
+    border-radius:2px; outline:none; }
+  .fslider input[type=range]::-webkit-slider-thumb { appearance:none; width:12px; height:12px;
+    border-radius:50%; background:#7dffd9; box-shadow:0 0 10px rgba(125,255,217,.5); cursor:pointer; }
+  .dpills { display:flex; flex-wrap:wrap; gap:6px; padding:0 16px 12px; }
+  .dpill { font-family:"SF Mono",ui-monospace,monospace; font-size:8.5px; letter-spacing:.12em;
+    color:#6f8f86; background:rgba(255,255,255,.04); border:1px solid rgba(125,255,217,.16);
+    border-radius:7px; padding:5px 10px; cursor:pointer; user-select:none; }
+  .dpill.on { color:#7dffd9; border-color:rgba(125,255,217,.5); background:rgba(125,255,217,.1); }
+
+  #autolog { border-top:1px solid rgba(125,255,217,.1); padding:4px 16px 14px; margin-top:auto; }
+  .alog { font-size:10px; color:#9fb4ab; line-height:1.55; padding:5px 0;
+    border-bottom:1px solid rgba(125,255,217,.06); font-family:"SF Mono",ui-monospace,monospace; }
+  .alog b { color:#7dffd9; font-weight:600; } .alog .bad { color:#ff9b8a; }
+  .alog .ago { color:#5a6b62; float:right; font-size:9px; }
+
+  /* ---------------- right rail ---------------- */
+  #rrail { position:fixed; right:16px; top:16px; z-index:5; width:158px; display:flex;
+    flex-direction:column; gap:10px; }
+  #filter { background:rgba(7,11,15,.85); border:1px solid rgba(125,255,217,.14); border-radius:14px;
+    backdrop-filter:blur(10px); padding:12px 14px; }
+  #filter h4 { font-family:"SF Mono",ui-monospace,monospace; font-size:9px; letter-spacing:.3em;
+    color:#6f8f86; margin-bottom:9px; }
+  .frow { display:flex; align-items:center; gap:8px; font-size:11px; color:#c9d6d2;
+    padding:3px 2px; cursor:pointer; user-select:none; }
+  .frow .fdot { width:8px; height:8px; border-radius:50%; flex:none; }
+  .frow .fc { margin-left:auto; font-family:"SF Mono",ui-monospace,monospace; font-size:9px; color:#6f8f86; }
+  .frow.off { opacity:.32; }
+  .chips2 { display:flex; gap:6px; justify-content:center; }
+  .chip2 { flex:1; text-align:center; font-family:"SF Mono",ui-monospace,monospace; font-size:8.5px;
+    letter-spacing:.08em; color:#8fd8c2; background:rgba(7,11,15,.85); cursor:default;
+    border:1px solid rgba(125,255,217,.2); border-radius:99px; padding:6px 8px; }
+  .chip2.gold { color:#ffcf7d; border-color:rgba(255,204,110,.3); }
+  .chip2.bad { color:#ff6b6b; border-color:rgba(255,107,107,.35); }
+  .modebtns { display:flex; gap:6px; justify-content:center; }
+  .modebtns button, .tog { font-family:"SF Mono",ui-monospace,monospace; font-size:8.5px; letter-spacing:.12em;
+    background:rgba(7,11,15,.85); color:#6f8f86; border:1px solid rgba(125,255,217,.16);
+    border-radius:8px; padding:6px 12px; cursor:pointer; user-select:none; }
+  .modebtns button.on { color:#ffcf7d; border-color:rgba(255,204,110,.45); }
+  .togwrap { display:flex; flex-direction:column; gap:6px; }
+  .tog { display:flex; justify-content:space-between; align-items:center; width:100%; }
+  .tog em { font-style:normal; color:#5a6b62; }
+  .tog.on { color:#7dffd9; border-color:rgba(125,255,217,.45); } .tog.on em { color:#57ffb0; }
+
+  /* reactor */
+  #reactor { position:relative; width:158px; height:158px; margin:2px auto; cursor:pointer; user-select:none; }
+  #reactor svg { width:100%; height:100%; filter:drop-shadow(0 0 18px rgba(125,255,217,.25)); }
+  #reactor .spin1 { animation:rspin 22s linear infinite; transform-origin:100px 100px; }
+  #reactor .spin2 { animation:rspin 14s linear infinite reverse; transform-origin:100px 100px; }
+  #reactor.busy .spin1 { animation-duration:2.6s; }
+  #reactor.busy .spin2 { animation-duration:1.8s; }
+  #reactor.listening .spin1 { animation-duration:1.1s; }
+  @keyframes rspin { to { transform:rotate(360deg); } }
+  #reactor .label { position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:4px; pointer-events:none; }
+  #reactor .label b { font-family:"SF Mono",ui-monospace,monospace; font-size:10.5px;
+    letter-spacing:.34em; color:#eafff8; text-indent:.34em; }
+  #reactor .label i { font-family:"SF Mono",ui-monospace,monospace; font-size:8px;
+    letter-spacing:.2em; color:#7dffd9; font-style:normal; }
+
+  /* top center */
+  #focus { position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:5;
+    display:flex; align-items:center; gap:10px; pointer-events:none; }
+  #focus .fname { color:#eafff8; font-size:20px; font-weight:600; letter-spacing:.06em;
+    text-shadow:0 2px 22px rgba(0,0,0,.8); }
+  #focus .fbtn { pointer-events:auto; cursor:pointer; font-family:"SF Mono",ui-monospace,monospace;
+    font-size:10px; color:#8fd8c2; background:rgba(7,11,15,.8); border:1px solid rgba(125,255,217,.25);
+    border-radius:99px; padding:6px 13px; }
+  #focus .fbtn:hover { color:#7dffd9; }
+  #focus .fbtn.gold { color:#ffcf7d; border-color:rgba(255,204,110,.3); }
+
+  /* EYES webcam PiP */
+  #eyes { position:fixed; left:16px; bottom:16px; z-index:6; width:210px; display:none;
+    border:1px solid rgba(125,255,217,.3); border-radius:12px; overflow:hidden;
+    box-shadow:0 14px 44px rgba(0,0,0,.6); }
+  #eyes video { width:100%; display:block; transform:scaleX(-1); filter:saturate(.9); }
+  #eyes .tag { position:absolute; top:6px; left:8px; font-family:"SF Mono",ui-monospace,monospace;
+    font-size:8px; letter-spacing:.2em; color:#eafff8; background:rgba(0,0,0,.5); padding:2px 8px; border-radius:99px; }
+
+  /* talk bar */
+  #talk { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:6;
+    width:min(560px, 58vw); display:flex; flex-direction:column; gap:8px; align-items:center; }
+  #chatlog { display:flex; flex-direction:column; gap:6px; max-height:190px; overflow-y:auto; width:100%; }
+  #chatlog::-webkit-scrollbar { width:4px; } #chatlog::-webkit-scrollbar-thumb { background:rgba(125,255,217,.25); border-radius:4px; }
+  .bubble { font-size:12px; line-height:1.55; padding:9px 13px; border-radius:12px; max-width:92%;
+    backdrop-filter:blur(8px); }
+  .bubble.user { align-self:flex-end; color:#e8fff7; background:rgba(125,255,217,.13);
+    border:1px solid rgba(125,255,217,.28); }
+  .bubble.nexus { align-self:flex-start; color:#ffe9c4; background:rgba(255,204,110,.1);
+    border:1px solid rgba(255,204,110,.26); }
+  .bubble .tools { display:block; margin-top:6px; font-family:"SF Mono",ui-monospace,monospace;
+    font-size:9px; color:#8fd8c2; letter-spacing:.08em; }
+  #talkrow { display:flex; gap:8px; width:100%; }
+  #msg { flex:1; background:rgba(7,11,15,.86); border:1px solid rgba(125,255,217,.3);
+    border-radius:99px; padding:12px 20px; color:#eafff8; font-size:13px; outline:none;
+    backdrop-filter:blur(10px); }
+  #msg:focus { border-color:#7dffd9; box-shadow:0 0 24px rgba(125,255,217,.18); }
+  .circlebtn { width:46px; height:46px; flex:none; border-radius:50%; cursor:pointer;
+    border:1px solid rgba(125,255,217,.35); background:rgba(7,11,15,.86); color:#7dffd9;
+    font-size:16px; display:flex; align-items:center; justify-content:center; }
+  .circlebtn:hover { box-shadow:0 0 20px rgba(125,255,217,.25); }
+  #mic.off { color:#5a6b62; border-color:rgba(255,255,255,.14); }
+  #mic.live { color:#ff6b6b; border-color:rgba(255,107,107,.6); animation:micpulse 1.1s infinite; }
+  @keyframes micpulse { 50% { box-shadow:0 0 26px rgba(255,107,107,.55); } }
+  #caption { position:fixed; left:50%; bottom:84px; transform:translateX(-50%); z-index:5;
+    max-width:min(680px,80vw); padding:11px 24px; border-radius:14px; text-align:center;
+    font-family:"SF Mono",ui-monospace,monospace; font-size:13px; letter-spacing:.08em; line-height:1.65;
+    color:#ffe9c4; background:rgba(8,12,16,.78); border:1px solid rgba(255,204,110,.3);
+    backdrop-filter:blur(8px); opacity:0; pointer-events:none; transition:opacity .25s; }
+  #caption.show { opacity:1; }
+  #fallback { position:fixed; inset:0; z-index:9; display:none; align-items:center; justify-content:center;
+    background:rgba(4,6,10,.9); color:#c9d6d2; font-size:13px; text-align:center; line-height:1.8; }
+</style>
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="https://unpkg.com/3d-force-graph/dist/3d-force-graph.min.js"></script>
+</head><body>
+<canvas id="stars"></canvas>
+<div id="graph"></div>
+<div id="vignette"></div>
+
+<div id="rail">
+  <div class="head">
+    <b>NEXUS OS</b>
+    <div class="sub" id="counts">— nodes · — connections</div>
+    <a href="/">‹ back to 2D</a>
+  </div>
+  <input id="search" placeholder="Search the brain…" autocomplete="off" />
+  <div class="sec-label">INSPECTOR</div>
+  <div id="inspector">
+    <div id="ins-name"><span class="dot" style="background:#7dffd9"></span><span>N.E.X.U.S</span></div>
+    <div id="ins-group">COSMOS MESH</div>
+    <div id="ins-meta">—</div>
+    <div id="ins-desc">Click a node to focus it — only that node and its connections light up, and you can read its note here. Automation joints (dream, swarm, tools, social, integrations) can be RUN from their card.</div>
+    <div id="ins-run"></div>
+    <div id="ins-result"></div>
+    <div class="depths" id="depths" style="display:none">
+      <button data-d="1">D1</button><button data-d="2">D2</button><button data-d="3">D3</button><button data-d="0" class="on">ALL</button>
+    </div>
+    <div class="sec-label" id="conn-label" style="display:none; margin:10px 0 2px; padding:0;">CONNECTIONS</div>
+    <div id="connections"></div>
+  </div>
+  <div class="sec-label">TOP HUBS</div>
+  <div id="hubs"></div>
+  <div class="sec-label">FORCES</div>
+  <div id="forces">
+    <div class="fslider"><span>Repel</span><input type="range" id="f-repel" min="40" max="900" value="260"></div>
+    <div class="fslider"><span>Link length</span><input type="range" id="f-link" min="40" max="260" value="110"></div>
+  </div>
+  <div class="sec-label">DISPLAY</div>
+  <div class="dpills">
+    <span class="dpill on" id="dp-labels">LABELS</span>
+    <span class="dpill on" id="dp-glow">GLOW</span>
+    <span class="dpill on" id="dp-links">LINKS</span>
+    <span class="dpill" id="dp-hubs">HUBS ONLY</span>
+  </div>
+  <div id="autolog">
+    <div class="sec-label" style="margin:8px 0 4px; padding:0;">AUTOMATION LOG</div>
+    <div id="alog-rows"><div class="alog">no automation events yet — RUN a node</div></div>
+  </div>
+</div>
+
+<div id="rrail">
+  <div id="filter"><h4>FILTER</h4><div id="filter-rows"></div></div>
+  <div id="reactor" title="Click to talk">
+    <svg viewBox="0 0 200 200">
+      <circle cx="100" cy="100" r="96" fill="rgba(4,8,10,.55)" stroke="rgba(125,255,217,.2)"/>
+      <g class="spin1" id="dial-r1"></g>
+      <g class="spin2" id="dial-r2"></g>
+      <circle cx="100" cy="100" r="42" fill="none" stroke="rgba(125,255,217,.55)" stroke-width="1.5"/>
+      <circle cx="100" cy="100" r="34" fill="rgba(125,255,217,.06)" stroke="rgba(125,255,217,.25)" stroke-dasharray="4 5"/>
+    </svg>
+    <div class="label"><b>N.E.X.U.S</b><i id="dial-state">IDLE</i></div>
+  </div>
+  <div class="chips2"><span class="chip2" id="chip-online">◦ …</span><span class="chip2 gold" id="chip-model">—</span></div>
+  <div class="modebtns">
+    <button data-m="ring" class="on">RING</button><button data-m="cube">CUBE</button><button data-m="face">FACE</button>
+  </div>
+  <div class="togwrap">
+    <div class="tog" id="tog-eyes">EYES<em>off</em></div>
+    <div class="tog" id="tog-watch">WATCH<em>off</em></div>
+    <div class="tog" id="tog-holo">HOLO<em>deck →</em></div>
+    <div class="tog" id="tog-focus">FOCUS<em>off</em></div>
+  </div>
+</div>
+
+<div id="eyes"><span class="tag">EYES · LOCAL CAM</span><video id="eyesvid" autoplay playsinline muted></video></div>
+
+<div id="focus">
+  <span class="fbtn" id="btn-fit">⊙ FIT</span>
+  <span class="fname" id="focus-name"></span>
+  <span class="fbtn gold" id="btn-reset">↺ RESET</span>
+  <span class="fbtn" id="btn-refresh">⟳ REFRESH</span>
+</div>
+
+<div id="talk">
+  <div id="chatlog"></div>
+  <div id="talkrow">
+    <input id="msg" placeholder="Talk to NEXUS — Enter to send · press M or click the reactor to speak" autocomplete="off" />
+    <div class="circlebtn" id="send" title="Send">➤</div>
+    <div class="circlebtn off" id="mic" title="Voice (LM Studio)">●</div>
+  </div>
+</div>
+<div id="caption"></div>
+<div id="fallback"><div>⚠ 3D libraries did not load (offline?).<br/>The cosmos needs the three.js + 3d-force-graph CDN once.<br/><br/><a href="/" style="color:#7dffd9">← back to the deck</a></div></div>
+
+<script>
+/* ============================================================
+   NEXUS COSMOS — the JARVIS-grade 3D automation brain.
+   Layers: mesh joints (/api/cosmos) · knowledge graph (/api/graph)
+           · notes as stars (/api/tree). Click = inspect/read.
+   RUN = automation trigger. Voice: mic → /v1/chat → LM Studio.
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const MESH_POLL = 15000, LLM_POLL = 25000, WATCH_POLL = 6000;
+
+/* ---------- api ---------- */
+const API = {
+  key: localStorage.getItem('nexus_api_key') || '',
+  session: localStorage.getItem('nexus_session') || ('cosmos-' + Math.random().toString(36).slice(2, 10)),
+};
+localStorage.setItem('nexus_session', API.session);
+async function nexusFetch(path, opts = {}) {
+  const headers = Object.assign({}, opts.headers || {});
+  if (API.key) headers['Authorization'] = 'Bearer ' + API.key;
+  if (opts.json) headers['Content-Type'] = 'application/json';
+  return fetch(path, Object.assign({}, opts, { headers }));
+}
+const jget = async p => { const r = await nexusFetch(p); if (!r.ok) throw new Error(p + ' → ' + r.status); return r.json(); };
+const jpost = (p, body) => nexusFetch(p, { method: 'POST', json: true, body: JSON.stringify(body || {}) });
+
+/* ---------- styling ---------- */
+const GROUP_STYLE = {
+  'core':           { color: '#ffcf7d', label: 'Core' },
+  'ui':             { color: '#7dffd9', label: 'UI' },
+  'memory':         { color: '#a9ffe6', label: 'Memory' },
+  'concept':        { color: '#c9ffe6', label: 'Concepts' },
+  'swarm':          { color: '#d9fff2', label: 'Swarms' },
+  'subconscious':   { color: '#ffe9c4', label: 'Subconscious' },
+  'self-evolution': { color: '#9dffe4', label: 'Skills' },
+  'integration':    { color: '#8fb8ff', label: 'Integrations' },
+  'topic':          { color: '#b6a6ff', label: 'Topics' },
+  'folder':         { color: '#f9c74f', label: 'Folders' },
+  'note':           { color: '#89b4fa', label: 'Notes' },
+  'Dinosaur':       { color: '#8ecae6', label: 'Dinosaur' },
+  'Space':          { color: '#ffd166', label: 'Space' },
+};
+const STATUS_COLOR = { online: '#57ffb0', idle: '#ffcf7d', enabled: '#57ffb0', configured: '#57c8ff', degraded: '#ffb257', disabled: '#7f8c8d', offline: '#ff6b6b' };
+const gstyle = g => GROUP_STYLE[g] || { color: '#8fd8c2', label: (g || 'mesh').toUpperCase() };
+const nodeColor = n => n.color || gstyle(n.group).color;
+
+/* ---------- state ---------- */
+let GRAPH = null, READY = false;
+let FULL = { nodes: [], links: [] };
+let COSMOS = null;
+let SELECTED = null, DEPTH = 0, FOCUS_MODE = false;
+let HIDDEN = new Set();
+let SHOW = { labels: true, glow: true, links: true, hubsOnly: false };
+let FORCES = { repel: 260, linkLen: 110 };
+let PULSES = new Map();
+let DEGREE = new Map();
+let micRec = null, listening = false;
+let STATE = 'IDLE';
+let WATCH = { on: false, prev: new Map(), timer: null };
+let eyesStream = null;
+
+/* ---------- stars bg ---------- */
+const SC = $('stars'), SCTX = SC.getContext('2d');
+let SW = innerWidth, SH = innerHeight;
+function sizeStars(){ SW = innerWidth; SH = innerHeight; SC.width = SW * devicePixelRatio; SC.height = SH * devicePixelRatio;
+  SCTX.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); }
+sizeStars(); addEventListener('resize', sizeStars);
+const STARLIST = Array.from({length: 200}, () => ({ x: Math.random()*2200, y: Math.random()*2200,
+  r: Math.random()*1.2+.2, tw: Math.random()*6.28 }));
+function drawStars(t){ SCTX.clearRect(0,0,SW,SH);
+  for (const s of STARLIST){ SCTX.globalAlpha = .1 + .36*Math.abs(Math.sin(t/1900 + s.tw));
+    SCTX.fillStyle = '#9fd8c8'; SCTX.beginPath(); SCTX.arc(s.x % SW, s.y % SH, s.r, 0, 7); SCTX.fill(); }
+  SCTX.globalAlpha = 1; requestAnimationFrame(drawStars); }
+requestAnimationFrame(drawStars);
+
+/* ---------- sprites ---------- */
+function makeTextTexture(text, { size = 44, color = '#eafff8', weight = 600 } = {}) {
+  const cv = document.createElement('canvas'); const ctx = cv.getContext('2d');
+  ctx.font = `${weight} ${size}px "SF Mono", Menlo, monospace`;
+  cv.width = Math.ceil(ctx.measureText(text).width) + 24; cv.height = size + 22;
+  const c = cv.getContext('2d');
+  c.font = `${weight} ${size}px "SF Mono", Menlo, monospace`;
+  c.fillStyle = color; c.textBaseline = 'middle';
+  c.shadowColor = 'rgba(0,0,0,.9)'; c.shadowBlur = 8;
+  c.fillText(text, 12, cv.height/2);
+  const tex = new THREE.CanvasTexture(cv); tex.minFilter = THREE.LinearFilter;
+  return { tex, w: cv.width, h: cv.height };
+}
+function makeGlowTexture(colorCss) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const c = cv.getContext('2d');
+  const g = c.createRadialGradient(64,64,4, 64,64,64);
+  g.addColorStop(0, colorCss); g.addColorStop(.35, colorCss + '88'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = g; c.fillRect(0,0,128,128);
+  const tex = new THREE.CanvasTexture(cv); tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+const glowCache = {};
+function glowSprite(colorCss, scale) {
+  if (!glowCache[colorCss]) glowCache[colorCss] = makeGlowTexture(colorCss);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowCache[colorCss], transparent: true,
+    blending: THREE.AdditiveBlending, depthWrite: false }));
+  sp.scale.set(scale, scale, 1); return sp;
+}
+function ringSprite(colorCss, scale) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const c = cv.getContext('2d');
+  c.strokeStyle = colorCss; c.lineWidth = 5;
+  c.shadowColor = colorCss; c.shadowBlur = 12;
+  c.beginPath(); c.arc(64,64,52,0,6.283); c.stroke();
+  const tex = new THREE.CanvasTexture(cv); tex.minFilter = THREE.LinearFilter;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sp.scale.set(scale, scale, 1); return sp;
+}
+function nodeObject(n) {
+  const grp = new THREE.Group();
+  const col = nodeColor(n);
+  const r = Math.max(1.8, Math.min(11, (n.val || 5) * (n.__cosmos ? 0.8 : 0.5)));
+  if (SHOW.glow) grp.add(glowSprite(col, r * (n.__cosmos ? 7 : 5)));
+  grp.add(new THREE.Mesh(new THREE.SphereGeometry(r, 18, 18),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(col) })));
+  if (n.status && n.__cosmos) grp.add(ringSprite(STATUS_COLOR[n.status] || '#8fd8c2', r * 3.4));
+  if (n.__selected) grp.add(ringSprite('#ffffff', r * 4.6));
+  const isHub = (DEGREE.get(n.id) || 0) >= 5;
+  const wantLabel = n.__cosmos || n.__selected || (SHOW.labels && (isHub || n.group === 'folder'));
+  const label = n.__label != null ? n.__label : String(n.id);
+  if (wantLabel && label) {
+    const big = !!n.__cosmos;
+    const { tex, w, h } = makeTextTexture(label, { size: big ? 46 : 30, color: big ? '#eafff8' : '#aebfc0' });
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    const k = big ? 0.16 : 0.07;
+    sp.scale.set(w * k, h * k, 1); sp.position.set(0, r + (big ? 12 : 5), 0);
+    grp.add(sp);
+  }
+  return grp;
+}
+
+/* ---------- graph ---------- */
+function initGraph() {
+  if (typeof ForceGraph3D === 'undefined') { $('fallback').style.display = 'flex'; return; }
+  GRAPH = ForceGraph3D({ controlType: 'orbit' })($('graph'))
+    .backgroundColor('rgba(0,0,0,0)')
+    .showNavInfo(false)
+    .nodeThreeObject(nodeObject)
+    .nodeLabel(n => `${n.__label || n.id} — ${gstyle(n.group).label}${n.status && n.__cosmos ? ' · ' + n.status : ''}`)
+    .linkColor(l => l.__hot ? 'rgba(255,207,125,.8)' : (l.weight >= .8 ? 'rgba(125,255,217,.45)' : 'rgba(125,255,217,.16)'))
+    .linkWidth(l => l.__hot ? 1.8 : (l.weight >= .8 ? 1.0 : 0.5))
+    .linkOpacity(.6)
+    .linkVisibility(() => SHOW.links)
+    .linkDirectionalParticles(l => Math.max(1, PULSES.get(linkKey(l)) || 0))
+    .linkDirectionalParticleWidth(2.4)
+    .linkDirectionalParticleSpeed(.011)
+    .linkDirectionalParticleColor(l => l.__hot ? '#ffcf7d' : '#b8ffe9')
+    .linkCurvature(.1)
+    .onNodeClick(onNodeClick)
+    .onBackgroundClick(clearSelection);
+  applyForces();
+  READY = true;
+  setTimeout(() => GRAPH.zoomToFit(900, 60), 1500);
+}
+function applyForces() {
+  if (!GRAPH) return;
+  GRAPH.d3Force('charge').strength(-FORCES.repel);
+  GRAPH.d3Force('link').distance(() => FORCES.linkLen);
+  GRAPH.d3ReheatSimulation && GRAPH.d3ReheatSimulation();
+}
+$('f-repel').addEventListener('input', e => { FORCES.repel = +e.target.value; applyForces(); });
+$('f-link').addEventListener('input', e => { FORCES.linkLen = +e.target.value; applyForces(); });
+
+/* display pills */
+function dpill(id, key, invert) {
+  $(id).addEventListener('click', () => {
+    SHOW[key] = !SHOW[key]; $(id).classList.toggle('on', SHOW[key]);
+    if (key === 'hubsOnly') refresh(false);
+    else { GRAPH.nodeThreeObject(nodeObject); GRAPH.refresh(); }
+  });
+}
+dpill('dp-labels', 'labels'); dpill('dp-glow', 'glow'); dpill('dp-links', 'links'); dpill('dp-hubs', 'hubsOnly');
+
+/* RING / CUBE / FACE */
+function applyMode(mode) {
+  document.querySelectorAll('.modebtns button').forEach(b => b.classList.toggle('on', b.dataset.m === mode));
+  if (!GRAPH) return;
+  GRAPH.d3Force('cube', null); GRAPH.d3Force('face', null);
+  if (mode === 'cube') {
+    const G = 70;
+    const f = alpha => { for (const n of FULL.nodes) {
+      n.vx += (Math.round(n.x / G) * G - n.x) * alpha * 0.12;
+      n.vy += (Math.round(n.y / G) * G - n.y) * alpha * 0.12;
+      n.vz += (Math.round(n.z / G) * G - n.z) * alpha * 0.12; } };
+    f.initialize = () => {};
+    GRAPH.d3Force('cube', f);
+  } else if (mode === 'face') {
+    const f = alpha => { for (const n of FULL.nodes) { n.vz += (0 - n.z) * alpha * 0.22; } };
+    f.initialize = () => {};
+    GRAPH.d3Force('face', f);
+  }
+  applyForces();
+}
+document.querySelectorAll('.modebtns button').forEach(b => b.addEventListener('click', () => applyMode(b.dataset.m)));
+
+/* ---------- data merge: mesh joints + knowledge + notes as stars ---------- */
+const linkKey = l => `${typeof l.source === 'object' ? l.source.id : l.source}→${typeof l.target === 'object' ? l.target.id : l.target}`;
+let NOTES_TOTAL = 0;
+function mergeData(cosmos, graph, tree) {
+  const nodes = [], links = [], seen = new Set();
+  for (const n of (cosmos.nodes || [])) {
+    if (seen.has(n.id)) continue; seen.add(n.id);
+    nodes.push(Object.assign({ __cosmos: true }, n));
+  }
+  for (const l of (cosmos.links || [])) links.push(Object.assign({ __cosmos: true }, l));
+  for (const n of (graph.nodes || [])) {
+    const id = 'k:' + n.id;
+    if (seen.has(id)) continue; seen.add(id);
+    nodes.push({ id, __knowledge: true, group: n.group || 'topic', val: Math.max(2, (n.val || 3) * .6),
+      __label: String(n.id).slice(0, 26), status: 'online' });
+  }
+  for (const l of (graph.links || [])) {
+    links.push({ source: 'k:' + (l.source.id || l.source), target: 'k:' + (l.target.id || l.target), weight: .3 });
+  }
+  /* notes as stars: folders are constellation hubs, files are stars */
+  NOTES_TOTAL = 0;
+  for (const f of (tree || [])) {
+    if (f.kind !== 'folder' || !(f.files || []).length) continue;
+    const fid = 'folder:' + f.name;
+    if (!seen.has(fid)) {
+      seen.add(fid);
+      nodes.push({ id: fid, group: 'folder', val: 6 + Math.min(6, f.files.length), __label: f.name,
+        status: 'online', desc: `${f.files.length} notes in this constellation.` });
+    }
+    links.push({ source: 'memory', target: fid, weight: .45 });
+    for (const note of f.files.slice(0, 14)) {
+      const nid = `note:${f.name}/${note.name}`;
+      if (seen.has(nid)) continue; seen.add(nid);
+      nodes.push({ id: nid, group: 'note', val: 2.6, __label: (note.title || note.name).slice(0, 24),
+        status: 'online', full: note.full || note.body || '', desc: (note.body || '').slice(0, 400) });
+      links.push({ source: fid, target: nid, weight: .5 });
+      NOTES_TOTAL++;
+    }
+  }
+  return { nodes, links };
+}
+async function loadAll() {
+  let cosmos = null, graph = null, tree = null;
+  try { cosmos = await jget('/api/cosmos'); COSMOS = cosmos; } catch (e) { console.warn('cosmos offline', e); }
+  try { graph = await jget('/api/graph'); } catch (e) {}
+  try { tree = await jget('/api/tree'); } catch (e) {}
+  if (!cosmos) {
+    cosmos = { nodes: [{ id: 'N.E.X.U.S', group: 'core', val: 18, status: 'offline', triggerable: true,
+      desc: 'Backend unreachable — is NEXUS running?' }], links: [], activity: [], counts: {} };
+  }
+  FULL = mergeData(cosmos, graph || {}, tree || []);
+  computeDegree();
+  refresh(true);
+  renderCounts(cosmos);
+  renderFilter();
+  renderHubs();
+  renderAutolog(cosmos.activity || []);
+  updateLlmLine(cosmos.llm);
+}
+function computeDegree() {
+  DEGREE = new Map();
+  for (const l of FULL.links) {
+    const s = l.source.id || l.source, t = l.target.id || l.target;
+    DEGREE.set(s, (DEGREE.get(s) || 0) + 1);
+    DEGREE.set(t, (DEGREE.get(t) || 0) + 1);
+  }
+}
+function renderCounts(c) {
+  $('counts').textContent = `${FULL.nodes.length} nodes · ${FULL.links.length} connections · ${NOTES_TOTAL} notes`;
+}
+
+/* ---------- visibility pipeline ---------- */
+function adjacency() {
+  const adj = new Map();
+  for (const l of FULL.links) {
+    const s = l.source.id || l.source, t = l.target.id || l.target;
+    if (!adj.has(s)) adj.set(s, []);
+    if (!adj.has(t)) adj.set(t, []);
+    adj.get(s).push(t); adj.get(t).push(s);
+  }
+  return adj;
+}
+function visibleNodes() {
+  let base = FULL.nodes.filter(n => !HIDDEN.has(n.group));
+  if (SHOW.hubsOnly) base = base.filter(n => n.__cosmos || (DEGREE.get(n.id) || 0) >= 3);
+  if (SELECTED) {
+    const hops = FOCUS_MODE ? 1 : DEPTH;
+    if (hops > 0) {
+      const adj = adjacency();
+      const reach = new Set([SELECTED]); let frontier = [SELECTED];
+      for (let d = 0; d < hops; d++) {
+        const next = [];
+        for (const id of frontier) for (const nb of (adj.get(id) || []))
+          if (!reach.has(nb)) { reach.add(nb); next.push(nb); }
+        frontier = next;
+      }
+      base = base.filter(n => reach.has(n.id));
+    }
+  }
+  return new Set(base.map(n => n.id));
+}
+function refresh() {
+  if (!READY) return;
+  const vis = visibleNodes();
+  FULL.nodes.forEach(n => { n.__selected = n.id === SELECTED; });
+  GRAPH.graphData({
+    nodes: FULL.nodes.filter(n => vis.has(n.id)),
+    links: FULL.links.filter(l => vis.has(l.source.id || l.source) && vis.has(l.target.id || l.target)),
+  });
+}
+
+/* ---------- filter legend ---------- */
+function renderFilter() {
+  const counts = {};
+  for (const n of FULL.nodes) counts[n.group] = (counts[n.group] || 0) + 1;
+  const order = Object.keys(counts).sort((a, b) => (counts[b] - counts[a]));
+  $('filter-rows').innerHTML = '';
+  for (const g of order) {
+    const row = document.createElement('div');
+    row.className = 'frow' + (HIDDEN.has(g) ? ' off' : '');
+    const colSample = FULL.nodes.find(n => n.group === g);
+    row.innerHTML = `<span class="fdot" style="background:${gstyle(g).color}"></span><span>${gstyle(g).label}</span><span class="fc">${counts[g]}</span>`;
+    row.onclick = () => { HIDDEN.has(g) ? HIDDEN.delete(g) : HIDDEN.add(g); row.classList.toggle('off'); refresh(); };
+    $('filter-rows').appendChild(row);
+  }
+}
+
+/* ---------- TOP HUBS ---------- */
+function renderHubs() {
+  const hubs = [...FULL.nodes]
+    .filter(n => (DEGREE.get(n.id) || 0) > 0)
+    .sort((a, b) => (DEGREE.get(b.id) || 0) - (DEGREE.get(a.id) || 0))
+    .slice(0, 8);
+  const box = $('hubs'); box.innerHTML = '';
+  for (const n of hubs) {
+    const row = document.createElement('div'); row.className = 'hub';
+    row.innerHTML = `<span class="hdot" style="background:${nodeColor(n)}"></span><span>${n.__label || n.id}</span><span class="hc">${DEGREE.get(n.id)}</span>`;
+    row.onclick = () => { selectNode(n.id); focusNode(n.id); pulseAround(n.id, 8); };
+    box.appendChild(row);
+  }
+}
+
+/* ---------- inspector ---------- */
+function nodeBy(id) { return FULL.nodes.find(n => n.id === id); }
+function connectionsOf(id) {
+  const out = [];
+  for (const l of FULL.links) {
+    const s = l.source.id || l.source, t = l.target.id || l.target;
+    if (s === id || t === id) out.push({ id: s === id ? t : s, weight: l.weight || 0 });
+  }
+  out.sort((a, b) => b.weight - a.weight);
+  return out;
+}
+function clearSelection() {
+  SELECTED = null; refresh();
+  $('focus-name').textContent = '';
+  $('ins-name').innerHTML = `<span class="dot" style="background:#ffcf7d"></span><span>N.E.X.U.S</span>`;
+  $('ins-group').textContent = 'COSMOS MESH'; $('ins-group').style.background = '#ffcf7d';
+  $('ins-meta').textContent = 'automation fabric · live';
+  $('ins-desc').textContent = 'Click a node to focus it — only that node and its connections light up, and you can read its note here. Automation joints (dream, swarm, tools, social, integrations) can be RUN from their card.';
+  $('ins-run').innerHTML = ''; $('ins-result').className = ''; $('ins-result').textContent = '';
+  $('conn-label').style.display = 'none'; $('depths').style.display = 'none'; $('connections').innerHTML = '';
+  const core = nodeBy('N.E.X.U.S');
+  if (core) renderRunPanel(core);
+}
+function onNodeClick(n) { selectNode(n.id); focusNode(n.id); }
+function selectNode(id) {
+  const n = nodeBy(id); if (!n) return;
+  SELECTED = id; $('focus-name').textContent = String(n.__label || n.id);
+  const st = gstyle(n.group);
+  $('ins-name').innerHTML = `<span class="dot" style="background:${nodeColor(n)}"></span><span>${n.__label || n.id}</span>`;
+  $('ins-group').textContent = st.label.toUpperCase(); $('ins-group').style.background = nodeColor(n);
+  const metaBits = [];
+  if (n.status && n.__cosmos) metaBits.push(`status: ${n.status}`);
+  const conns = connectionsOf(id);
+  metaBits.push(`${conns.length} connection${conns.length === 1 ? '' : 's'}`);
+  if (n.detail) metaBits.push(n.detail);
+  $('ins-meta').textContent = metaBits.join(' · ');
+  $('ins-desc').textContent = n.full ? (n.full.slice(0, 900))
+    : (n.desc || (n.__knowledge ? 'A knowledge-layer star: a concept or memory the brain indexed.' : 'Mesh joint.'));
+  $('ins-result').className = ''; $('ins-result').textContent = '';
+  $('conn-label').style.display = 'block'; $('depths').style.display = FOCUS_MODE ? 'none' : 'flex';
+  const rows = $('connections'); rows.innerHTML = '';
+  for (const c of conns.slice(0, 26)) {
+    const cn = nodeBy(c.id); if (!cn) continue;
+    const row = document.createElement('div'); row.className = 'conn';
+    row.innerHTML = `<span class="cdot" style="background:${nodeColor(cn)}"></span><span>${cn.__label || cn.id}</span><span class="w">${c.weight ? c.weight.toFixed(1) : ''}</span>`;
+    row.onclick = () => selectNode(c.id);
+    rows.appendChild(row);
+  }
+  renderRunPanel(n);
+  if (n.last_run) {
+    $('ins-result').className = 'show';
+    $('ins-result').textContent = (n.last_run.ok ? '✓ last run: ' : '✗ last run: ') + (n.last_run.summary || '');
+  }
+  refresh();
+}
+function renderRunPanel(n) {
+  const box = $('ins-run'); box.innerHTML = '';
+  if (!n.triggerable) return;
+  const wrap = document.createElement('div');
+  const action = n.action || n.id;
+  let input = null;
+  if (action === 'generate' || action === 'run' || action === 'run_social') {
+    input = document.createElement('input');
+    input.placeholder = action === 'generate' ? 'problem statement for the new tool…'
+      : action === 'run_social' ? 'optional: what should the post be about?' : 'task for the swarm…';
+    wrap.appendChild(input);
+  }
+  const btn = document.createElement('button'); btn.className = 'run-btn';
+  btn.textContent = { pulse: '⟳ PULSE', state: '⟳ STATE', dream: '▶ DREAM CYCLE', run: '▶ RUN SWARM',
+    generate: '▶ GENERATE TOOL', stats: '⟳ STATS', digest: '⟳ DIGEST', run_social: '▶ DRAFT POST',
+    toggle: (n.stats && n.stats.enabled ? '◼ DISABLE' : '▶ ENABLE') }[action] || '▶ RUN';
+  btn.onclick = async () => {
+    btn.classList.add('busy'); setReactor('WORKING');
+    const params = {};
+    if (input && input.value.trim()) {
+      if (action === 'generate') params.problem_statement = params.description = input.value.trim();
+      else params.task = input.value.trim();
+    }
+    try {
+      const r = await jpost('/api/cosmos/trigger', { node: n.id, params });
+      const j = await r.json();
+      $('ins-result').className = 'show';
+      $('ins-result').textContent = (j.ok ? '✓ ' : '✗ ') + (j.summary || JSON.stringify(j).slice(0, 300));
+      if (j.ok) { pulseAround(n.id); setReactor(action === 'dream' ? 'DREAMING' : 'IDLE'); }
+      else setReactor('FAULT');
+      if (action === 'dream') setTimeout(() => setReactor('IDLE'), 3000);
+      loadAllSoon();
+    } catch (e) {
+      $('ins-result').className = 'show';
+      $('ins-result').textContent = '✗ ' + e.message + (e.message.includes('401') ? ' — set localStorage.nexus_api_key or enable NEXUS_LOCAL_UI_AUTH' : '');
+      setReactor('FAULT');
+    }
+    btn.classList.remove('busy');
+  };
+  wrap.appendChild(btn);
+  box.appendChild(wrap);
+}
+document.querySelectorAll('#depths button').forEach(b => b.addEventListener('click', () => {
+  DEPTH = Number(b.dataset.d);
+  document.querySelectorAll('#depths button').forEach(x => x.classList.toggle('on', x === b));
+  refresh();
+}));
+$('btn-fit').onclick = () => GRAPH && GRAPH.zoomToFit(800, 60);
+$('btn-refresh').onclick = () => loadAll();
+$('btn-reset').onclick = () => {
+  SELECTED = null; DEPTH = 0; HIDDEN.clear(); SHOW.hubsOnly = false; $('dp-hubs').classList.remove('on');
+  document.querySelectorAll('#depths button').forEach(x => x.classList.toggle('on', x.dataset.d === '0'));
+  renderFilter(); refresh(); clearSelection(); GRAPH && GRAPH.zoomToFit(800, 60);
+};
+function focusNode(id) {
+  if (!READY) return;
+  const n = nodeBy(id); if (!n || n.x == null) return;
+  const dist = 130;
+  const ratio = 1 + dist / Math.hypot(n.x || 1, n.y || 1, n.z || 1);
+  GRAPH.cameraPosition({ x: n.x * ratio, y: n.y * ratio, z: n.z * ratio }, n, 900);
+}
+
+/* ---------- search ---------- */
+$('search').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const q = $('search').value.trim().toLowerCase(); if (!q) return;
+  const hit = FULL.nodes.find(n => String(n.__label || n.id).toLowerCase().includes(q));
+  if (hit) { selectNode(hit.id); focusNode(hit.id); pulseAround(hit.id); }
+});
+
+/* ---------- pulses ---------- */
+function pulseAround(id, amount = 12) {
+  for (const l of FULL.links) {
+    const s = l.source.id || l.source, t = l.target.id || l.target;
+    if (s === id || t === id) { PULSES.set(linkKey(l), amount); l.__hot = true; }
+  }
+  tickPulses();
+}
+let pulseTimer = null;
+function tickPulses() {
+  if (pulseTimer) return;
+  pulseTimer = setInterval(() => {
+    let alive = false;
+    for (const [k, v] of PULSES) {
+      const nv = v - 1.5;
+      if (nv <= 1) { PULSES.delete(k); const l = FULL.links.find(x => linkKey(x) === k); if (l) l.__hot = false; }
+      else { PULSES.set(k, nv); alive = true; }
+    }
+    if (READY) { GRAPH.refresh(); }
+    if (!alive && PULSES.size === 0) { clearInterval(pulseTimer); pulseTimer = null; }
+  }, 260);
+}
+
+/* ---------- automation log ---------- */
+function renderAutolog(events) {
+  const box = $('alog-rows'); box.innerHTML = '';
+  if (!events.length) { box.innerHTML = '<div class="alog">no automation events yet — RUN a node</div>'; return; }
+  const ago = ts => { if (!ts) return ''; const s = Math.max(0, (Date.now()/1000) - ts);
+    return s < 60 ? Math.floor(s) + 's' : s < 3600 ? Math.floor(s/60) + 'm' : Math.floor(s/3600) + 'h'; };
+  for (const ev of events.slice(0, 8)) {
+    const row = document.createElement('div'); row.className = 'alog';
+    row.innerHTML = `<span class="ago">${ago(ev.ts)}</span><b>${ev.node || '?'}</b> ${ev.ok ? '<span>ok</span>' : '<span class="bad">failed</span>'} — ${(ev.summary || '').slice(0, 90)}`;
+    box.appendChild(row);
+  }
+}
+
+/* ---------- reactor + status chips ---------- */
+(function buildDial() {
+  const seg = (g, r0, r1, a0, a1, fill, op) => {
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const rad = a => (a - 90) * Math.PI / 180;
+    const x = (r, a) => 100 + r * Math.cos(rad(a)), y = (r, a) => 100 + r * Math.sin(rad(a));
+    p.setAttribute('d', `M ${x(r1,a0)} ${y(r1,a0)} A ${r1} ${r1} 0 ${(a1-a0)>180?1:0} 1 ${x(r1,a1)} ${y(r1,a1)} L ${x(r0,a1)} ${y(r0,a1)} A ${r0} ${r0} 0 ${(a1-a0)>180?1:0} 0 ${x(r0,a0)} ${y(r0,a0)} Z`);
+    p.setAttribute('fill', fill); p.setAttribute('fill-opacity', op);
+    g.appendChild(p);
+  };
+  const r1 = $('dial-r1'), r2 = $('dial-r2');
+  for (let a = 0; a < 360; a += 15) seg(r1, 78, 90, a, a + 10, '#7dffd9', a % 45 === 0 ? .55 : .2);
+  for (let a = 0; a < 360; a += 30) seg(r2, 52, 68, a, a + 18, '#ffcf7d', a % 90 === 0 ? .5 : .18);
+})();
+function setReactor(s) {
+  STATE = s;
+  $('dial-state').textContent = s;
+  $('reactor').classList.toggle('busy', s !== 'IDLE');
+}
+function updateLlmLine(llm) {
+  if (!llm) { $('chip-online').textContent = '◦ NO LLM'; $('chip-online').classList.add('bad'); return; }
+  $('chip-online').textContent = llm.reachable ? '◉ ONLINE' : '○ OFFLINE';
+  $('chip-online').classList.toggle('bad', !llm.reachable);
+  $('chip-model').textContent = String(llm.model || '?').slice(0, 16).toUpperCase();
+  $('chip-model').title = `${llm.kind} @ ${llm.base_url} — ${llm.reachable ? 'reachable in ' + llm.latency_ms + 'ms' : 'unreachable ' + (llm.error || '')}`;
+}
+async function pollLlm() { try { updateLlmLine(await jget('/api/llm/status')); } catch (_) {} }
+
+/* ---------- right-rail toggles ---------- */
+function setTog(id, on, label) {
+  $(id).classList.toggle('on', on);
+  $(id).querySelector('em').textContent = label || (on ? 'on' : 'off');
+}
+$('tog-eyes').onclick = async () => {
+  if (eyesStream) {
+    eyesStream.getTracks().forEach(t => t.stop()); eyesStream = null;
+    $('eyes').style.display = 'none'; setTog('tog-eyes', false); return;
+  }
+  try {
+    eyesStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    $('eyesvid').srcObject = eyesStream;
+    $('eyes').style.display = 'block'; setTog('tog-eyes', true);
+  } catch (e) { caption('camera blocked — allow it to give NEXUS eyes.'); }
+};
+$('tog-watch').onclick = () => {
+  WATCH.on = !WATCH.on; setTog('tog-watch', WATCH.on);
+  clearInterval(WATCH.timer);
+  if (WATCH.on) {
+    WATCH.prev = new Map();
+    WATCH.timer = setInterval(async () => {
+      try {
+        const c = await jget('/api/cosmos');
+        for (const n of (c.nodes || [])) {
+          const ts = n.last_run && n.last_run.ts;
+          const prev = WATCH.prev.get(n.id);
+          if (ts && prev && ts > prev) pulseAround(n.id, 10);
+          if (ts) WATCH.prev.set(n.id, ts);
+        }
+        COSMOS = c; renderAutolog(c.activity || []); updateLlmLine(c.llm); loadAllQuiet();
+      } catch (_) {}
+    }, WATCH_POLL);
+    caption('watch mode — the cosmos pulses when automations fire.');
+  }
+};
+let loadAllQuietTimer = null;
+function loadAllQuiet() { clearTimeout(loadAllQuietTimer); loadAllQuietTimer = setTimeout(loadAll, 1500); }
+$('tog-holo').onclick = () => { location.href = '/'; };
+$('tog-focus').onclick = () => {
+  FOCUS_MODE = !FOCUS_MODE; setTog('tog-focus', FOCUS_MODE);
+  $('depths').style.display = FOCUS_MODE ? 'none' : ($('conn-label').style.display === 'block' ? 'flex' : 'none');
+  refresh();
+  if (FOCUS_MODE && SELECTED) caption('focus mode — ' + String(nodeBy(SELECTED)?.__label || SELECTED) + ' and its direct links.');
+};
+
+/* ---------- chat (LM Studio loop) ---------- */
+function bubble(role, html) {
+  const d = document.createElement('div');
+  d.className = 'bubble ' + role; d.innerHTML = html;
+  const log = $('chatlog'); log.appendChild(d);
+  while (log.children.length > 8) log.firstChild.remove();
+  log.scrollTop = log.scrollHeight;
+}
+function caption(text, holdMs) {
+  const c = $('caption'); c.textContent = text; c.classList.add('show');
+  clearTimeout(caption._t);
+  caption._t = setTimeout(() => c.classList.remove('show'), holdMs || Math.max(2600, text.length * 60));
+}
+function pickSpeakVoice() {
+  const vs = (window.speechSynthesis || { getVoices: () => [] }).getVoices();
+  return vs.find(v => /daniel/i.test(v.name)) || vs.find(v => /arthur/i.test(v.name))
+      || vs.find(v => v.lang === 'en-GB' && /male/i.test(v.name)) || vs.find(v => v.lang === 'en-GB') || null;
+}
+let speakVoice = null;
+if (window.speechSynthesis) { speakVoice = pickSpeakVoice(); speechSynthesis.onvoiceschanged = () => speakVoice = pickSpeakVoice(); }
+function speak(text) {
+  caption(text);
+  if (!window.speechSynthesis) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text.slice(0, 420));
+    if (speakVoice) u.voice = speakVoice;
+    u.rate = .98; u.pitch = .88;
+    speechSynthesis.speak(u);
+  } catch (_) {}
+}
+let chatBusy = false;
+async function sendChat(raw) {
+  const text = (raw || $('msg').value || '').trim(); if (!text || chatBusy) return;
+  chatBusy = true; $('msg').value = '';
+  bubble('user', text.replace(/</g, '&lt;'));
+  setReactor('THINKING'); pulseAround('N.E.X.U.S', 10); pulseAround('H.O.L.O', 6);
+  try {
+    const r = await jpost('/v1/chat', { message: text, session_id: API.session });
+    if (r.status === 401) {
+      bubble('nexus', 'NEXUS says <b>401 — auth needed</b>. Use localhost (NEXUS_LOCAL_UI_AUTH=auto) or set <span style="font-family:monospace">localStorage.nexus_api_key="sk-…"</span>');
+      speak('I need a key to open the conscious loop, sir.');
+    } else if (!r.ok) {
+      bubble('nexus', 'Backend error ' + r.status + ' — is the NEXUS server up?');
+    } else {
+      const j = await r.json();
+      const tools = (j.tools_used || []).length ? `<span class="tools">tools: ${j.tools_used.join(' · ')} — memories recalled: ${j.memories_recalled}</span>` : '';
+      bubble('nexus', (j.response || '—').replace(/</g, '&lt;').replace(/\n/g, '<br>') + tools);
+      speak((j.response || '').replace(/^\s*FINAL ANSWER:\s*/i, '').slice(0, 420));
+      pulseAround('memory', 8); pulseAround('concept', 8);
+    }
+  } catch (e) {
+    bubble('nexus', 'Cannot reach NEXUS (' + e.message + '). Start the server, sir.');
+    speak('The conscious loop is unreachable.');
+  }
+  chatBusy = false; setReactor('IDLE');
+}
+$('send').onclick = () => sendChat();
+$('msg').addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+
+/* ---------- voice ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SR) {
+  micRec = new SR();
+  micRec.lang = 'en-US'; micRec.interimResults = true; micRec.maxAlternatives = 1;
+  micRec.onresult = e => {
+    let interim = '', final = '';
+    for (const res of e.results) (res.isFinal ? final += res[0].transcript : interim += res[0].transcript);
+    $('msg').value = (final || interim);
+    caption('🎙 ' + (final || interim), 2000);
+  };
+  micRec.onend = () => {
+    listening = false; $('mic').classList.remove('live'); $('reactor').classList.remove('listening');
+    const said = $('msg').value.trim();
+    if (said) { caption('🎙 ' + said, 1600); setTimeout(() => sendChat(said), 350); }
+  };
+  micRec.onerror = () => { listening = false; $('mic').classList.remove('live'); $('reactor').classList.remove('listening'); };
+  $('mic').classList.remove('off'); $('mic').title = 'Voice — talk to NEXUS (via LM Studio)';
+}
+function toggleMic() {
+  if (!micRec) { caption('Voice recognition unavailable here — type instead, sir.'); return; }
+  if (listening) { micRec.stop(); return; }
+  try { micRec.start(); listening = true; $('mic').classList.add('live'); $('reactor').classList.add('listening'); caption('Listening… speak now.'); } catch (_) {}
+}
+$('mic').onclick = toggleMic;
+$('reactor').onclick = toggleMic;
+addEventListener('keydown', e => {
+  if ((e.key === 'm' || e.key === 'M') && !['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)) toggleMic();
+});
+
+/* ---------- poll + boot ---------- */
+let loadTimer = null;
+function loadAllSoon() { clearTimeout(loadTimer); loadTimer = setTimeout(loadAll, 1200); }
+setInterval(loadAll, MESH_POLL);
+setInterval(pollLlm, LLM_POLL);
+initGraph();
+loadAll();
+pollLlm();
+clearSelection();
+setReactor('IDLE');
+</script>
+</body></html>

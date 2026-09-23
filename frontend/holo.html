@@ -189,6 +189,9 @@
   <span class="chip off" id="fx">EFFECTS</span>
   <span class="chip off" id="debug">DEBUG</span>
   <span class="chip off" id="jarvis">N.E.X.U.S</span>
+  <span class="chip off" id="lmchip" title="LM Studio / LLM status">LM</span>
+  <span class="chip off" id="micchip" title="Talk to NEXUS (voice → LM Studio)">MIC</span>
+  <span class="chip off" id="cosmoschip" title="Open the COSMOS automation mesh">COSMOS</span>
   <span class="chip" id="retry">RETRY CAMERA</span>
   <span id="status">booting…</span>
 </div>
@@ -1776,8 +1779,15 @@ function renderMesh(cosmos){
     const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
     c.setAttribute('r', Math.max(5, Math.min(11, (n.val||6)*0.7)));
     c.setAttribute('fill', n.color||'#7dffd9');
-    c.setAttribute('stroke','rgba(0,0,0,0.3)'); c.setAttribute('stroke-width','1.2');
+    const scol = n.status ? ({online:'#57ffb0',idle:'#ffcf7d',enabled:'#57ffb0',configured:'#57c8ff',degraded:'#ffb257',disabled:'#7f8c8d',offline:'#ff6b6b'})[n.status] : null;
+    c.setAttribute('stroke', scol || 'rgba(0,0,0,0.3)');
+    c.setAttribute('stroke-width', scol ? '2' : '1.2');
     c.setAttribute('class','mesh-node');
+    if(scol){ const sh=document.createElementNS('http://www.w3.org/2000/svg','circle');
+      sh.setAttribute('r', Math.max(7, Math.min(13,(n.val||6)*0.7)+3.5));
+      sh.setAttribute('fill','none'); sh.setAttribute('stroke',scol);
+      sh.setAttribute('stroke-opacity','0.35'); sh.setAttribute('stroke-width','1');
+      g.appendChild(sh); }
     g.appendChild(c);
     const t=document.createElementNS('http://www.w3.org/2000/svg','text');
     t.setAttribute('text-anchor','middle'); t.setAttribute('dy', n.val>10 ? '22':'18');
@@ -1785,11 +1795,21 @@ function renderMesh(cosmos){
     t.setAttribute('fill','#8fd8c2'); t.setAttribute('letter-spacing','0.06em');
     t.textContent=n.id.length>10 ? n.id.slice(0,10): n.id;
     g.appendChild(t);
-    g.addEventListener('click',()=> { askInput.value=`Tell me about ${n.id} — suggest, weakness, props`; askInput.focus(); });
+    g.addEventListener('click',()=> {
+      askInput.value=`Tell me about ${n.id} — suggest, weakness, props`;
+      if(n.triggerable && window.__cosmosTrigger) window.__cosmosTrigger(n);
+      else askInput.focus();
+    });
     meshSvg.appendChild(g);
   });
 }
-fetch('/config/nexus.config.json').then(r=>r.json()).then(j=> renderMesh(j.cosmos)).catch(()=> renderMesh({nodes:[{id:'N.E.X.U.S',group:'core',val:18},{id:'gmail',group:'integration',val:6},{id:'drive',group:'integration',val:6},{id:'github',group:'integration',val:6}],links:[{source:'N.E.X.U.S',target:'gmail'},{source:'N.E.X.U.S',target:'drive'},{source:'N.E.X.U.S',target:'github'},{source:'gmail',target:'drive'},{source:'drive',target:'github'}]}));
+/* Live mesh: /api/cosmos (status + triggerable) — falls back to static config then to a stub */
+fetch('/api/cosmos').then(r=>r.ok?r.json():Promise.reject(new Error('cosmos '+r.status))).then(j=>{
+  window.__cosmosData=j;
+  renderMesh({nodes:j.nodes, links:j.links});
+  // refresh ring colors/statuses periodically
+  setInterval(()=> fetch('/api/cosmos').then(r=>r.ok?r.json():Promise.reject()).then(jj=>{ window.__cosmosData=jj; renderMesh({nodes:jj.nodes, links:jj.links}); }).catch(()=>{}), 30000);
+}).catch(()=> fetch('/config/nexus.config.json').then(r=>r.json()).then(j=> renderMesh(j.cosmos)).catch(()=> renderMesh({nodes:[{id:'N.E.X.U.S',group:'core',val:18},{id:'gmail',group:'integration',val:6},{id:'drive',group:'integration',val:6},{id:'github',group:'integration',val:6}],links:[{source:'N.E.X.U.S',target:'gmail'},{source:'N.E.X.U.S',target:'drive'},{source:'N.E.X.U.S',target:'github'},{source:'gmail',target:'drive'},{source:'drive',target:'github'}]})));
 if(meshToggle){
   meshToggle.addEventListener('click',()=>{
     const m=document.getElementById('integration-mesh');
@@ -2010,15 +2030,24 @@ if(dropEl && fileInput){
         thinking.remove();
         addBubble('nexus', `<b>N.E.X.U.S</b><br>${j.summary}<br><br><b>Suggest:</b> ${(j.suggestions||[]).join(' • ')}<br><b>Props:</b> ${(j.props||[]).join(' • ')}`);
       } else {
-        // no file yet -> chat via /v1/chat if available, else heuristic
-        const r=await fetch('/v1/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message: promptQ})});
+        // no file yet -> chat via /v1/chat (conscious loop → LM Studio), with session continuity
+        const hdrs={'Content-Type':'application/json'};
+        const k=localStorage.getItem('nexus_api_key'); if(k) hdrs['Authorization']='Bearer '+k;
+        const sid=localStorage.getItem('nexus_session')||('holo-'+Math.random().toString(36).slice(2,10));
+        localStorage.setItem('nexus_session', sid);
+        const r=await fetch('/v1/chat', {method:'POST', headers:hdrs, body: JSON.stringify({message: promptQ, session_id: sid})});
         if(r.ok){
           const j=await r.json();
           thinking.remove();
-          addBubble('nexus', j.response || j.detail || '—');
+          const tools=(j.tools_used||[]).length?`<br><span style="font-size:9px;color:#8fd8c2;font-family:monospace">tools: ${j.tools_used.join(' · ')}</span>`:'';
+          addBubble('nexus', (j.response || j.detail || '—').replace(/</g,'&lt;').replace(/\n/g,'<br>') + tools);
+          if(window.__nexusSpeak) window.__nexusSpeak(j.response||'');
+        } else if(r.status===401){
+          thinking.remove();
+          addBubble('nexus','<b>401 — auth needed.</b> On localhost NEXUS auto-admits the UI (NEXUS_LOCAL_UI_AUTH=auto). Otherwise set an API key in the console: <span style="font-family:monospace">localStorage.nexus_api_key="sk-…"</span>');
         } else {
           thinking.remove();
-          addBubble('nexus', `Drop a file first, then say “hey nexus what do you think about this file on the screen” — I’ll analyze <b>${fileNameCache||'no file yet'}</b> visible in the preview above. Mesh is joint: file → N.E.X.U.S → memory/concept.`);
+          addBubble('nexus', `Backend ${r.status} — drop a file for analysis, or make sure the NEXUS server is up (uvicorn on :8000).`);
         }
       }
     }catch(e){ thinking.remove(); addBubble('nexus','Error: '+ e.message); }
@@ -2028,5 +2057,141 @@ if(dropEl && fileInput){
   // expose for hand gesture: voice-like trigger when user says hey nexus (text) -> already via input
   window._nexusTalk = talk;
 })();
+</script>
+<script type="module">
+/* ============================================================================
+   NEXUS WIRING — live mesh automation, LM Studio status chip, voice talk.
+   Everything degrades gracefully offline; nothing here is required for the
+   hand-gesture core, it only wires the deck to the NEXUS backend.
+   ========================================================================== */
+const STATUS_COLORS = { online:'#57ffb0', idle:'#ffcf7d', enabled:'#57ffb0', configured:'#57c8ff',
+  degraded:'#ffb257', disabled:'#7f8c8d', offline:'#ff6b6b' };
+const hdrs = () => {
+  const h = {'Content-Type':'application/json'};
+  const k = localStorage.getItem('nexus_api_key'); if (k) h['Authorization'] = 'Bearer ' + k;
+  return h;
+};
+const analysisEl = document.getElementById('nexus-analysis');
+function showAutomationResult(n, j){
+  if(!analysisEl) return;
+  analysisEl.style.display='block';
+  analysisEl.innerHTML = `
+    <div style="font-weight:700; color:#ffe9c4; letter-spacing:0.1em; font-size:10px;">⚙ ${n.id} — automation</div>
+    <div class="sec" style="border-left-color:${j.ok ? STATUS_COLORS.online : STATUS_COLORS.offline}">
+      <b>${j.ok ? '✓ OK' : '✗ FAILED'}</b><br>${(j.summary || JSON.stringify(j)).slice(0, 500)}</div>
+    ${j.tools ? `<div class="sec"><b>TOOLS</b><br>${j.tools.join(' · ')}</div>` : ''}`;
+}
+
+/* Mesh-node automation trigger — called from the SVG mesh click when the
+   node is triggerable (dream, swarm, tools, integrations, core pulse…). */
+window.__cosmosTrigger = async (n, params={}) => {
+  try{
+    if(analysisEl){ analysisEl.style.display='block'; analysisEl.innerHTML =
+      `<div class="sec">⏳ running <b>${n.id}</b> automation…</div>`; }
+    const r = await fetch('/api/cosmos/trigger', { method:'POST', headers:hdrs(),
+      body: JSON.stringify({ node:n.id, params }) });
+    const j = await r.json().catch(()=>({ok:false, summary:'bad response'}));
+    if(r.status===401){
+      showAutomationResult(n, {ok:false, summary:'401 — set localStorage.nexus_api_key or serve from localhost'});
+      return;
+    }
+    showAutomationResult(n, j);
+  }catch(e){ showAutomationResult(n, {ok:false, summary:e.message + ' — is the NEXUS backend up?'}); }
+};
+
+/* Automation quick-run row — injected between the mesh SVG and the file drop. */
+(async function automationRows(){
+  try{
+    const r = await fetch('/api/cosmos'); if(!r.ok) return;
+    const j = await r.json();
+    const meshSvg = document.getElementById('mesh-svg');
+    if(!meshSvg || !(j.nodes||[]).some(n=>n.triggerable)) return;
+    const box = document.createElement('div');
+    box.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;padding:8px 12px 0;';
+    for(const n of j.nodes.filter(n=>n.triggerable)){
+      const b = document.createElement('button');
+      b.textContent = ({pulse:'⟳ PULSE', dream:'▶ DREAM', run:'▶ SWARM', digest:'⟳ MEMORY', stats:'⟳ CONCEPTS', generate:'⚒ TOOLS', toggle:'⎋ ' + n.id.toUpperCase(), state:'⟳ DECK'})[n.action] || ('▶ ' + n.id);
+      b.title = (n.detail || n.action || '') + (n.status ? ' — ' + n.status : '');
+      b.style.cssText = 'font-family:"SF Mono",ui-monospace,monospace;font-size:8.5px;letter-spacing:.1em;' +
+        'color:' + (STATUS_COLORS[n.status]||'#7dffd9') + ';background:rgba(125,255,217,.06);' +
+        'border:1px solid ' + (STATUS_COLORS[n.status]||'rgba(125,255,217,.25)') + '55;border-radius:99px;padding:4px 10px;cursor:pointer;';
+      b.onclick = () => window.__cosmosTrigger(n);
+      box.appendChild(b);
+    }
+    meshSvg.insertAdjacentElement('afterend', box);
+  }catch(_){}
+})();
+
+/* LM Studio status chip — polls /api/llm/status. */
+const lmChip = document.getElementById('lmchip');
+async function pollLm(){
+  try{
+    const r = await fetch('/api/llm/status'); if(!r.ok) throw new Error('status '+r.status);
+    const j = await r.json();
+    lmChip.classList.remove('off');
+    lmChip.textContent = j.reachable ? `LM ✓` : `LM ✗`;
+    lmChip.style.color = j.reachable ? '#57ffb0' : '#ff6b6b';
+    lmChip.style.borderColor = j.reachable ? 'rgba(87,255,176,.45)' : 'rgba(255,107,107,.4)';
+    lmChip.title = `${j.kind} @ ${j.base_url}\nmodel: ${j.model}\n${j.reachable ? 'reachable · '+j.latency_ms.toFixed(0)+'ms' : 'UNREACHABLE — start LM Studio on port 1234'}`;
+  }catch(e){
+    lmChip.textContent = 'LM ✗'; lmChip.style.color = '#ff6b6b';
+    lmChip.title = 'cannot reach /api/llm/status — NEXUS backend down?';
+  }
+}
+pollLm(); setInterval(pollLm, 25000);
+lmChip && lmChip.addEventListener('click', ()=> pollLm());
+
+/* COSMOS chip — open the 3D automation mesh page. */
+const cosmosChip = document.getElementById('cosmoschip');
+cosmosChip && cosmosChip.addEventListener('click', ()=> { location.href = '/cosmos'; });
+
+/* Voice: mic → /v1/chat → LM Studio → spoken reply (local browser TTS). */
+let speakTokenN = 0;
+window.__nexusSpeak = (text) => {
+  try{
+    if(!window.speechSynthesis) return;
+    const cleaned = String(text||'').replace(/^\s*FINAL ANSWER:\s*/i,'').trim().slice(0, 420);
+    if(!cleaned) return;
+    const token = ++speakTokenN;
+    const captionEl = document.getElementById('caption');
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(cleaned);
+    const vs = speechSynthesis.getVoices();
+    u.voice = vs.find(v=>/daniel/i.test(v.name)) || vs.find(v=>v.lang==='en-GB') || null;
+    u.rate = .98; u.pitch = .88;
+    speechSynthesis.speak(u);
+    if(captionEl){ captionEl.textContent = '🔊 ' + cleaned.slice(0,160); captionEl.classList.add('show');
+      setTimeout(()=>{ if(token===speakTokenN) captionEl.classList.remove('show'); }, Math.max(2600, cleaned.length*60)); }
+  }catch(_){}
+};
+const micChip = document.getElementById('micchip');
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if(SR){
+  const rec = new SR();
+  rec.lang='en-US'; rec.interimResults=true; rec.maxAlternatives=1;
+  const chatInput = document.getElementById('nexus-chat-input');
+  const chatSend = document.getElementById('nexus-chat-send');
+  rec.onresult = e => {
+    let interim='', final='';
+    for(const res of e.results) (res.isFinal ? final+=res[0].transcript : interim+=res[0].transcript);
+    if(chatInput) chatInput.value = final || interim;
+  };
+  rec.onend = () => {
+    micChip.classList.add('off'); micChip.textContent='MIC';
+    const said = (chatInput && chatInput.value || '').trim();
+    if(said && chatSend) setTimeout(()=> chatSend.click(), 300);
+  };
+  rec.onerror = () => { micChip.classList.add('off'); micChip.textContent='MIC'; };
+  micChip.title = 'Voice — talk to NEXUS via LM Studio';
+  micChip.addEventListener('click', ()=>{
+    if(!micChip.classList.contains('off')){ rec.stop(); return; }
+    try{ rec.start(); micChip.classList.remove('off'); micChip.textContent='● LIVE'; micChip.style.color='#ff6b6b';
+      setTimeout(()=>{ micChip.style.color='#7dffd9'; }, 1500);
+    }catch(_){}
+  });
+  addEventListener('keydown', e => {
+    if((e.key==='m'||e.key==='M') && !['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)) micChip.click();
+  });
+}else if(micChip){ micChip.title='SpeechRecognition not available in this browser'; }
 </script>
 </body></html>

@@ -37,7 +37,9 @@ python -m nexus.training.cli import-seed
 ## Key Quirks
 
 - **`.env` is gitignored.** Copy `.env.example` → `.env`. Current config uses LM Studio on `localhost:1234` (Qwen 3.5 9B + Qwen2.5 Coder 7B + all-MiniLM-L6-v2 embeddings).
-- **Auth fail-closed.** `NEXUS_API_KEYS={}` means zero keys configured — all requests get 401. Set a key in `.env` before testing endpoints.
+- **Auth fail-closed — except the local UI.** `NEXUS_API_KEYS={}` + `NEXUS_LOCAL_UI_AUTH=auto` (default) admits ONLY loopback clients without a bearer token so the shipped UI (`/` and `/cosmos`) works zero-config against LM Studio. Any configured key, or a non-loopback client, → 401. Set `NEXUS_LOCAL_UI_AUTH=false` for strict posture everywhere.
+- **The UI is served by the backend.** `GET /` → HOLO deck (hand gestures), `GET /cosmos` → the JARVIS-style 3D automation mesh. Deck endpoints live in `infrastructure/api/routes/holo.py` (`/api/tree|notes|props|state`); the mesh + automation triggers live in `infrastructure/api/routes/cosmos.py` (`/api/cosmos`, `/api/cosmos/trigger`, `/api/llm/status`). `frontend/server.py` (stdlib, :4890) proxies those same paths to the backend so both entry points stay wired.
+- **`python-multipart` is a hard runtime dep** — FastAPI raises at import time if `UploadFile`/`Form` routes exist without it (`/api/analyze`).
 - **pytest asyncio_mode = auto.** All async tests run without `@pytest.mark.asyncio` (it's in `pytest.ini`).
 - **PowerShell, not bash.** On Windows, `curl` is an alias for `Invoke-WebRequest`. Use `Invoke-RestMethod` for API calls.
 - **Qwen 3.5 is a reasoning model.** It uses `reasoning_content` for chain-of-thought. Needs `max_tokens` ≥ 200+ for answers to appear in `content`.

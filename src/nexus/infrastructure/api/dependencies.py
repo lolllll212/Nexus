@@ -7,13 +7,15 @@ never trusted again.
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import HTTPException, Request
 
 from nexus.domain.exceptions import QuotaExceededError, RateLimitExceededError, UnauthorizedError
-from nexus.domain.value_objects.identity import Identity
+from nexus.domain.value_objects.identity import Identity, Role
 from nexus.infrastructure.di.container import Container
+
+_LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost", "::ffff:127.0.0.1", "testclient"}
 
 
 def get_container(request: Request) -> Container:
@@ -25,16 +27,58 @@ def get_container(request: Request) -> Container:
     return request.app.state.container
 
 
+def local_ui_bypass_allowed(request: Request, container: Container) -> bool:
+    """Whether a request WITHOUT a bearer token may act as the local UI.
+
+    Modes (``NEXUS_LOCAL_UI_AUTH``):
+      - ``auto`` (default): only loopback clients, and only while the API-key
+        table is empty — so a zero-config local LM Studio box "just works",
+        but the moment any key is configured every endpoint is fail-closed.
+      - ``true``: always allow (local development only).
+      - ``false``: never allow (production posture).
+    """
+    cfg = getattr(container, "config", None)
+    mode = str(getattr(cfg, "local_ui_auth", "auto") or "auto").lower()
+    if mode in ("0", "false", "no", "off"):
+        return False
+    if mode in ("1", "true", "yes", "on"):
+        return True
+    # auto: fail-closed as soon as any key exists
+    authenticator = getattr(container, "authenticator", None)
+    if getattr(authenticator, "has_keys", True):
+        return False
+    host = getattr(getattr(request, "client", None), "host", None) or ""
+    return host in _LOOPBACK_HOSTS
+
+
 async def require_identity(request: Request) -> Identity:
     """Verify the bearer token and expose the caller's Identity."""
     auth = request.headers.get("Authorization", "")
+    container = get_container(request)
     if not auth.lower().startswith("bearer "):
+        if local_ui_bypass_allowed(request, container):
+            identity = Identity(
+                user_id="local-ui",
+                tenant_id="default",
+                role=Role.ADMIN,
+                display_name="Local UI",
+            )
+            request.state.identity = identity
+            return identity
         raise HTTPException(status_code=401, detail="Missing bearer token")
     token = auth[7:].strip()
-    container = get_container(request)
     try:
         identity = await container.authenticator.authenticate(token)
     except UnauthorizedError:
+        if local_ui_bypass_allowed(request, container):
+            identity = Identity(
+                user_id="local-ui",
+                tenant_id="default",
+                role=Role.ADMIN,
+                display_name="Local UI",
+            )
+            request.state.identity = identity
+            return identity
         raise HTTPException(status_code=401, detail="Invalid credentials")
     request.state.identity = identity
     return identity

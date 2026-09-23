@@ -12,38 +12,6 @@ import json
 import os
 from dataclasses import dataclass, field
 
-from nexus.domain.value_objects.synapse import SynapseConfig
-
-# Ports (abstractions)
-from nexus.domain.ports.auth import Authenticator
-from nexus.domain.ports.cognition import ActionPolicyStore, CorticalColumnRegistry
-from nexus.domain.ports.event_bus import Event, EventBus, EventTopic
-from nexus.domain.ports.execution import ToolExecutor
-from nexus.domain.ports.llm_provider import LLMProvider, EmbeddingProvider
-from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
-from nexus.domain.ports.observability import Metrics, Tracer
-from nexus.domain.ports.rate_limiter import RateLimiter
-from nexus.domain.ports.quota import QuotaService
-from nexus.domain.ports.sandbox import Sandbox
-from nexus.domain.ports.secrets import SecretStore
-from nexus.domain.ports.speech import SpeechToText, TextToSpeech
-from nexus.domain.ports.swarm import AgentRepository, SwarmRepository
-from nexus.domain.ports.tool_registry import ToolRegistry
-from nexus.domain.ports.deployment import DeploymentProvider
-from nexus.domain.ports.activity_feed import ActivityFeed
-
-# Application (use cases)
-from nexus.application.cortex.process_message import ProcessMessageUseCase
-from nexus.application.cortex.session_manager import SessionManager
-from nexus.application.interfaces.subconscious_coordinator import SubconsciousCoordinator
-from nexus.application.subcortex.amygdala import AmygdalaUseCase
-from nexus.application.subcortex.basal_ganglia import BasalGangliaUseCase
-from nexus.application.subcortex.synthesis import EntitySynthesisUseCase
-from nexus.application.subcortex.dreaming.dream_session import DreamSessionUseCase
-from nexus.application.subcortex.pattern_detection import PatternDetectionUseCase
-from nexus.application.subcortex.thalamus import ThalamicGatingUseCase
-from nexus.application.tools.generate_tool import GenerateToolUseCase
-from nexus.application.tools.self_heal import SelfHealUseCase
 from nexus.application.autonomy.goals import (
     ApproveGoalUseCase,
     AutonomyLoopUseCase,
@@ -52,8 +20,40 @@ from nexus.application.autonomy.goals import (
     GetGoalUseCase,
     ListGoalsUseCase,
 )
+
+# Application (use cases)
+from nexus.application.cortex.process_message import ProcessMessageUseCase
+from nexus.application.cortex.session_manager import SessionManager
+from nexus.application.interfaces.subconscious_coordinator import SubconsciousCoordinator
+from nexus.application.subcortex.amygdala import AmygdalaUseCase
+from nexus.application.subcortex.basal_ganglia import BasalGangliaUseCase
+from nexus.application.subcortex.dreaming.dream_session import DreamSessionUseCase
+from nexus.application.subcortex.pattern_detection import PatternDetectionUseCase
+from nexus.application.subcortex.synthesis import EntitySynthesisUseCase
+from nexus.application.subcortex.thalamus import ThalamicGatingUseCase
+from nexus.application.tools.generate_tool import GenerateToolUseCase
+from nexus.application.tools.self_heal import SelfHealUseCase
+from nexus.domain.ports.activity_feed import ActivityFeed
+
+# Ports (abstractions)
+from nexus.domain.ports.auth import Authenticator
 from nexus.domain.ports.autonomy import AutonomyPolicy
+from nexus.domain.ports.cognition import ActionPolicyStore, CorticalColumnRegistry
+from nexus.domain.ports.deployment import DeploymentProvider
+from nexus.domain.ports.event_bus import Event, EventBus, EventTopic
+from nexus.domain.ports.execution import ToolExecutor
 from nexus.domain.ports.goal_repository import GoalRepository
+from nexus.domain.ports.llm_provider import EmbeddingProvider, LLMProvider
+from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
+from nexus.domain.ports.observability import Metrics, Tracer
+from nexus.domain.ports.quota import QuotaService
+from nexus.domain.ports.rate_limiter import RateLimiter
+from nexus.domain.ports.sandbox import Sandbox
+from nexus.domain.ports.secrets import SecretStore
+from nexus.domain.ports.speech import SpeechToText, TextToSpeech
+from nexus.domain.ports.swarm import AgentRepository, SwarmRepository
+from nexus.domain.ports.tool_registry import ToolRegistry
+from nexus.domain.value_objects.synapse import SynapseConfig
 
 
 def _parse_json_env(name: str, default: dict | None = None) -> dict:
@@ -115,6 +115,14 @@ class Config:
     )
     # ---- Production hardening (P1) ----
     api_keys: dict = field(default_factory=lambda: _parse_json_env("NEXUS_API_KEYS"))
+    # Local UI auth bypass: "auto" (default) authenticates loopback requests
+    # without a bearer token ONLY when no API keys are configured, so the
+    # shipped HOLO UI works zero-config on a local LM Studio box while any
+    # configured key keeps every endpoint fail-closed. "true" = always bypass
+    # (dev only), "false" = never bypass (production posture).
+    local_ui_auth: str = field(
+        default_factory=lambda: os.getenv("NEXUS_LOCAL_UI_AUTH", "auto").strip().lower()
+    )
     deploy_platform: str = field(default_factory=lambda: os.getenv("NEXUS_DEPLOY_PLATFORM", "local"))
     tenants: list = field(
         default_factory=lambda: [t.strip() for t in os.getenv("NEXUS_TENANTS", "").split(",") if t.strip()]
@@ -289,7 +297,6 @@ class Container:
         )
 
         # ---- Swarm (P4) ----
-        from nexus.infrastructure.adapters.swarm.executor import SwarmAgentExecutor
         from nexus.application.swarm.swarm import (
             CreateSwarmUseCase,
             GetAgentUseCase,
@@ -299,6 +306,7 @@ class Container:
             RegisterAgentUseCase,
             SwarmCoordinatorUseCase,
         )
+        from nexus.infrastructure.adapters.swarm.executor import SwarmAgentExecutor
 
         self.register_agent = RegisterAgentUseCase(self.agent_repo)
         self.list_agents = ListAgentsUseCase(self.agent_repo)
@@ -551,8 +559,8 @@ class Container:
         return LocalDeployer()
 
     def _build_executor(self) -> ToolExecutor:
-        from nexus.infrastructure.adapters.execution.registry_tool_executor import RegistryBackedToolExecutor
         from nexus.infrastructure.adapters.execution.extended_tools import EXTENDED_HANDLERS
+        from nexus.infrastructure.adapters.execution.registry_tool_executor import RegistryBackedToolExecutor
         from nexus.infrastructure.adapters.plugins.loader import PluginLoader
 
         # Start with extended builtin handlers

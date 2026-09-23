@@ -17,6 +17,7 @@ dependencies = [
     "fastapi>=0.109",
     "uvicorn[standard]>=0.27",
     "pydantic>=2.5",
+    "python-multipart>=0.0.9",  # UploadFile/Form routes (/api/analyze) fail at import without it
 
     # Persistence adapters
     "redis>=5.0",

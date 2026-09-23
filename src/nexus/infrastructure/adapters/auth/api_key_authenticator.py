@@ -6,8 +6,6 @@ database. Swap for a JWT or OAuth adapter by implementing the same port.
 
 from __future__ import annotations
 
-from typing import Dict
-
 from nexus.domain.exceptions import UnauthorizedError
 from nexus.domain.ports.auth import Authenticator
 from nexus.domain.value_objects.identity import Identity, Role
@@ -23,17 +21,20 @@ class ApiKeyAuthenticator(Authenticator):
     preventing accidental anonymous access in production.
     """
 
-    def __init__(self, keys: Dict[str, Dict]) -> None:
+    def __init__(self, keys: dict[str, dict]) -> None:
         self._keys = keys or {}
         self._empty = len(self._keys) == 0
+
+    @property
+    def has_keys(self) -> bool:
+        """Whether any API keys are configured (empty table = fail-closed)."""
+        return not self._empty
 
     async def authenticate(self, credential: str) -> Identity:
         if not credential:
             raise UnauthorizedError("Missing credentials")
         if self._empty:
-            raise UnauthorizedError(
-                "No API keys configured. Set NEXUS_API_KEYS in .env to allow access."
-            )
+            raise UnauthorizedError("No API keys configured. Set NEXUS_API_KEYS in .env to allow access.")
         record = self._keys.get(credential)
         if record is None:
             raise UnauthorizedError("Invalid credentials")

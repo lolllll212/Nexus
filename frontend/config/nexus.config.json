@@ -59,6 +59,52 @@
       },
       "webhookSecretEnv": "GITHUB_WEBHOOK_SECRET",
       "cosmosNode": "github"
+    },
+    "whatsapp": {
+      "enabled": false,
+      "provider": "meta",
+      "oauth": {
+        "clientIdEnv": "WHATSAPP_TOKEN",
+        "apiVersion": "v20.0"
+      },
+      "note": "WhatsApp Cloud API bridge — send/read messages as memories",
+      "cosmosNode": "whatsapp"
+    },
+    "telegram": {
+      "enabled": false,
+      "provider": "telegram",
+      "oauth": {
+        "clientIdEnv": "TELEGRAM_BOT_TOKEN"
+      },
+      "note": "Telegram bot bridge — chat with NEXUS from Telegram",
+      "cosmosNode": "telegram"
+    },
+    "threads": {
+      "enabled": false,
+      "provider": "meta",
+      "oauth": {
+        "clientIdEnv": "THREADS_TOKEN",
+        "apiVersion": "v1.0"
+      },
+      "note": "Threads bridge — auto-post drafted updates",
+      "cosmosNode": "threads"
+    },
+    "social": {
+      "enabled": false,
+      "provider": "nexus",
+      "oauth": {},
+      "note": "Social media automation — swarm-drafted cross-posts (RUN = generate)",
+      "cosmosNode": "social"
+    },
+    "youtube": {
+      "enabled": false,
+      "provider": "google",
+      "oauth": {
+        "clientIdEnv": "YOUTUBE_CLIENT_ID",
+        "clientSecretEnv": "YOUTUBE_CLIENT_SECRET"
+      },
+      "note": "YouTube bridge — draft titles/descriptions from memory",
+      "cosmosNode": "youtube"
     }
   },
   "cosmos": {
@@ -75,7 +121,12 @@
       { "id": "dream", "group": "subconscious", "val": 7, "color": "#ffe9c4", "desc": "Dreaming pipeline" },
       { "id": "gmail", "group": "integration", "val": 6, "color": "#ea4335", "desc": "Gmail bridge — ingest threads as memories" },
       { "id": "drive", "group": "integration", "val": 6, "color": "#34a853", "desc": "Drive bridge — markdown / docs as knowledge" },
-      { "id": "github", "group": "integration", "val": 6, "color": "#24292e", "desc": "GitHub bridge — repos/issues as concepts" },
+      { "id": "github", "group": "integration", "val": 6, "color": "#4078c0", "desc": "GitHub bridge — repos/issues as concepts" },
+      { "id": "whatsapp", "group": "integration", "val": 6, "color": "#25D366", "desc": "WhatsApp bridge — message ingest + sends (flag stub)" },
+      { "id": "telegram", "group": "integration", "val": 6, "color": "#229ED9", "desc": "Telegram bot bridge — chat with NEXUS anywhere (flag stub)" },
+      { "id": "threads", "group": "integration", "val": 6, "color": "#d9d9d9", "desc": "Threads bridge — auto-post drafted updates (flag stub)" },
+      { "id": "social", "group": "integration", "val": 7, "color": "#ff7a59", "desc": "Social media automation — swarm-drafted cross-posts. RUN drafts one now." },
+      { "id": "youtube", "group": "integration", "val": 6, "color": "#ff4e45", "desc": "YouTube bridge — titles/descriptions from memory (flag stub)" },
       { "id": "tools", "group": "self-evolution", "val": 7, "color": "#9dffe4", "desc": "Generated tools" }
     ],
     "links": [
@@ -90,12 +141,30 @@
       { "source": "N.E.X.U.S", "target": "gmail", "weight": 0.7 },
       { "source": "N.E.X.U.S", "target": "drive", "weight": 0.7 },
       { "source": "N.E.X.U.S", "target": "github", "weight": 0.7 },
+      { "source": "N.E.X.U.S", "target": "whatsapp", "weight": 0.7 },
+      { "source": "N.E.X.U.S", "target": "telegram", "weight": 0.7 },
+      { "source": "N.E.X.U.S", "target": "threads", "weight": 0.7 },
+      { "source": "N.E.X.U.S", "target": "social", "weight": 0.8 },
+      { "source": "N.E.X.U.S", "target": "youtube", "weight": 0.7 },
+      { "source": "social", "target": "threads", "weight": 0.75 },
+      { "source": "social", "target": "youtube", "weight": 0.75 },
+      { "source": "social", "target": "whatsapp", "weight": 0.7 },
+      { "source": "social", "target": "telegram", "weight": 0.7 },
+      { "source": "social", "target": "swarm", "weight": 0.8 },
+      { "source": "social", "target": "memory", "weight": 0.65 },
+      { "source": "whatsapp", "target": "telegram", "weight": 0.6 },
+      { "source": "threads", "target": "youtube", "weight": 0.6 },
       { "source": "gmail", "target": "memory", "weight": 0.6 },
       { "source": "drive", "target": "memory", "weight": 0.6 },
       { "source": "github", "target": "concept", "weight": 0.6 },
+      { "source": "whatsapp", "target": "memory", "weight": 0.6 },
+      { "source": "telegram", "target": "memory", "weight": 0.6 },
+      { "source": "youtube", "target": "concept", "weight": 0.6 },
+      { "source": "threads", "target": "concept", "weight": 0.6 },
       { "source": "gmail", "target": "drive", "weight": 0.5 },
       { "source": "drive", "target": "github", "weight": 0.5 },
       { "source": "gmail", "target": "github", "weight": 0.5 },
+      { "source": "gmail", "target": "whatsapp", "weight": 0.5 },
       { "source": "memory", "target": "concept", "weight": 0.9 },
       { "source": "memory", "target": "dream", "weight": 0.7 },
       { "source": "concept", "target": "Dinosaur", "weight": 0.5 },

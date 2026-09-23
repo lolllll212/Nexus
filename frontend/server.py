@@ -14,11 +14,14 @@ Endpoints:
                          sir"). Nothing reads it yet by design — prototype stays
                          standalone until proven.
 """
-import json, os, time
+import json, os, time, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PORT = int(os.environ.get("HOLO_PORT", "4890"))
+HOST = os.environ.get("HOLO_HOST", "127.0.0.1")
+# NEXUS backend to proxy brain calls to (chat, cosmos, graph, analyze, llm status)
+BACKEND = os.environ.get("NEXUS_BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")
 
 # the page, cached at boot: long-lived processes on macOS can silently lose file
 # access (TCC) hours in — serving the boot-time copy beats a 500 "missing" page
@@ -98,12 +101,68 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b)
 
+    # ---- proxy to the NEXUS backend: brain endpoints the deck/cosmos page call ----
+    def _proxy(self, method):
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except Exception:
+            n = 0
+        body = self.rfile.read(n) if n > 0 else None
+        req = urllib.request.Request(BACKEND + self.path, data=body, method=method)
+        for k in ("Content-Type", "Authorization", "Accept"):
+            if self.headers.get(k):
+                req.add_header(k, self.headers[k])
+        try:
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                data = resp.read()
+                self._send(resp.status, data, resp.headers.get("Content-Type", "application/json"))
+        except urllib.error.HTTPError as e:
+            try:
+                data = e.read()
+            except Exception:
+                data = json.dumps({"error": f"backend {e.code}"}).encode()
+            self._send(e.code, data, e.headers.get("Content-Type", "application/json") if e.headers else "application/json")
+        except Exception as e:
+            self._send(502, {"error": f"NEXUS backend unreachable at {BACKEND}: {e}"})
+
+    def _is_brain_path(self, p):
+        """Paths owned by the NEXUS backend (everything else stays local)."""
+        if p.startswith("/v1/"):
+            return True
+        if p.startswith(("/api/graph", "/api/analyze", "/api/cosmos", "/api/llm")):
+            return True
+        return False
+
     MIME = {".mjs": "text/javascript", ".js": "text/javascript",
             ".wasm": "application/wasm", ".task": "application/octet-stream",
             ".glb": "model/gltf-binary"}
 
     def do_GET(self):
         p = self.path.split("?")[0]
+        if self._is_brain_path(p):
+            return self._proxy("GET")
+        if p in ("/cosmos", "/cosmos.html"):
+            try:
+                return self._send(200, open(os.path.join(ROOT, "cosmos.html"), "rb").read(),
+                                  "text/html; charset=utf-8")
+            except OSError:
+                return self._send(404, {"error": "cosmos.html missing"})
+        if p.startswith(("/config/", "/state/", "/assets/")):
+            # static cosmos config + deck state + assets, served from the repo
+            safe = os.path.normpath(p.lstrip("/"))
+            if ".." not in safe:
+                full = os.path.join(ROOT, safe)
+                if os.path.isfile(full):
+                    ext = os.path.splitext(full)[1]
+                    ctype = {"json": "application/json", ".png": "image/png",
+                             ".jpg": "image/jpeg"}.get(ext, "application/octet-stream")
+                    if ext == ".json":
+                        ctype = "application/json"
+                    try:
+                        return self._send(200, open(full, "rb").read(), ctype)
+                    except OSError:
+                        pass
+            return self._send(404, {"error": "not found"})
         if p in ("/", "/holo.html"):
             try:
                 body = open(os.path.join(ROOT, "holo.html"), "rb").read()
@@ -143,6 +202,8 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
         p = self.path.split("?")[0]
+        if self._is_brain_path(p):
+            return self._proxy("POST")
         if p == "/api/diag":              # the page phones home its own crash report
             try:
                 n = int(self.headers.get("Content-Length") or 0)
@@ -158,6 +219,8 @@ class H(BaseHTTPRequestHandler):
                 pass
             return self._send(200, {"ok": True})
         if p != "/api/state":
+            if p.startswith("/api/"):       # unknown /api — let the backend answer
+                return self._proxy("POST")
             return self._send(404, {"error": "not found"})
         try:
             n = int(self.headers.get("Content-Length") or 0)
@@ -176,5 +239,6 @@ class H(BaseHTTPRequestHandler):
         return self._send(200, {"ok": True})
 
 if __name__ == "__main__":
-    print(f"HOLO deck on http://localhost:{PORT}  ·  notes: {notes_dir()}")
-    ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
+    print(f"HOLO deck on http://{HOST}:{PORT}  ·  notes: {notes_dir()}  ·  brain: {BACKEND}")
+    print(f"COSMOS mesh on http://{HOST}:{PORT}/cosmos")
+    ThreadingHTTPServer((HOST, PORT), H).serve_forever()

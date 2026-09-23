@@ -109,7 +109,22 @@ NEXUS_EMBEDDING_DIMENSION=384
 python -m uvicorn nexus.infrastructure.api.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-### 4. Talk to It
+### 4. Open the UI
+
+The NEXUS UI ships in the repo and is served by the backend itself — no separate server, no keys needed on localhost:
+
+| Page | URL | What it is |
+|---|---|---|
+| **HOLO deck** | `http://localhost:8000/` | Hand-gesture deck (orbs, notes, 3D props, file-drop analysis) |
+| **COSMOS** | `http://localhost:8000/cosmos` | JARVIS-style 3D automation mesh of the whole system |
+
+**Talk to it (voice → LM Studio):** on either page press **M** (or click the reactor / MIC chip), speak, and the loop is: browser mic → `POST /v1/chat` → **LM Studio** → answer spoken back by the local browser voice. Typed chat works in the TALK boxes too — session memory persists via `localStorage`.
+
+**Automate from the mesh (COSMOS page):** every subsystem is a node with a live status ring — click **dream** ▸ run a dream cycle, **swarm** ▸ run a task, **tools** ▸ self-evolve a new tool, **gmail/drive/github** ▸ toggle bridges. The left inspector shows connections, the right legend filters groups, and the reactor dial shows the LM Studio model + state. Edge pulses mark activity.
+
+> On localhost, requests from the UI are admitted without an API key (`NEXUS_LOCAL_UI_AUTH=auto` — only while `NEXUS_API_KEYS` is empty, only for loopback clients). Remote browsers still need a key: `localStorage.nexus_api_key = "sk-…"` in the console, or send the `Authorization: Bearer` header.
+
+### 5. Talk to It (API)
 
 ```bash
 # OpenAI-compatible endpoint
@@ -199,6 +214,21 @@ The agent will **autonomously**:
 |---|---|---|
 | `/v1/system/dream` | POST | Manually trigger a dream cycle |
 | `/v1/health` | GET | Health check |
+
+### UI + Cosmos (automation mesh)
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/` | GET | HOLO hand-gesture deck (the NEXUS UI) |
+| `/cosmos` | GET | JARVIS-style 3D automation mesh page |
+| `/api/cosmos` | GET | Live mesh: config joints + real-time status per node |
+| `/api/cosmos/trigger` | POST | Run a node's automation (dream, swarm, tools, integrations…) |
+| `/api/cosmos/integrations/{name}` | POST | Enable/disable a bridge (gmail, drive, github) |
+| `/api/llm/status` | GET | LLM probe — LM Studio reachability, model, latency |
+| `/api/tree`, `/api/notes`, `/api/props` | GET | HOLO deck content (orb folders, notes, 3D props) |
+| `/api/state` | GET/POST | Deck gesture state ('Card pinned, sir') |
+| `/api/graph` | GET | Knowledge graph feed for the 3D views |
+| `/api/analyze` | POST | File-drop analysis (public, HOLO ingest) |
 
 ---
 

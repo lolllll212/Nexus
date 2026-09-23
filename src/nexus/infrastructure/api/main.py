@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response, HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from nexus.domain.exceptions import (
@@ -30,9 +30,22 @@ from nexus.domain.exceptions import (
     ToolNotFoundError,
     UnauthorizedError,
 )
-from nexus.infrastructure.di.container import Config, Container
 from nexus.infrastructure.api.dependencies import get_container
-from nexus.infrastructure.api.routes import analyze, chat, goals, graph, memory, tools, system, swarm, coding
+from nexus.infrastructure.api.paths import frontend_dir
+from nexus.infrastructure.api.routes import (
+    analyze,
+    chat,
+    coding,
+    cosmos,
+    goals,
+    graph,
+    holo,
+    memory,
+    swarm,
+    system,
+    tools,
+)
+from nexus.infrastructure.di.container import Config, Container
 
 
 @asynccontextmanager
@@ -114,13 +127,33 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(coding.router)
     app.include_router(graph.router)
     app.include_router(analyze.router)
+    app.include_router(holo.router)
+    app.include_router(cosmos.router)
 
-    @app.get("/", tags=["meta"])
-    async def root() -> dict:
+    @app.get("/", response_class=HTMLResponse, tags=["meta"], include_in_schema=False)
+    async def root() -> HTMLResponse:
+        """The NEXUS UI (HOLO deck) — the frontend ships with the repo."""
+        root_dir = frontend_dir()
+        if root_dir is not None and (root_dir / "holo.html").is_file():
+            return HTMLResponse((root_dir / "holo.html").read_text(encoding="utf-8"))
+        return HTMLResponse("<h1>NEXUS</h1><p>a new kind of brain — see <a href='/docs'>/docs</a></p>")
+
+    @app.get("/cosmos", response_class=HTMLResponse, tags=["meta"], include_in_schema=False)
+    async def cosmos_page() -> HTMLResponse:
+        """The COSMOS — JARVIS-style 3D automation mesh of the whole system."""
+        root_dir = frontend_dir()
+        if root_dir is not None and (root_dir / "cosmos.html").is_file():
+            return HTMLResponse((root_dir / "cosmos.html").read_text(encoding="utf-8"))
+        return HTMLResponse("<h1>COSMOS</h1><p>frontend/cosmos.html missing.</p>", status_code=404)
+
+    @app.get("/info", tags=["meta"])
+    async def info() -> dict:
         return {
             "name": "NEXUS",
             "tagline": "a new kind of brain",
             "version": "0.1.0",
+            "ui": "/",
+            "cosmos": "/cosmos",
             "conscious_loop": "/v1/chat",
             "subconscious": "/v1/system/dream",
         }
@@ -135,17 +168,15 @@ def create_app(config: Config | None = None) -> FastAPI:
     @app.get("/dashboard", tags=["meta"], include_in_schema=False)
     async def dashboard() -> HTMLResponse:
         from pathlib import Path
+
         dashboard_path = Path(__file__).parent / "static" / "dashboard.html"
         content = dashboard_path.read_text(encoding="utf-8")
         return HTMLResponse(content=content)
 
-    # Serve the 3D frontend (holo-gestures) — mounted last so /v1/* API routes take precedence
-    from pathlib import Path as _FrontendPath
-
-    _frontend_dir = _FrontendPath(__file__).resolve().parents[4] / "frontend"
-    if not _frontend_dir.exists():
-        _frontend_dir = _FrontendPath("frontend")
-    if _frontend_dir.exists():
+    # Serve the 3D frontend (holo-gestures) — mounted last so /v1/* + /api/*
+    # routes and the explicit / and /cosmos pages take precedence over files.
+    _frontend_dir = frontend_dir()
+    if _frontend_dir is not None:
         app.mount("/", StaticFiles(directory=str(_frontend_dir), html=True), name="frontend")
 
     return app
