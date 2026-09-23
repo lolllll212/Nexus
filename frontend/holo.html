@@ -88,7 +88,7 @@
     line-height:2; color:#8fd8c2; background:rgba(8,14,18,.74); border:1px solid rgba(125,255,217,.22);
     border-radius:12px; padding:9px 15px; }
   #legend b { color:#7dffd9; font-weight:600; }
-  #ui { position:fixed; z-index:5; left:0; right:0; top:0; display:flex; align-items:center;
+  #ui { position:fixed; z-index:11; left:0; right:0; top:0; display:flex; align-items:center;
         gap:14px; padding:14px 20px; pointer-events:none; }
   #ui .chip { pointer-events:auto; font-family:"SF Mono",ui-monospace,monospace; font-size:11px;
         letter-spacing:.14em; padding:8px 16px; border-radius:99px; cursor:pointer; user-select:none;
@@ -125,8 +125,64 @@
   /* 3D Force Graph — full-screen dark knowledge graph */
   #3d-graph { position:fixed; inset:0; width:100%; height:100%; background:#000000; z-index:8; display:block; }
   #3d-graph canvas { display:block; }
+
+  /* ══════════ J.A.R.V.I.S. DASHBOARD — overlay over #3d-graph ══════════ */
+  #jv-left, #jv-right { position:fixed; top:62px; bottom:14px; width:262px; z-index:10; pointer-events:none;
+    display:flex; flex-direction:column; gap:10px; font-family:'Courier New','Fira Code',ui-monospace,monospace; }
+  #jv-left { left:14px; } #jv-right { right:14px; align-items:stretch; }
+  .jv-panel { pointer-events:auto; background:rgba(15,15,20,0.8); backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px);
+    border:1px solid rgba(125,255,217,0.18); border-radius:10px; padding:11px 13px; color:#bcd4c9; }
+  .jv-h { font-size:.8rem; letter-spacing:1px; text-transform:uppercase; color:#666; margin-bottom:7px; display:flex; justify-content:space-between; }
+  .jv-h em { font-style:normal; color:#3f675b; font-size:.62rem; letter-spacing:.05em; }
+  #jv-head .jv-name { font-size:14px; letter-spacing:.22em; color:#effff8; text-shadow:0 0 12px rgba(125,255,217,.55); }
+  #jv-head .jv-stats { margin-top:5px; font-size:.68rem; letter-spacing:.12em; color:#6f8a80; }
+  #jv-head .jv-stats b { color:#7dffd9; font-weight:normal; }
+  #jv-search { width:100%; box-sizing:border-box; background:rgba(255,255,255,.05); border:1px solid rgba(125,255,217,.22);
+    border-radius:8px; padding:8px 10px; color:#e8fff7; font-family:inherit; font-size:.78rem; letter-spacing:.06em; }
+  #jv-search:focus { outline:none; border-color:rgba(125,255,217,.55); box-shadow:0 0 10px rgba(125,255,217,.25); }
+  #jv-inspector { font-size:.72rem; line-height:1.65; color:#8fb3a6; min-height:96px; max-height:30vh; overflow:auto; }
+  #jv-inspector .ins-id { color:#effff8; font-size:.85rem; letter-spacing:.08em; }
+  #jv-inspector .ins-chip { display:inline-block; margin:2px 4px 0 0; padding:1px 7px; border-radius:99px; font-size:.62rem; letter-spacing:.08em; border:1px solid rgba(125,255,217,.3); color:#7dffd9; }
+  #jv-inspector .dim { color:#5a6b62; }
+  #jv-hubs { list-style:none; margin:0; padding:0; font-size:.74rem; max-height:22vh; overflow:auto; }
+  #jv-hubs li { display:flex; justify-content:space-between; padding:3px 4px; cursor:pointer; color:#9fc9ba; border-radius:5px; }
+  #jv-hubs li:hover { background:rgba(125,255,217,.09); color:#e8fff7; }
+  #jv-hubs li b { font-weight:normal; color:#ffb257; text-shadow:0 0 8px rgba(255,178,87,.4); }
+  .jv-force { display:flex; align-items:center; gap:8px; font-size:.68rem; letter-spacing:.1em; color:#8fb3a6; margin-top:6px; }
+  .jv-force span { width:74px; } .jv-force output { width:36px; text-align:right; color:#7dffd9; }
+  .jv-force input[type=range] { flex:1; -webkit-appearance:none; appearance:none; height:3px; border-radius:2px;
+    background:linear-gradient(90deg, rgba(87,255,176,.9), rgba(87,200,255,.9)); outline:none; }
+  .jv-force input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:11px; height:11px; border-radius:50%;
+    background:#effff8; box-shadow:0 0 8px rgba(125,255,217,.9); cursor:pointer; }
+  #jv-filter { list-style:none; margin:0; padding:0; font-size:.74rem; max-height:26vh; overflow:auto; }
+  #jv-filter li { display:flex; align-items:center; gap:8px; padding:3px 4px; cursor:pointer; color:#9fc9ba; border-radius:5px; }
+  #jv-filter li:hover { background:rgba(125,255,217,.08); }
+  #jv-filter li.off { opacity:.35; }
+  #jv-filter .dot { width:9px; height:9px; border-radius:50%; flex:none; box-shadow:0 0 9px currentColor; }
+  #jv-filter b { font-weight:normal; color:#888f97; margin-left:auto; }
+  #jv-dial { display:flex; align-items:center; gap:12px; }
+  #jv-ring { position:relative; width:74px; height:74px; flex:none; border-radius:50%;
+    background:conic-gradient(from 0deg, rgba(125,255,217,.95) calc(var(--p,35)*1%), rgba(125,255,217,.08) 0);
+    -webkit-mask:radial-gradient(farthest-side, transparent 62%, #000 63%); mask:radial-gradient(farthest-side, transparent 62%, #000 63%);
+    animation:jv-spin 9s linear infinite; }
+  #jv-ring::after { content:''; position:absolute; inset:18px; border-radius:50%; border:1px solid rgba(125,255,217,.35);
+    box-shadow:inset 0 0 14px rgba(125,255,217,.35); }
+  @keyframes jv-spin { to { transform:rotate(360deg); } }
+  #jv-dial .nm { font-size:.72rem; letter-spacing:.24em; color:#effff8; }
+  #jv-dial .st { margin-top:4px; font-size:.62rem; letter-spacing:.18em; color:#57ffb0; text-shadow:0 0 8px rgba(87,255,176,.6); }
+  #jv-dial .mdl { margin-top:3px; font-size:.6rem; letter-spacing:.08em; color:#6f8a80; word-break:break-all; }
+  #jv-toggles { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .jv-tog { font-size:.62rem; letter-spacing:.16em; padding:7px 6px; text-align:center; color:#8a97a0; border-radius:7px;
+    border:1px solid rgba(255,255,255,.12); cursor:pointer; user-select:none; }
+  .jv-tog.on { color:#effff8; border-color:rgba(125,255,217,.55); background:rgba(125,255,217,.12); text-shadow:0 0 8px rgba(125,255,217,.7); }
+  #jv-eyes { position:fixed; left:14px; bottom:14px; width:196px; height:130px; z-index:12; display:none; border-radius:10px; overflow:hidden;
+    border:1px solid rgba(125,255,217,.3); box-shadow:0 10px 40px rgba(0,0,0,.7); background:#000; pointer-events:none; }
+  #jv-eyes video { width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+  #jv-eyes .tag { position:absolute; left:8px; top:6px; font-family:inherit; font-size:.58rem; letter-spacing:.24em; color:#7dffd9; text-shadow:0 0 6px rgba(0,0,0,.9); }
+  body.jv-min .jv-panel, body.jv-min #integration-mesh, body.jv-min #ui, body.jv-min #ring { display:none !important; }
+  @media (max-width:1080px){ #jv-left, #jv-right { display:none; } }
   /* Integration mesh — cosmos joint structure */
-  #integration-mesh { position:fixed; right:14px; top:58px; width:360px; max-height:62vh; z-index:9; pointer-events:auto;
+  #integration-mesh { position:fixed; right:292px; top:58px; width:360px; max-height:62vh; z-index:9; pointer-events:auto;
     background:rgba(8,12,16,0.92); border:1px solid rgba(125,255,217,0.28); border-radius:16px; backdrop-filter:blur(12px);
     -webkit-backdrop-filter:blur(12px); box-shadow:0 18px 60px rgba(0,0,0,0.6); overflow:hidden; display:flex; flex-direction:column; }
   #integration-mesh header { padding:12px 16px 8px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid rgba(125,255,217,0.15); }
@@ -172,6 +228,51 @@
     </div>
   </div>
 </div>
+<!-- ══════════ J.A.R.V.I.S. DASHBOARD OVERLAY (bound to the 3d-force-graph) ══════════ -->
+<aside id="jv-left">
+  <div class="jv-panel" id="jv-head">
+    <div class="jv-name">AI WORKSHOP&nbsp;OS</div>
+    <div class="jv-stats"><b id="jv-nnodes">0</b> nodes&nbsp;·&nbsp;<b id="jv-nlinks">0</b> connections&nbsp;·&nbsp;<span id="jv-live">SYNC</span></div>
+  </div>
+  <div class="jv-panel">
+    <input id="jv-search" placeholder="Search the brain…" autocomplete="off"/>
+  </div>
+  <div class="jv-panel">
+    <div class="jv-h">Inspector <em>select</em></div>
+    <div id="jv-inspector">Click a node to focus it. Use the FORCE sliders below to reshape the constellation, the FILTER legend to isolate groups, and TOP HUBS to jump to the most-connected nodes.</div>
+  </div>
+  <div class="jv-panel">
+    <div class="jv-h">Top Hubs <em>by degree</em></div>
+    <ul id="jv-hubs"></ul>
+  </div>
+  <div class="jv-panel">
+    <div class="jv-h">Forces <em>live</em></div>
+    <div class="jv-force"><span>Repel</span><input id="jv-repel" type="range" min="10" max="400" step="5" value="120"/><output id="jv-repel-v">120</output></div>
+    <div class="jv-force"><span>Link length</span><input id="jv-link" type="range" min="10" max="320" step="5" value="80"/><output id="jv-link-v">80</output></div>
+  </div>
+</aside>
+<aside id="jv-right">
+  <div class="jv-panel">
+    <div class="jv-h">Filter <em>groups</em></div>
+    <ul id="jv-filter"></ul>
+  </div>
+  <div class="jv-panel">
+    <div id="jv-dial">
+      <div id="jv-ring" style="--p:35"></div>
+      <div><div class="nm">J.A.R.V.I.S.</div><div class="st" id="jv-status">ONLINE</div><div class="mdl" id="jv-model">knowledge graph</div></div>
+    </div>
+  </div>
+  <div class="jv-panel">
+    <div class="jv-h">Modes</div>
+    <div id="jv-toggles">
+      <div class="jv-tog" id="jv-t-eyes">EYES</div>
+      <div class="jv-tog" id="jv-t-watch">WATCH</div>
+      <div class="jv-tog" id="jv-t-holo">HOLO</div>
+      <div class="jv-tog on" id="jv-t-focus">FOCUS</div>
+    </div>
+  </div>
+</aside>
+<div id="jv-eyes"><span class="tag">EYES · CAM</span><video id="jv-eyes-v" autoplay playsinline muted></video></div>
 <video id="cam" autoplay playsinline muted></video>
 <canvas id="stars"></canvas>
 <div id="vignette"></div>
@@ -1639,6 +1740,200 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const graphEl = document.getElementById('3d-graph');
 if (graphEl) {
   graphEl.style.background = '#000000';
+
+  /* ═══════════ J.A.R.V.I.S. DASHBOARD — wiring for the 3d-force-graph ═══════════ */
+  const jv = {
+    g: id => document.getElementById(id),
+    palette: ['#7dffd9','#ffb257','#57c8ff','#f38ba8','#ffcf7d','#c8a2ff','#89b4fa','#a6da95','#94e2d5','#ee99a0'],
+    groupColors: {}, // group -> hex, assigned in order of first sight
+    deg: new Map(), links: [], nodes: [], selected: null,
+    filterOff: new Set(), focusOn: true, watchTimer: null, eyesStream: null,
+    groupColor(g) {
+      g = String(g || 'unknown');
+      if (!this.groupColors[g]) this.groupColors[g] = this.palette[Object.keys(this.groupColors).length % this.palette.length];
+      return this.groupColors[g];
+    },
+    computeDeg() {
+      this.deg = new Map(this.nodes.map(n => [String(n.id), 0]));
+      for (const l of this.links) {
+        const a = String(l.source && l.source.id !== undefined ? l.source.id : l.source);
+        const b = String(l.target && l.target.id !== undefined ? l.target.id : l.target);
+        if (this.deg.has(a)) this.deg.set(a, this.deg.get(a) + 1);
+        if (this.deg.has(b)) this.deg.set(b, this.deg.get(b) + 1);
+      }
+    },
+    neighborsOf(id) {
+      const out = [];
+      for (const l of this.links) {
+        const a = String(l.source && l.source.id !== undefined ? l.source.id : l.source);
+        const b = String(l.target && l.target.id !== undefined ? l.target.id : l.target);
+        if (a === id) out.push(b); else if (b === id) out.push(a);
+      }
+      return out;
+    },
+    setNodeDim(n, dim) {
+      const obj = n.__threeObj; if (!obj) return;
+      obj.traverse(c => {
+        if (!c.material) return;
+        const mats = Array.isArray(c.material) ? c.material : [c.material];
+        mats.forEach(m => { m.transparent = dim; m.opacity = dim ? 0.13 : 1; m.needsUpdate = true; });
+      });
+    },
+    esc: s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),
+    applyDim(graph) {
+      const sel = this.selected ? String(this.selected.id) : null;
+      const focusSet = sel && this.focusOn ? new Set([sel, ...this.neighborsOf(sel)]) : null;
+      const visible = new Set();
+      for (const n of this.nodes) {
+        const id = String(n.id);
+        const inFilter = !this.filterOff.has(String(n.group || 'unknown'));
+        const vis = inFilter && (!focusSet || focusSet.has(id));
+        if (vis) visible.add(id);
+        this.setNodeDim(n, !vis);
+      }
+      graph.linkColor(l => {
+        const a = String(l.source && l.source.id !== undefined ? l.source.id : l.source);
+        const b = String(l.target && l.target.id !== undefined ? l.target.id : l.target);
+        const on = visible.has(a) && visible.has(b);
+        return on ? `rgba(125,255,217,${sel ? 0.65 : 0.45})` : 'rgba(125,255,217,0.05)';
+      });
+    },
+    select(node, graph) {
+      this.selected = node || null;
+      const ins = this.g('jv-inspector');
+      if (!node) {
+        ins.innerHTML = 'Click a node to focus it. Use the FORCE sliders to reshape the constellation, the FILTER legend to isolate groups, and TOP HUBS to jump to the most-connected nodes.';
+        this.g('jv-status').textContent = 'ONLINE';
+        this.g('jv-ring').style.setProperty('--p', 35);
+        this.applyDim(graph);
+        return;
+      }
+      const id = String(node.id), grp = String(node.group || 'unknown');
+      const deg = this.deg.get(id) || 0, nb = this.neighborsOf(id);
+      ins.innerHTML =
+        `<div class="ins-id">◆ ${this.esc(id)}</div>` +
+        `<span class="ins-chip" style="border-color:${this.groupColor(grp)};color:${this.groupColor(grp)}">${this.esc(grp)}</span>` +
+        `<span class="ins-chip">degree ${deg}</span><span class="ins-chip">val ${node.val || 1}</span>` +
+        `<div style="margin-top:6px" class="dim">pos ${(node.x||0).toFixed(1)}, ${(node.y||0).toFixed(1)}, ${(node.z||0).toFixed(1)}</div>` +
+        (nb.length ? `<div style="margin-top:4px" class="dim">links → ${nb.slice(0, 8).map(this.esc, this).join(' · ')}${nb.length > 8 ? ' …' : ''}</div>` : '') +
+        `<div class="dim" style="margin-top:6px">ESC or click space to release${this.focusOn ? ' · FOCUS isolating neighbors' : ''}</div>`;
+      // camera fly-in
+      const k = 2.3;
+      graph.cameraPosition({ x: (node.x || 0) * k, y: (node.y || 0) * k, z: (node.z || 0) * k + 60 },
+                           { x: node.x, y: node.y, z: node.z }, 1200);
+      const mx = Math.max(1, ...this.deg.values());
+      this.g('jv-ring').style.setProperty('--p', Math.max(8, Math.round(100 * deg / mx)));
+      this.g('jv-status').textContent = 'FOCUSED';
+      this.applyDim(graph);
+    },
+    buildHubs(graph) {
+      const ul = this.g('jv-hubs'); if (!ul) return;
+      const top = [...this.deg.entries()].sort((x, y) => y[1] - x[1]).slice(0, 10);
+      ul.innerHTML = top.map(([id, d]) => `<li data-id="${this.esc(id)}"><span>${this.esc(id)}</span><b>[${d}]</b></li>`).join('');
+      ul.querySelectorAll('li').forEach(li => li.addEventListener('click', () => {
+        const n = this.nodes.find(nn => String(nn.id) === li.dataset.id);
+        if (n) this.select(n, graph);
+      }));
+    },
+    buildFilter() {
+      const ul = this.g('jv-filter'); if (!ul) return;
+      const counts = new Map();
+      for (const n of this.nodes) { const g = String(n.group || 'unknown'); this.groupColor(g); counts.set(g, (counts.get(g) || 0) + 1); }
+      const rows = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+      ul.innerHTML = rows.map(([g, c]) =>
+        `<li data-g="${this.esc(g)}"${this.filterOff.has(g) ? ' class="off"' : ''}>` +
+        `<span class="dot" style="background:${this.groupColor(g)};color:${this.groupColor(g)}"></span>` +
+        `<span>${this.esc(g)}</span><b>${c}</b></li>`).join('');
+      ul.querySelectorAll('li').forEach(li => li.addEventListener('click', () => {
+        const g = li.dataset.g;
+        this.filterOff.has(g) ? this.filterOff.delete(g) : this.filterOff.add(g);
+        li.classList.toggle('off', this.filterOff.has(g));
+        if (this._graph) this.applyDim(this._graph);
+      }));
+    },
+    wire(graph, gData) {
+      this._graph = graph; this.nodes = gData.nodes; this.links = gData.links;
+      this.computeDeg();
+      this.g('jv-nnodes').textContent = gData.nodes.length;
+      this.g('jv-nlinks').textContent = gData.links.length;
+      this.buildHubs(graph); this.buildFilter(); this.applyDim(graph);
+      // physics sliders → live d3 forces
+      const repel = this.g('jv-repel'), link = this.g('jv-link');
+      const chg = graph.d3Force('charge'), lnk = graph.d3Force('link');
+      if (chg && typeof chg.strength === 'function') { try { const s = -chg.strength(); if (s > 0) { repel.value = s; this.g('jv-repel-v').textContent = s; } } catch (e) {} }
+      if (lnk && typeof lnk.distance === 'function') { try { const d = lnk.distance(); if (d > 0) { link.value = d; this.g('jv-link-v').textContent = d; } } catch (e) {} }
+      const applyRepel = () => { this.g('jv-repel-v').textContent = repel.value; const f = graph.d3Force('charge'); if (f && f.strength) f.strength(-repel.value); graph.d3ReheatSimulation(); };
+      const applyLink  = () => { this.g('jv-link-v').textContent  = link.value;  const f = graph.d3Force('link');   if (f && f.distance) f.distance(+link.value); graph.d3ReheatSimulation(); };
+      repel.addEventListener('input', applyRepel);
+      link.addEventListener('input', applyLink);
+      // search
+      const sb = this.g('jv-search');
+      sb.addEventListener('keydown', e => {
+        if (e.key !== 'Enter') return;
+        const q = sb.value.trim().toLowerCase(); if (!q) return;
+        const n = this.nodes.find(nn => String(nn.id).toLowerCase().includes(q));
+        if (n) { this.select(n, graph); sb.blur(); }
+      });
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') {
+          if (document.body.classList.contains('jv-min')) document.body.classList.remove('jv-min');
+          else if (this.selected) this.select(null, graph);
+        }
+      });
+      graph.onBackgroundClick(() => this.select(null, graph));
+      // mode toggles
+      this.g('jv-t-focus').addEventListener('click', () => {
+        this.focusOn = !this.focusOn;
+        this.g('jv-t-focus').classList.toggle('on', this.focusOn);
+        this.applyDim(graph);
+      });
+      this.g('jv-t-holo').addEventListener('click', () => {
+        document.body.classList.toggle('jv-min'); // pure constellation view — ESC brings the chrome back
+      });
+      this.g('jv-t-eyes').addEventListener('click', async () => {
+        const pill = this.g('jv-eyes'), v = this.g('jv-eyes-v'), chip = this.g('jv-t-eyes');
+        const on = pill.style.display !== 'block';
+        pill.style.display = on ? 'block' : 'none'; chip.classList.toggle('on', on);
+        if (on && !v.srcObject) {
+          try {
+            const camV = document.getElementById('cam');
+            v.srcObject = (camV && camV.srcObject) || await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+            this.eyesStream = v.srcObject;
+          } catch (e) { pill.querySelector('.tag').textContent = 'EYES · DENIED'; }
+        }
+      });
+      this.g('jv-t-watch').addEventListener('click', () => {
+        const chip = this.g('jv-t-watch');
+        if (this.watchTimer) { clearInterval(this.watchTimer); this.watchTimer = null; chip.classList.remove('on'); return; }
+        chip.classList.add('on');
+        const sig = () => this.nodes.length + ':' + this.links.length + ':' + this.nodes.map(n => n.id).join('|');
+        let last = sig();
+        this.watchTimer = setInterval(async () => {
+          try {
+            const d = await (await fetch('/api/graph')).json();
+            const ns = { nodes: d.nodes || [], links: d.links || [] };
+            const s = ns.nodes.length + ':' + ns.links.length + ':' + ns.nodes.map(n => n.id).join('|');
+            if (s === last) return;
+            last = s;
+            this.nodes = ns.nodes; this.links = ns.links;
+            graph.graphData(ns); this.computeDeg();
+            this.g('jv-nnodes').textContent = ns.nodes.length;
+            this.g('jv-nlinks').textContent = ns.links.length;
+            this.buildHubs(graph); this.buildFilter();
+            const lv = this.g('jv-live'); lv.textContent = 'Δ UPDATED'; lv.style.color = '#ffb257';
+            setTimeout(() => { lv.textContent = 'LIVE'; lv.style.color = ''; }, 3000);
+          } catch (e) {}
+        }, 8000);
+        this.g('jv-live').textContent = 'LIVE';
+      });
+      // LLM model line on the dial
+      fetch('/api/llm/status').then(r => r.json()).then(s => {
+        const m = (s && s.model) || 'knowledge graph';
+        this.g('jv-model').textContent = m + (s && s.reachable ? ' · ok' : ' · offline');
+      }).catch(() => {});
+    }
+  };
+
   const loader = new GLTFLoader();
   let triceratopsScene = null;
   let apolloScene = null;
@@ -1713,15 +2008,18 @@ if (graphEl) {
         }
         const isMemory = grp === 'memory';
         const geom = new THREE.SphereGeometry(isMemory ? 4 : 7, 16, 16);
-        const mat = new THREE.MeshLambertMaterial({ color: isMemory ? 0x7dffd9 : (grp === 'Dinosaur' ? 0x8ecae6 : grp === 'Space' ? 0xffd166 : grp === 'core' ? 0xffe9c4 : 0xa9ffe6) });
+        // node color matches the FILTER legend dot (per-group palette)
+        const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(jv.groupColor(isMemory ? 'memory' : (grp || 'unknown'))) });
         return new THREE.Mesh(geom, mat);
       })
       .nodeLabel(node => `${node.id} (${node.group})`)
-      .onNodeClick(node => console.log('[graph] node click', node));
+      .onNodeClick(node => jv.select(node, graph));
     window.addEventListener('resize', () => {
       if (graph.width) graph.width(window.innerWidth);
       if (graph.height) graph.height(window.innerHeight);
     });
+    jv.wire(graph, gData);   // J.A.R.V.I.S. dashboard comes alive
+    setTimeout(() => { try { const f = graph.d3Force('charge'); if (f && f.strength) f.strength(-jv.g('jv-repel').value); const lf = graph.d3Force('link'); if (lf && lf.distance) lf.distance(+jv.g('jv-link').value); graph.d3ReheatSimulation(); } catch(e){} }, 600);
     // also merge cosmos config if available for richer links
     fetch('/config/nexus.config.json').then(r=>r.json()).then(cfg=>{
       if(cfg.cosmos && cfg.cosmos.nodes) console.log('[cosmos] config loaded', cfg.cosmos.nodes.length);
