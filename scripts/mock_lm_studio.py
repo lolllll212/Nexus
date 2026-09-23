@@ -16,10 +16,13 @@ Stdlib only. Dev/demo tool — never used by the application itself.
 """
 
 import json
+import os
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-PORT = 1234
+# 0.0.0.0 so the sandbox preview proxy (and LAN) can see it too; loopback keeps working.
+HOST = os.environ.get("MOCK_LM_HOST", "0.0.0.0")
+PORT = int(os.environ.get("MOCK_LM_PORT", "1234"))
 
 
 class H(BaseHTTPRequestHandler):
@@ -96,5 +99,5 @@ class H(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print(f"mock LM Studio on http://127.0.0.1:{PORT}/v1")
-    ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
+    print(f"mock LM Studio on http://127.0.0.1:{PORT}/v1 (listening on {HOST}:{PORT})")
+    ThreadingHTTPServer((HOST, PORT), H).serve_forever()
