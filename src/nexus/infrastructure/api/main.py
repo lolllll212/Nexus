@@ -32,7 +32,7 @@ from nexus.domain.exceptions import (
 )
 from nexus.infrastructure.di.container import Config, Container
 from nexus.infrastructure.api.dependencies import get_container
-from nexus.infrastructure.api.routes import chat, goals, memory, tools, system, swarm, coding
+from nexus.infrastructure.api.routes import analyze, chat, goals, graph, memory, tools, system, swarm, coding
 
 
 @asynccontextmanager
@@ -112,6 +112,8 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(tools.router)
     app.include_router(system.router)
     app.include_router(coding.router)
+    app.include_router(graph.router)
+    app.include_router(analyze.router)
 
     @app.get("/", tags=["meta"])
     async def root() -> dict:
@@ -136,6 +138,15 @@ def create_app(config: Config | None = None) -> FastAPI:
         dashboard_path = Path(__file__).parent / "static" / "dashboard.html"
         content = dashboard_path.read_text(encoding="utf-8")
         return HTMLResponse(content=content)
+
+    # Serve the 3D frontend (holo-gestures) — mounted last so /v1/* API routes take precedence
+    from pathlib import Path as _FrontendPath
+
+    _frontend_dir = _FrontendPath(__file__).resolve().parents[4] / "frontend"
+    if not _frontend_dir.exists():
+        _frontend_dir = _FrontendPath("frontend")
+    if _frontend_dir.exists():
+        app.mount("/", StaticFiles(directory=str(_frontend_dir), html=True), name="frontend")
 
     return app
 
