@@ -13,7 +13,8 @@ import {
   Zap,
   Layers,
   Eye,
-  Camera
+  Camera,
+  Code
 } from 'lucide-react';
 
 interface TopNavigationProps {
