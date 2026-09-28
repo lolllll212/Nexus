@@ -98,9 +98,16 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b)
 
-    MIME = {".mjs": "text/javascript", ".js": "text/javascript",
-            ".wasm": "application/wasm", ".task": "application/octet-stream",
-            ".glb": "model/gltf-binary"}
+    MIME = {
+        ".mjs": "text/javascript",
+        ".js": "text/javascript",
+        ".css": "text/css",
+        ".wasm": "application/wasm",
+        ".task": "application/octet-stream",
+        ".glb": "model/gltf-binary",
+        ".svg": "image/svg+xml",
+        ".json": "application/json",
+    }
 
     def do_GET(self):
         p = self.path.split("?")[0]
@@ -125,11 +132,10 @@ class H(BaseHTTPRequestHandler):
             except OSError:
                 names = []
             return self._send(200, names)
-        if p.startswith(("/vendor/", "/props/")):
-            # self-hosted tracking libs: no CDN in the path, so ad-block extensions
-            # and offline machines can't kill the hand tracking
+        if p.startswith(("/vendor/", "/props/", "/assets/")):
+            # self-hosted tracking libs and built frontend assets
             safe = os.path.normpath(p.lstrip("/"))
-            if safe.startswith(("vendor", "props")) and ".." not in safe:
+            if safe.startswith(("vendor", "props", "assets")) and ".." not in safe:
                 full = os.path.join(ROOT, safe)
                 if os.path.isfile(full):
                     ext = os.path.splitext(full)[1]
