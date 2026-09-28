@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List
 from uuid import uuid4
 
 
@@ -25,15 +24,16 @@ class Swarm:
     owner_id: str
     leader_id: str
     id: str = field(default_factory=lambda: str(uuid4()))
-    worker_ids: List[str] = field(default_factory=list)
+    worker_ids: list[str] = field(default_factory=list)
     status: SwarmStatus = SwarmStatus.READY
     created_at: datetime = field(default_factory=datetime.utcnow)
-    metadata: Dict[str, object] = field(default_factory=dict)
+    metadata: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass
 class SwarmResult:
     """Outcome of a swarm run."""
+
     final_response: str
-    worker_responses: Dict[str, str]   # agent_id -> output
+    worker_responses: dict[str, str]  # agent_id -> output
     session_id: str

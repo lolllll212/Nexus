@@ -5,8 +5,8 @@ This is the proof of the architecture: the entire conscious + subconscious
 brain runs against in-memory fakes. No Redis, no Neo4j, no OpenAI required.
 """
 
-import sys
 import asyncio
+import sys
 from pathlib import Path
 
 import pytest
@@ -15,24 +15,28 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from nexus.application.cortex.process_message import ProcessMessageUseCase
 from nexus.application.cortex.session_manager import SessionManager
-from nexus.application.subcortex.synthesis import EntitySynthesisUseCase
+from nexus.application.interfaces.subconscious_coordinator import SubconsciousCoordinator
 from nexus.application.subcortex.dreaming.dream_session import DreamSessionUseCase
 from nexus.application.subcortex.dreaming.prune import PruningUseCase
 from nexus.application.subcortex.dreaming.simulate import SimulationUseCase
-from nexus.application.interfaces.subconscious_coordinator import SubconsciousCoordinator
-
-from tests.fakes import (
-    FakeEventBus, FakeMemoryRepository, FakeConceptRepository, FakeShortTermMemory,
-    FakeLLM, FakeSandbox, FakeToolRegistry, FakeExecutor,
-)
-
-from nexus.domain.entities.memory import Memory, MemoryType, EmotionalWeight
+from nexus.application.subcortex.synthesis import EntitySynthesisUseCase
 from nexus.domain.entities.concept import Concept, SynapticConnection
-from nexus.domain.entities.tool import ToolStatus
 from nexus.domain.entities.conversation import MessageRole
-from nexus.domain.value_objects.synapse import ConnectionType, SynapseConfig
+from nexus.domain.entities.memory import EmotionalWeight, Memory, MemoryType
+from nexus.domain.entities.tool import ToolStatus
 from nexus.domain.ports.event_bus import EventTopic
 from nexus.domain.value_objects.emotion import infer_emotional_state
+from nexus.domain.value_objects.synapse import ConnectionType, SynapseConfig
+from tests.fakes import (
+    FakeConceptRepository,
+    FakeEventBus,
+    FakeExecutor,
+    FakeLLM,
+    FakeMemoryRepository,
+    FakeSandbox,
+    FakeShortTermMemory,
+    FakeToolRegistry,
+)
 
 
 @pytest.mark.asyncio
@@ -192,9 +196,14 @@ async def test_consolidation_without_emotional_threshold_is_unchanged():
 
     sessions = SessionManager(working)
     use_case = ProcessMessageUseCase(
-        llm=llm, memory_repo=memory_repo, concept_repo=concept_repo,
-        working_memory=working, tools=tools, executor=executor,
-        event_bus=event_bus, session_manager=sessions,
+        llm=llm,
+        memory_repo=memory_repo,
+        concept_repo=concept_repo,
+        working_memory=working,
+        tools=tools,
+        executor=executor,
+        event_bus=event_bus,
+        session_manager=sessions,
     )
     await use_case.execute(user_id="u1", message="tell me about the project", session_id="s1")
 
@@ -215,9 +224,14 @@ async def test_conscious_loop_responds_and_dispatchs_event():
 
     sessions = SessionManager(working)
     use_case = ProcessMessageUseCase(
-        llm=llm, memory_repo=memory_repo, concept_repo=concept_repo,
-        working_memory=working, tools=tools, executor=executor,
-        event_bus=event_bus, session_manager=sessions,
+        llm=llm,
+        memory_repo=memory_repo,
+        concept_repo=concept_repo,
+        working_memory=working,
+        tools=tools,
+        executor=executor,
+        event_bus=event_bus,
+        session_manager=sessions,
     )
 
     result = await use_case.execute(user_id="u1", message="hello", session_id="s1")
@@ -287,9 +301,14 @@ async def test_dreaming_full_cycle_runs():
     executor = FakeExecutor()
 
     dream = DreamSessionUseCase(
-        llm=llm, memory_repo=memory_repo, concept_repo=concept_repo,
-        working_memory=working, sandbox=sandbox, executor=executor,
-        synapse=SynapseConfig(), event_bus=event_bus,
+        llm=llm,
+        memory_repo=memory_repo,
+        concept_repo=concept_repo,
+        working_memory=working,
+        sandbox=sandbox,
+        executor=executor,
+        synapse=SynapseConfig(),
+        event_bus=event_bus,
     )
 
     result = await dream.run()
@@ -318,9 +337,14 @@ async def test_coordinator_wires_loops_together():
 
     pattern = PatternDetectionUseCase(llm, memory_repo, event_bus)
     dream = DreamSessionUseCase(
-        llm=llm, memory_repo=memory_repo, concept_repo=concept_repo,
-        working_memory=working, sandbox=sandbox, executor=executor,
-        synapse=SynapseConfig(), event_bus=event_bus,
+        llm=llm,
+        memory_repo=memory_repo,
+        concept_repo=concept_repo,
+        working_memory=working,
+        sandbox=sandbox,
+        executor=executor,
+        synapse=SynapseConfig(),
+        event_bus=event_bus,
     )
     coordinator = SubconsciousCoordinator(event_bus, synthesis, pattern, dream)
 
@@ -380,7 +404,9 @@ async def test_simulation_builds_and_verifies_deployable_microservice_scaffold()
     )
     sandbox = FakeSandbox()
 
-    simulation = SimulationUseCase(llm=llm, sandbox=sandbox, executor=FakeExecutor(), memory_repo=memory_repo, working_memory=working)
+    simulation = SimulationUseCase(
+        llm=llm, sandbox=sandbox, executor=FakeExecutor(), memory_repo=memory_repo, working_memory=working
+    )
     result = await simulation.run(
         [Memory(content="user needs a rate limiter for the API", memory_type=MemoryType.EPISODIC)]
     )
@@ -414,10 +440,10 @@ async def test_simulation_marks_solution_failed_when_scaffold_tests_fail():
     sandbox = FakeSandbox()
     sandbox.fail_project = True
 
-    simulation = SimulationUseCase(llm=llm, sandbox=sandbox, executor=FakeExecutor(), memory_repo=memory_repo, working_memory=working)
-    result = await simulation.run(
-        [Memory(content="some unresolved memory", memory_type=MemoryType.EPISODIC)]
+    simulation = SimulationUseCase(
+        llm=llm, sandbox=sandbox, executor=FakeExecutor(), memory_repo=memory_repo, working_memory=working
     )
+    result = await simulation.run([Memory(content="some unresolved memory", memory_type=MemoryType.EPISODIC)])
 
     assert result.solutions_tested == 1
     assert result.deployments_ready == 0
@@ -434,9 +460,14 @@ async def test_cortex_modulates_tone_from_room_emotional_weight():
     llm = FakeLLM(script={"complete": "FINAL ANSWER: Take it easy, we will fix it."})
     sessions = SessionManager(working)
     use_case = ProcessMessageUseCase(
-        llm=llm, memory_repo=memory_repo, concept_repo=concept_repo,
-        working_memory=working, tools=FakeToolRegistry(), executor=FakeExecutor(),
-        event_bus=event_bus, session_manager=sessions,
+        llm=llm,
+        memory_repo=memory_repo,
+        concept_repo=concept_repo,
+        working_memory=working,
+        tools=FakeToolRegistry(),
+        executor=FakeExecutor(),
+        event_bus=event_bus,
+        session_manager=sessions,
     )
 
     result = await use_case.execute(
@@ -461,9 +492,14 @@ async def test_cortex_encodes_emotional_weight_into_episodic_memory():
     llm = FakeLLM(script={"complete": "FINAL ANSWER: okay"})
     sessions = SessionManager(working)
     use_case = ProcessMessageUseCase(
-        llm=llm, memory_repo=memory_repo, concept_repo=concept_repo,
-        working_memory=working, tools=FakeToolRegistry(), executor=FakeExecutor(),
-        event_bus=event_bus, session_manager=sessions,
+        llm=llm,
+        memory_repo=memory_repo,
+        concept_repo=concept_repo,
+        working_memory=working,
+        tools=FakeToolRegistry(),
+        executor=FakeExecutor(),
+        event_bus=event_bus,
+        session_manager=sessions,
     )
 
     await use_case.execute(user_id="u1", message="I am panicking, urgent help now", session_id="s1")
@@ -483,7 +519,9 @@ def test_session_restore_preserves_emotional_state():
         sessions = SessionManager(working)
         conv = await sessions.get_or_create("room-1", "u1")
         conv.observe_message(MessageRole.USER, "I am really angry and frustrated about this")
-        await working.set("session:default:room-1", {"recent": [], "emotional_state": conv.emotional_state.__dict__}, 3600)
+        await working.set(
+            "session:default:room-1", {"recent": [], "emotional_state": conv.emotional_state.__dict__}, 3600
+        )
 
         fresh = SessionManager(working)  # new session manager, same store
         restored = await fresh.get_or_create("room-1", "u1")

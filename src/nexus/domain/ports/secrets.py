@@ -8,11 +8,10 @@ being read directly from environment in business code.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 
 class SecretStore(ABC):
     """Resolves a secret by name, or None when it is not configured."""
 
     @abstractmethod
-    def get(self, name: str) -> Optional[str]: ...
+    def get(self, name: str) -> str | None: ...

@@ -8,7 +8,6 @@ port so in-memory mode never needs the embedding API.
 from __future__ import annotations
 
 import hashlib
-from typing import List
 
 from nexus.domain.ports.llm_provider import EmbeddingProvider
 
@@ -21,12 +20,12 @@ class InMemoryEmbedder(EmbeddingProvider):
     def dimension(self) -> int:
         return self._dim
 
-    async def embed(self, text: str) -> List[float]:
+    async def embed(self, text: str) -> list[float]:
         digest = hashlib.sha256(text.encode("utf-8")).digest()
         vec = [int(b) / 255.0 for b in digest]
         if len(vec) < self._dim:
             vec = (vec * (self._dim // len(vec) + 1))[: self._dim]
         return vec[: self._dim]
 
-    async def embed_batch(self, texts: List[str]) -> List[List[float]]:
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         return [await self.embed(t) for t in texts]

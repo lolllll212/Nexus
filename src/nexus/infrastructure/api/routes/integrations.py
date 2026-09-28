@@ -14,19 +14,23 @@ import hmac
 import json
 import os
 import time
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends, HTTPException, Request
+from typing import Any
 
-from nexus.infrastructure.api.dependencies import get_container
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
+
+from nexus.infrastructure.api.dependencies import get_container, require_identity
 from nexus.infrastructure.di.container import Container
 
-router = APIRouter(prefix="/api/integrations", tags=["integrations"])
+router = APIRouter(
+    prefix="/api/integrations", tags=["integrations"], dependencies=[Depends(require_identity)]
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Models
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class GitHubStatusOut(BaseModel):
     connected: bool
@@ -43,7 +47,7 @@ class GitHubIssue(BaseModel):
     state: str
     created_at: str
     comments: int
-    labels: List[str]
+    labels: list[str]
     body: str
 
 
@@ -61,7 +65,7 @@ class GitHubPR(BaseModel):
 class CreateIssueIn(BaseModel):
     title: str
     body: str
-    labels: List[str] = Field(default_factory=lambda: ["enhancement"])
+    labels: list[str] = Field(default_factory=lambda: ["enhancement"])
 
 
 class GmailStatusOut(BaseModel):
@@ -91,6 +95,7 @@ class SendEmailIn(BaseModel):
 # GitHub Routes
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/github/status", response_model=GitHubStatusOut)
 async def get_github_status() -> GitHubStatusOut:
     token = os.getenv("GITHUB_TOKEN", "")
@@ -104,7 +109,7 @@ async def get_github_status() -> GitHubStatusOut:
 
 
 @router.get("/github/repos")
-async def list_github_repos() -> List[Dict[str, Any]]:
+async def list_github_repos() -> list[dict[str, Any]]:
     return [
         {
             "name": "lolllll212/Nexus",
@@ -139,8 +144,8 @@ async def list_github_repos() -> List[Dict[str, Any]]:
     ]
 
 
-@router.get("/github/issues", response_model=List[GitHubIssue])
-async def list_github_issues() -> List[GitHubIssue]:
+@router.get("/github/issues", response_model=list[GitHubIssue])
+async def list_github_issues() -> list[GitHubIssue]:
     return [
         GitHubIssue(
             id=104,
@@ -175,8 +180,8 @@ async def list_github_issues() -> List[GitHubIssue]:
     ]
 
 
-@router.get("/github/pulls", response_model=List[GitHubPR])
-async def list_github_pulls() -> List[GitHubPR]:
+@router.get("/github/pulls", response_model=list[GitHubPR])
+async def list_github_pulls() -> list[GitHubPR]:
     return [
         GitHubPR(
             id=42,
@@ -202,7 +207,7 @@ async def list_github_pulls() -> List[GitHubPR]:
 
 
 @router.post("/github/create-issue")
-async def create_github_issue(data: CreateIssueIn) -> Dict[str, Any]:
+async def create_github_issue(data: CreateIssueIn) -> dict[str, Any]:
     new_id = int(time.time()) % 1000 + 100
     return {
         "status": "created",
@@ -221,7 +226,7 @@ async def create_github_issue(data: CreateIssueIn) -> Dict[str, Any]:
 # Gmail Routes
 # ─────────────────────────────────────────────────────────────────────────────
 
-GMAIL_STORAGE: List[Dict[str, Any]] = [
+GMAIL_STORAGE: list[dict[str, Any]] = [
     {
         "id": "msg-101",
         "sender": "NVIDIA Developer Program <nim-alerts@nvidia.com>",
@@ -272,13 +277,13 @@ async def get_gmail_status() -> GmailStatusOut:
     )
 
 
-@router.get("/gmail/messages", response_model=List[GmailMessage])
-async def list_gmail_messages() -> List[GmailMessage]:
+@router.get("/gmail/messages", response_model=list[GmailMessage])
+async def list_gmail_messages() -> list[GmailMessage]:
     return [GmailMessage(**m) for m in GMAIL_STORAGE]
 
 
 @router.post("/gmail/send")
-async def send_gmail_message(data: SendEmailIn) -> Dict[str, Any]:
+async def send_gmail_message(data: SendEmailIn) -> dict[str, Any]:
     new_msg = {
         "id": f"msg-{int(time.time())}",
         "sender": "operator@starkindustries.ai",
@@ -296,11 +301,10 @@ async def send_gmail_message(data: SendEmailIn) -> Dict[str, Any]:
 
 
 @router.post("/gmail/summarize")
-async def summarize_gmail_inbox() -> Dict[str, Any]:
+async def summarize_gmail_inbox() -> dict[str, Any]:
     unread = [m for m in GMAIL_STORAGE if m["is_unread"]]
     summary_lines = [
-        f"• {m['sender'].split('<')[0].strip()}: '{m['subject']}' — {m['snippet']}"
-        for m in unread
+        f"• {m['sender'].split('<')[0].strip()}: '{m['subject']}' — {m['snippet']}" for m in unread
     ]
     return {
         "unread_count": len(unread),
@@ -317,8 +321,9 @@ async def summarize_gmail_inbox() -> Dict[str, Any]:
 # Overall Integrations Overview
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/overview")
-async def get_integrations_overview() -> Dict[str, Any]:
+async def get_integrations_overview() -> dict[str, Any]:
     return {
         "integrations": [
             {
@@ -379,7 +384,7 @@ async def get_integrations_overview() -> Dict[str, Any]:
     }
 
 
-def verify_github_signature(raw_body: bytes, signature_header: Optional[str], secret: str) -> bool:
+def verify_github_signature(raw_body: bytes, signature_header: str | None, secret: str) -> bool:
     """Validate GitHub webhook HMAC-SHA256 signature."""
     if not secret:
         return True
@@ -397,7 +402,7 @@ def verify_github_signature(raw_body: bytes, signature_header: Optional[str], se
 async def github_webhook(
     request: Request,
     container: Container = Depends(get_container),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Receive and verify GitHub webhooks (issues, pull requests, push)."""
     raw_body = await request.body()
     signature = request.headers.get("X-Hub-Signature-256")
@@ -429,7 +434,7 @@ async def github_webhook(
 async def gmail_webhook(
     request: Request,
     container: Container = Depends(get_container),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Receive Google Cloud Pub/Sub push notifications for incoming emails."""
     try:
         body = await request.json()

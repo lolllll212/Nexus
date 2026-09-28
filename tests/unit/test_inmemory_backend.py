@@ -19,8 +19,8 @@ async def test_container_memory_backend_runs_offline():
 
         # Adapters are the in-memory ones, not the network ones.
         assert container.config.infra_backend == "memory"
-        from nexus.infrastructure.adapters.inmemory.memory_repository import InMemoryMemoryRepository
         from nexus.infrastructure.adapters.inmemory.concept_repository import InMemoryConceptRepository
+        from nexus.infrastructure.adapters.inmemory.memory_repository import InMemoryMemoryRepository
         from nexus.infrastructure.adapters.inmemory.short_term_memory import InMemoryShortTermMemory
 
         assert isinstance(container.memory_repo, InMemoryMemoryRepository)

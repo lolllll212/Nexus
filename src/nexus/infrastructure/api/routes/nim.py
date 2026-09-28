@@ -10,23 +10,22 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
-from nexus.infrastructure.api.dependencies import get_container
-from nexus.infrastructure.di.container import Container
 from nexus.infrastructure.adapters.llm.nvidia_nim_provider import (
-    NvidiaNimProvider,
     SUPPORTED_NIM_MODELS,
-    DEFAULT_NIM_MODEL,
-    DEFAULT_NIM_BASE_URL,
+    NvidiaNimProvider,
 )
+from nexus.infrastructure.api.dependencies import get_container, require_identity
+from nexus.infrastructure.di.container import Container
 
 logger = logging.getLogger("nexus.nim.api")
 
-router = APIRouter(prefix="/api/nim", tags=["nvidia-nim"])
+router = APIRouter(prefix="/api/nim", tags=["nvidia-nim"], dependencies=[Depends(require_identity)])
 
 
 class ChatMessage(BaseModel):
@@ -35,16 +34,16 @@ class ChatMessage(BaseModel):
 
 
 class NimChatRequest(BaseModel):
-    prompt: Optional[str] = None
-    messages: Optional[List[ChatMessage]] = None
-    model: Optional[str] = None
-    tier: Optional[str] = "cortex"
-    system_prompt: Optional[str] = (
+    prompt: str | None = None
+    messages: list[ChatMessage] | None = None
+    model: str | None = None
+    tier: str | None = "cortex"
+    system_prompt: str | None = (
         "You are J.A.R.V.I.S., an advanced AI operating system assistant and Second Brain "
         "knowledge navigator. Respond concisely, intelligently, and with polite Stark-like technical precision."
     )
     temperature: float = Field(0.5, ge=0.0, le=2.0)
-    max_tokens: Optional[int] = Field(1024, ge=1, le=8192)
+    max_tokens: int | None = Field(1024, ge=1, le=8192)
 
 
 class NimChatResponse(BaseModel):
@@ -56,9 +55,9 @@ class NimChatResponse(BaseModel):
 
 
 class NimConfigRequest(BaseModel):
-    api_key: Optional[str] = None
-    model: Optional[str] = None
-    base_url: Optional[str] = None
+    api_key: str | None = None
+    model: str | None = None
+    base_url: str | None = None
 
 
 class NimStatusResponse(BaseModel):
@@ -68,7 +67,7 @@ class NimStatusResponse(BaseModel):
     base_url: str
     active_model: str
     status: str
-    supported_models: List[Dict[str, Any]]
+    supported_models: list[dict[str, Any]]
 
 
 def _get_nim_provider(container: Container) -> NvidiaNimProvider:
@@ -76,7 +75,7 @@ def _get_nim_provider(container: Container) -> NvidiaNimProvider:
     if provider is None:
         # Fallback creation if not wired
         provider = NvidiaNimProvider()
-        setattr(container, "nim_provider", provider)
+        container.nim_provider = provider
     return provider
 
 
@@ -106,7 +105,7 @@ async def get_nim_status(container: Container = Depends(get_container)) -> NimSt
 
 
 @router.get("/models")
-async def list_nim_models(container: Container = Depends(get_container)) -> Dict[str, Any]:
+async def list_nim_models(container: Container = Depends(get_container)) -> dict[str, Any]:
     """List all supported NVIDIA NIM models and descriptions."""
     provider = _get_nim_provider(container)
     return {
@@ -129,7 +128,7 @@ async def chat_nim(
         provider.model = req.model
 
     try:
-        messages: List[Dict[str, str]] = []
+        messages: list[dict[str, str]] = []
         if req.system_prompt:
             messages.append({"role": "system", "content": req.system_prompt})
 
@@ -169,7 +168,7 @@ async def chat_nim_stream(
     tier_model = getattr(provider, "get_tier_model", lambda t: provider.model)(req.tier or "cortex")
     model_name = req.model or tier_model
 
-    messages: List[Dict[str, str]] = []
+    messages: list[dict[str, str]] = []
     if req.system_prompt:
         messages.append({"role": "system", "content": req.system_prompt})
 
@@ -204,7 +203,7 @@ async def chat_nim_stream(
 async def configure_nim(
     req: NimConfigRequest,
     container: Container = Depends(get_container),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Dynamically update NVIDIA NIM credentials or model configuration."""
     provider = _get_nim_provider(container)
 
@@ -235,7 +234,7 @@ async def configure_nim(
 @router.get("/verify")
 async def verify_nim_connection(
     container: Container = Depends(get_container),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Verify live connectivity with NVIDIA NIM endpoint."""
     provider = _get_nim_provider(container)
     return await provider.verify_connection()

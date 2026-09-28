@@ -9,7 +9,6 @@ more reliable. The day's decay is reversed for what actually matters.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List
 
 from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository
 from nexus.domain.value_objects.synapse import SynapseConfig
@@ -17,13 +16,13 @@ from nexus.domain.value_objects.synapse import SynapseConfig
 
 @dataclass
 class CoreCluster:
-    concept_ids: List[str]
-    labels: List[str]
+    concept_ids: list[str]
+    labels: list[str]
 
 
 @dataclass
 class ConsolidationResult:
-    clusters_identified: List[CoreCluster] = field(default_factory=list)
+    clusters_identified: list[CoreCluster] = field(default_factory=list)
     connections_strengthened: int = 0
     emotionally_charged: int = 0  # connections reinforced with emotional priority
 
@@ -52,7 +51,7 @@ class ConsolidationUseCase:
 
         # High-arousal memory clusters re-consolidate first (the brain
         # strengthens what it felt most strongly about).
-        charged: Dict[str, float] = {}
+        charged: dict[str, float] = {}
         if self._memory_repo and emotional_intensity > 0.0:
             charged_memories = await self._memory_repo.find_by_emotional_weight(
                 emotional_intensity, limit=200, tenant_id=tenant_id
@@ -69,7 +68,9 @@ class ConsolidationUseCase:
 
         # Build simple clusters around each strong anchor
         for anchor in strong_concepts[:max_clusters]:
-            neighbors = await self._concept_repo.get_connections(anchor.id, min_weight=0.5, tenant_id=tenant_id)
+            neighbors = await self._concept_repo.get_connections(
+                anchor.id, min_weight=0.5, tenant_id=tenant_id
+            )
             if len(neighbors) < min_cluster_size:
                 continue
             cluster = CoreCluster(

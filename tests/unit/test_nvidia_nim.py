@@ -2,16 +2,15 @@
 Tests for NVIDIA NIM LLMProvider adapter and API endpoints.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
 
-from nexus.domain.exceptions import LLMUnavailableError
 from nexus.infrastructure.adapters.llm.nvidia_nim_provider import (
-    NvidiaNimProvider,
-    DEFAULT_NIM_MODEL,
     DEFAULT_NIM_BASE_URL,
-    SUPPORTED_NIM_MODELS,
+    DEFAULT_NIM_MODEL,
+    NvidiaNimProvider,
 )
 from nexus.infrastructure.api.main import create_app
 from tests.fakes.container import TEST_API_KEY_1
@@ -94,10 +93,11 @@ async def test_nvidia_nim_streaming_simulation():
 
 def test_nim_api_routes():
     from tests.fakes.container import FakeContainer
+
     app = create_app()
     fake = FakeContainer()
     app.state.container = fake
-    client = TestClient(app)
+    client = TestClient(app, headers={"Authorization": f"Bearer {TEST_API_KEY_1}"})
 
     # Status endpoint
     res = client.get("/api/nim/status")

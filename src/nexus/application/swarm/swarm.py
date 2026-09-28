@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Protocol
+from typing import Protocol
 
 from nexus.domain.entities.agent import Agent
 from nexus.domain.entities.swarm import Swarm, SwarmResult, SwarmStatus
@@ -29,7 +29,7 @@ class RegisterAgentUseCase:
         owner_id: str,
         system_prompt: str,
         role: str = "worker",
-        tools: Optional[List[str]] = None,
+        tools: list[str] | None = None,
     ) -> Agent:
         agent = Agent(
             name=name,
@@ -49,7 +49,7 @@ class ListAgentsUseCase:
     def __init__(self, repo: AgentRepository) -> None:
         self._repo = repo
 
-    async def execute(self, tenant_id: str, role: Optional[str] = None, limit: int = 100) -> List[Agent]:
+    async def execute(self, tenant_id: str, role: str | None = None, limit: int = 100) -> list[Agent]:
         if role is not None:
             return await self._repo.list_by_role(role, tenant_id=tenant_id, limit=limit)
         return await self._repo.list_all(tenant_id=tenant_id, limit=limit)
@@ -81,7 +81,7 @@ class CreateSwarmUseCase:
         tenant_id: str,
         owner_id: str,
         leader_id: str,
-        worker_ids: List[str],
+        worker_ids: list[str],
     ) -> Swarm:
         if await self._agent_repo.get(leader_id, tenant_id=tenant_id) is None:
             raise AgentNotFoundError(leader_id)
@@ -105,7 +105,7 @@ class ListSwarmsUseCase:
     def __init__(self, swarm_repo: SwarmRepository) -> None:
         self._swarm_repo = swarm_repo
 
-    async def execute(self, tenant_id: str, limit: int = 100) -> List[Swarm]:
+    async def execute(self, tenant_id: str, limit: int = 100) -> list[Swarm]:
         return await self._swarm_repo.list_all(tenant_id=tenant_id, limit=limit)
 
 
@@ -148,7 +148,7 @@ class SwarmCoordinatorUseCase:
             raise AgentNotFoundError(swarm.leader_id)
 
         # Phase 1: fan out to active workers (bounded).
-        worker_responses: Dict[str, str] = {}
+        worker_responses: dict[str, str] = {}
         worker_ids = swarm.worker_ids[: self._max_workers]
         for worker_id in worker_ids:
             worker = await self._agent_repo.get(worker_id, tenant_id=tenant_id)

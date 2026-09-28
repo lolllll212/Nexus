@@ -22,8 +22,7 @@ from fastapi.testclient import TestClient
 from nexus.domain.exceptions import LLMUnavailableError
 from nexus.infrastructure.api.main import create_app
 from nexus.infrastructure.di.container import Config
-
-from tests.fakes.container import FakeContainer, TEST_API_KEY_1
+from tests.fakes.container import TEST_API_KEY_1, FakeContainer
 
 AUTH = {"Authorization": f"Bearer {TEST_API_KEY_1}"}
 

@@ -4,8 +4,6 @@ Built-in tool registry adapter - the capabilities NEXUS ships with.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
-
 from nexus.domain.entities.tool import Tool, ToolStatus
 from nexus.domain.ports.tool_registry import ToolRegistry
 from nexus.domain.value_objects.schema import JSONSchema
@@ -14,26 +12,23 @@ from nexus.domain.value_objects.schema import JSONSchema
 class BuiltinToolRegistry(ToolRegistry):
     """In-memory registry seeded with NEXUS's built-in tools."""
 
-    def __init__(self, builtins: List[Tool]) -> None:
-        self._tools: Dict[str, Tool] = {t.id: t for t in builtins}
-        self._index: Dict[str, str] = {t.name: t.id for t in builtins}
+    def __init__(self, builtins: list[Tool]) -> None:
+        self._tools: dict[str, Tool] = {t.id: t for t in builtins}
+        self._index: dict[str, str] = {t.name: t.id for t in builtins}
 
     async def register(self, tool: Tool) -> None:
         self._tools[tool.id] = tool
         self._index[tool.name] = tool.id
 
-    async def get(self, tool_id: str) -> Optional[Tool]:
+    async def get(self, tool_id: str) -> Tool | None:
         return self._tools.get(tool_id) or self._tools.get(self._index.get(tool_id, ""))
 
-    async def search(self, query: str, limit: int = 5) -> List[Tool]:
+    async def search(self, query: str, limit: int = 5) -> list[Tool]:
         q = query.lower()
-        matches = [
-            t for t in self._tools.values()
-            if q in t.name.lower() or q in t.description.lower()
-        ]
+        matches = [t for t in self._tools.values() if q in t.name.lower() or q in t.description.lower()]
         return matches[:limit]
 
-    async def list_all(self) -> List[Tool]:
+    async def list_all(self) -> list[Tool]:
         return list(self._tools.values())
 
     async def update(self, tool: Tool) -> None:
@@ -41,7 +36,7 @@ class BuiltinToolRegistry(ToolRegistry):
         self._index[tool.name] = tool.id
 
 
-def default_builtin_tools() -> List[Tool]:
+def default_builtin_tools() -> list[Tool]:
     """Seed tools NEXUS can always use — core + extended."""
     from nexus.infrastructure.adapters.execution.extended_tools import extended_builtin_tools
 

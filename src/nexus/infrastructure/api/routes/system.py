@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import List
-
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
@@ -50,7 +48,7 @@ class DreamLogEntry(BaseModel):
     recall_delta: float | None = None
 
 
-@router.get("/dreams", response_model=List[DreamLogEntry], dependencies=[Depends(require_identity)])
+@router.get("/dreams", response_model=list[DreamLogEntry], dependencies=[Depends(require_identity)])
 async def recent_dreams(
     limit: int = 20,
     container: Container = Depends(get_container),

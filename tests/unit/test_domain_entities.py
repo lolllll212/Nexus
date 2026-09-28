@@ -8,9 +8,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from nexus.domain.entities.concept import Concept, SynapticConnection
-from nexus.domain.entities.memory import Memory, MemoryType, EmotionalWeight
-from nexus.domain.value_objects.synapse import ConnectionType
+from nexus.domain.entities.memory import EmotionalWeight, Memory, MemoryType
 from nexus.domain.value_objects.emotion import EmotionalState
+from nexus.domain.value_objects.synapse import ConnectionType
 
 
 class TestConceptNeuroplasticity:

@@ -8,9 +8,7 @@ and creates training examples from them.
 from __future__ import annotations
 
 import ast
-import subprocess
 from pathlib import Path
-from typing import List, Optional
 
 from nexus.application.training.coding_store import CodingExample, CodingStore
 
@@ -21,7 +19,7 @@ class GitIngester:
     def __init__(self, store: CodingStore) -> None:
         self._store = store
 
-    def ingest_repo(self, repo_path: str, patterns: List[str] = None) -> int:
+    def ingest_repo(self, repo_path: str, patterns: list[str] | None = None) -> int:
         """Scan a repo and create training examples from its code."""
         patterns = patterns or ["*.py"]
         repo = Path(repo_path)
@@ -45,7 +43,7 @@ class GitIngester:
 
         return count
 
-    def _extract_from_file(self, filepath: Path, repo_root: Path) -> List[CodingExample]:
+    def _extract_from_file(self, filepath: Path, repo_root: Path) -> list[CodingExample]:
         """Extract function/class definitions as training examples."""
         try:
             source = filepath.read_text(encoding="utf-8", errors="replace")
@@ -68,7 +66,7 @@ class GitIngester:
 
         return examples
 
-    def _extract_function(self, node, source: str, filepath: str) -> Optional[CodingExample]:
+    def _extract_function(self, node, source: str, filepath: str) -> CodingExample | None:
         """Extract a function as a training example."""
         docstring = ast.get_docstring(node) or ""
         if not docstring or len(docstring) < 10:
@@ -100,7 +98,7 @@ class GitIngester:
             source="git",
         )
 
-    def _extract_class(self, node, source: str, filepath: str) -> Optional[CodingExample]:
+    def _extract_class(self, node, source: str, filepath: str) -> CodingExample | None:
         """Extract a class as a training example."""
         docstring = ast.get_docstring(node) or ""
         if not docstring or len(docstring) < 10:
@@ -109,7 +107,7 @@ class GitIngester:
         lines = source.split("\n")
         start = node.lineno - 1
         end = node.end_lineno or start + 50
-        class_source = "\n".join(lines[start:min(end, start + 80)])
+        class_source = "\n".join(lines[start : min(end, start + 80)])
 
         methods = [n.name for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
 
@@ -141,11 +139,23 @@ class GitIngester:
             return "data-processing"
         return "general"
 
-    def _extract_tags(self, name: str, docstring: str) -> List[str]:
+    def _extract_tags(self, name: str, docstring: str) -> list[str]:
         tags = []
         text = f"{name} {docstring}".lower()
-        keywords = ["async", "decorator", "generator", "context", "dataclass", "enum",
-                     "exception", "iterator", "callback", "factory", "singleton", "adapter"]
+        keywords = [
+            "async",
+            "decorator",
+            "generator",
+            "context",
+            "dataclass",
+            "enum",
+            "exception",
+            "iterator",
+            "callback",
+            "factory",
+            "singleton",
+            "adapter",
+        ]
         for kw in keywords:
             if kw in text:
                 tags.append(kw)

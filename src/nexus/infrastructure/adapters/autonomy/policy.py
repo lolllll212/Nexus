@@ -8,12 +8,10 @@ tenant's allowlist.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
-
 from nexus.domain.entities.goal import Goal, GoalEvent, GoalStatus
+from nexus.domain.exceptions import RateLimitExceededError
 from nexus.domain.ports.autonomy import AutonomyDecision, AutonomyPolicy
 from nexus.domain.ports.rate_limiter import RateLimiter
-from nexus.domain.exceptions import RateLimitExceededError
 
 HOURLY_WINDOW_SECONDS = 3600
 
@@ -25,13 +23,13 @@ class DefaultAutonomyPolicy(AutonomyPolicy):
         self,
         rate_limiter: RateLimiter,
         hourly_budget: int = 0,
-        allowlist: Optional[List[str]] = None,
+        allowlist: list[str] | None = None,
     ) -> None:
         self._rate_limiter = rate_limiter
         self._hourly_budget = hourly_budget
         self._allowlist: set = set(allowlist or [])
-        self._approvals: Dict[tuple, Dict[str, object]] = {}
-        self._audit_log: Dict[str, List[GoalEvent]] = {}
+        self._approvals: dict[tuple, dict[str, object]] = {}
+        self._audit_log: dict[str, list[GoalEvent]] = {}
 
     async def authorize_action(self, tenant_id: str = "default", units: int = 1) -> AutonomyDecision:
         if self._hourly_budget > 0:
@@ -76,7 +74,7 @@ class DefaultAutonomyPolicy(AutonomyPolicy):
         ]
         return pending[:limit]
 
-    async def audit_log(self, tenant_id: str = "default", limit: int = 200) -> List[GoalEvent]:
+    async def audit_log(self, tenant_id: str = "default", limit: int = 200) -> list[GoalEvent]:
         log = self._audit_log.get(tenant_id, [])
         return log[-limit:]
 

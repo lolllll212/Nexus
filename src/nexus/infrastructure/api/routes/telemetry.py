@@ -3,18 +3,18 @@
 import asyncio
 import os
 import time
-from typing import Dict, Any
-from fastapi import APIRouter, Depends, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import PlainTextResponse
+from typing import Any
 
-from nexus.infrastructure.api.dependencies import get_container
-from nexus.infrastructure.di.container import Container
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+
+from nexus.infrastructure.api.dependencies import get_container, require_identity
 from nexus.infrastructure.api.routes.graph import get_default_second_brain_graph
+from nexus.infrastructure.di.container import Container
 
-router = APIRouter(tags=["telemetry"])
+router = APIRouter(tags=["telemetry"], dependencies=[Depends(require_identity)])
 
 START_TIME = time.time()
-REQUEST_COUNTERS: Dict[str, int] = {
+REQUEST_COUNTERS: dict[str, int] = {
     "chat": 0,
     "tools": 0,
     "workflows": 0,
@@ -69,19 +69,12 @@ async def generate_prometheus_metrics(container: Container) -> str:
         lines.append(f'nexus_requests_total{{module="{key}"}} {val}')
 
     lines.append("")
-    lines.append(f'# Nexus backend mode: {backend}')
+    lines.append(f"# Nexus backend mode: {backend}")
     return "\n".join(lines) + "\n"
 
 
-@router.get("/metrics", response_class=PlainTextResponse, include_in_schema=False)
-async def prometheus_metrics(container: Container = Depends(get_container)) -> Response:
-    """Export system metrics in standard Prometheus exposition format."""
-    text = await generate_prometheus_metrics(container)
-    return PlainTextResponse(text, media_type="text/plain; version=0.0.4; charset=utf-8")
-
-
 @router.get("/api/system/telemetry")
-async def system_telemetry(container: Container = Depends(get_container)) -> Dict[str, Any]:
+async def system_telemetry(container: Container = Depends(get_container)) -> dict[str, Any]:
     """JSON telemetry endpoint for real-time J.A.R.V.I.S. HUD gauges."""
     uptime = time.time() - START_TIME
     tools = await container.tool_registry.list_all()
@@ -95,7 +88,9 @@ async def system_telemetry(container: Container = Depends(get_container)) -> Dic
         "nim": {
             "configured": nim_provider is not None,
             "has_api_key": getattr(nim_provider, "has_api_key", False) if nim_provider else False,
-            "model": getattr(nim_provider, "model", "meta/llama-3.3-70b-instruct") if nim_provider else "None",
+            "model": (
+                getattr(nim_provider, "model", "meta/llama-3.3-70b-instruct") if nim_provider else "None"
+            ),
         },
         "tools_count": len(tools),
         "graph_nodes_count": len(graph_data.get("nodes", [])),

@@ -9,10 +9,9 @@ Surfaces findings as context injections the cortex can use proactively.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List
 
 from nexus.domain.entities.memory import Memory
-from nexus.domain.ports.event_bus import Event, EventBus, EventTopic, EventPriority
+from nexus.domain.ports.event_bus import Event, EventBus, EventPriority, EventTopic
 from nexus.domain.ports.llm_provider import LLMProvider
 from nexus.domain.ports.memory_repository import MemoryRepository
 from nexus.domain.value_objects.schema import JSONSchema
@@ -27,7 +26,7 @@ class PatternInsight:
 
 @dataclass
 class PatternDetectionResult:
-    insights: List[PatternInsight] = field(default_factory=list)
+    insights: list[PatternInsight] = field(default_factory=list)
 
 
 _PATTERN_SCHEMA = JSONSchema(
@@ -61,7 +60,7 @@ class PatternDetectionUseCase:
         result = PatternDetectionResult()
 
         # Pull the most active memories (highest access counts)
-        memories: List[Memory] = []
+        memories: list[Memory] = []
         for m in await self._memory_repo.retrieve("", limit=limit):
             memories.append(m)
 

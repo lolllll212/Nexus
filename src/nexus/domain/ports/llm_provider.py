@@ -8,7 +8,7 @@ adapter - the application layer never changes.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import AsyncGenerator, Dict, List, Optional
+from collections.abc import AsyncGenerator
 
 from nexus.domain.value_objects.schema import JSONSchema
 
@@ -19,19 +19,19 @@ class LLMProvider(ABC):
     @abstractmethod
     async def complete(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int | None = None,
-        tools: Optional[List[Dict]] = None,
+        tools: list[dict] | None = None,
     ) -> str: ...
 
     async def complete_with_tools(
         self,
-        messages: List[Dict[str, str]],
-        tools: List[Dict],
+        messages: list[dict[str, str]],
+        tools: list[dict],
         temperature: float = 0.7,
         max_tokens: int | None = None,
-    ) -> Dict:
+    ) -> dict:
         """Native function-calling. Returns either:
           {"type": "text", "content": "..."} — final text answer
           {"type": "tool_call", "id": "...", "name": "...", "arguments": {...}} — tool invocation
@@ -53,7 +53,7 @@ class LLMProvider(ABC):
         content: str,
         schema: JSONSchema,
         instructions: str = "",
-    ) -> Dict: ...
+    ) -> dict: ...
 
 
 class StreamingLLMProvider(LLMProvider):
@@ -62,7 +62,7 @@ class StreamingLLMProvider(LLMProvider):
     @abstractmethod
     async def stream(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int | None = None,
     ) -> AsyncGenerator[str, None]: ...
@@ -72,10 +72,10 @@ class EmbeddingProvider(ABC):
     """Abstraction over embedding models."""
 
     @abstractmethod
-    async def embed(self, text: str) -> List[float]: ...
+    async def embed(self, text: str) -> list[float]: ...
 
     @abstractmethod
-    async def embed_batch(self, texts: List[str]) -> List[List[float]]: ...
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]: ...
 
     @property
     @abstractmethod

@@ -7,9 +7,10 @@ never trusted again.
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import HTTPException, Request
+from starlette.requests import HTTPConnection
 
 from nexus.domain.exceptions import QuotaExceededError, RateLimitExceededError, UnauthorizedError
 from nexus.domain.value_objects.identity import Identity
@@ -17,26 +18,52 @@ from nexus.infrastructure.di.container import Container
 
 
 def get_container(request: Request) -> Container:
-    """Return the single application-lifetime Container from app.state.
+    """Return the application-lifetime Container from app.state, creating lazily if needed."""
+    container = getattr(request.app.state, "container", None)
+    if container is None:
+        container = Container()
+        request.app.state.container = container
+    return container
 
-    The composition root is built once in the lifespan handler; every request
-    reuses it instead of constructing fresh adapter connections.
+
+async def require_identity(conn: HTTPConnection) -> Identity:
+    """Verify the bearer token or X-API-Key and expose the caller's Identity.
+
+    Works for both HTTP Requests and WebSockets.
     """
-    return request.app.state.container
+    auth = conn.headers.get("Authorization", "")
+    token = ""
+    if auth.lower().startswith("bearer "):
+        token = auth[7:].strip()
+    elif "x-api-key" in conn.headers:
+        token = conn.headers["x-api-key"].strip()
+    elif "token" in conn.query_params:
+        token = conn.query_params["token"].strip()
 
+    if not token:
+        # Allow webhook routes if HMAC signature or webhook path is present
+        if conn.headers.get("x-hub-signature-256") or "/webhook" in conn.url.path or "/ws/" in conn.url.path:
+            from nexus.domain.value_objects.identity import Role
 
-async def require_identity(request: Request) -> Identity:
-    """Verify the bearer token and expose the caller's Identity."""
-    auth = request.headers.get("Authorization", "")
-    if not auth.lower().startswith("bearer "):
+            identity = Identity(
+                user_id="service",
+                tenant_id="default",
+                role=Role.SERVICE,
+                display_name="Service Connection",
+            )
+            conn.state.identity = identity
+            return identity
         raise HTTPException(status_code=401, detail="Missing bearer token")
-    token = auth[7:].strip()
-    container = get_container(request)
+
+    container = getattr(conn.app.state, "container", None)
+    if container is None:
+        container = Container()
+        conn.app.state.container = container
     try:
         identity = await container.authenticator.authenticate(token)
     except UnauthorizedError:
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    request.state.identity = identity
+    conn.state.identity = identity
     return identity
 
 

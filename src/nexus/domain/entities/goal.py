@@ -5,15 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
 from uuid import uuid4
 
 
 class GoalStatus(Enum):
     """Lifecycle states of a goal."""
-    PROPOSED = "proposed"    # awaiting approval (if approval required)
-    ACTIVE = "active"        # autonomy loop is working it
-    BLOCKED = "blocked"      # needs human input / budget exhausted
+
+    PROPOSED = "proposed"  # awaiting approval (if approval required)
+    ACTIVE = "active"  # autonomy loop is working it
+    BLOCKED = "blocked"  # needs human input / budget exhausted
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -21,6 +21,7 @@ class GoalStatus(Enum):
 
 class GoalPriority(Enum):
     """Urgency ranking, drives scheduling order."""
+
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"
@@ -29,6 +30,7 @@ class GoalPriority(Enum):
 
 class StepStatus(Enum):
     """Lifecycle states of a single goal step."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     DONE = "done"
@@ -42,16 +44,16 @@ class GoalStep:
 
     description: str
     status: StepStatus = StepStatus.PENDING
-    tool: Optional[str] = None
-    output: Optional[str] = None
-    error: Optional[str] = None
+    tool: str | None = None
+    output: str | None = None
+    error: str | None = None
 
 
 @dataclass
 class GoalEvent:
     """Append-only audit entry in a goal's lifecycle ledger."""
 
-    kind: str      # step_started|step_completed|step_failed|budget_decremented|approved|rejected|cancelled|regenerated_tool
+    kind: str  # step_started|step_completed|step_failed|budget_decremented|approved|rejected|cancelled|regenerated_tool
     detail: str
     actor: str = "system"
     ts: datetime = field(default_factory=datetime.utcnow)
@@ -71,14 +73,14 @@ class Goal:
     budget_spent: int = 0
     max_cost_per_step: float = 1.0
     requires_approval: bool = True
-    approved_by: Optional[str] = None
-    approved_at: Optional[datetime] = None
+    approved_by: str | None = None
+    approved_at: datetime | None = None
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
-    deadline: Optional[datetime] = None
-    plan: List[GoalStep] = field(default_factory=list)
-    result: Optional[str] = None
-    history: List[GoalEvent] = field(default_factory=list)
+    deadline: datetime | None = None
+    plan: list[GoalStep] = field(default_factory=list)
+    result: str | None = None
+    history: list[GoalEvent] = field(default_factory=list)
 
     @property
     def budget_remaining(self) -> int:
@@ -92,7 +94,7 @@ class Goal:
         self.history.append(GoalEvent(kind=kind, detail=detail, actor=actor))
         self.updated_at = datetime.utcnow()
 
-    def mark_active(self, approved_by: Optional[str] = None) -> None:
+    def mark_active(self, approved_by: str | None = None) -> None:
         self.status = GoalStatus.ACTIVE
         if approved_by:
             self.approved_by = approved_by

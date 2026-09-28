@@ -12,18 +12,92 @@ import json
 import os
 import platform
 import re
-import sys
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 from urllib.parse import quote_plus
 
 from nexus.domain.entities.tool import Tool, ToolStatus
 from nexus.domain.value_objects.schema import JSONSchema
-from nexus.infrastructure.adapters.security.ssrf import validate_safe_url
+from nexus.infrastructure.adapters.security.ssrf import safe_http_fetch
 
-TOOL_DEFS: List[Dict[str, Any]] = [
+_AUTONOMY_POLICY: Any = None
+_DEFAULT_SANDBOX: Any = None
+
+
+def set_autonomy_policy(policy: Any) -> None:
+    global _AUTONOMY_POLICY
+    _AUTONOMY_POLICY = policy
+
+
+def get_autonomy_policy() -> Any:
+    return _AUTONOMY_POLICY
+
+
+def set_default_sandbox(sandbox: Any) -> None:
+    global _DEFAULT_SANDBOX
+    _DEFAULT_SANDBOX = sandbox
+
+
+def get_default_sandbox() -> Any:
+    global _DEFAULT_SANDBOX
+    if _DEFAULT_SANDBOX is None:
+        from nexus.infrastructure.adapters.sandbox.docker_sandbox import DockerSandbox
+
+        _DEFAULT_SANDBOX = DockerSandbox()
+    return _DEFAULT_SANDBOX
+
+
+def get_workspace_root() -> Path:
+    """Return the absolute path of the configured workspace root."""
+    root_str = os.getenv("NEXUS_WORKSPACE_ROOT", ".")
+    return Path(root_str).resolve()
+
+
+def get_allowed_roots() -> list[Path]:
+    roots = [get_workspace_root()]
+    try:
+        import tempfile
+
+        t_dir = Path(tempfile.gettempdir()).resolve()
+        if t_dir not in roots:
+            roots.append(t_dir)
+    except Exception:
+        pass
+    return roots
+
+
+def resolve_confined_path(rel_or_abs_path: str | Path, must_exist: bool = False) -> tuple[Path | None, str]:
+    """
+    Resolve a path and ensure it is strictly confined within WORKSPACE_ROOT or temp dir.
+    Rejects any path traversal attempt (e.g. '../', absolute paths outside workspace).
+    Returns (resolved_path, "") on success, or (None, error_message) on rejection.
+    """
+    try:
+        allowed = get_allowed_roots()
+        path = Path(rel_or_abs_path)
+        if not path.is_absolute():
+            candidate = (get_workspace_root() / path).resolve()
+        else:
+            candidate = path.resolve()
+
+        is_confined = any(candidate == r or r in candidate.parents for r in allowed)
+        if not is_confined:
+            return (
+                None,
+                f"Access denied: path '{rel_or_abs_path}' escapes workspace root '{get_workspace_root()}'",
+            )
+
+        if must_exist and not candidate.exists():
+            return None, f"Path not found: '{rel_or_abs_path}'"
+
+        return candidate, ""
+    except Exception as e:
+        return None, f"Invalid path '{rel_or_abs_path}': {e}"
+
+
+TOOL_DEFS: list[dict[str, Any]] = [
     {
         "id": "web_search",
         "name": "web_search",
@@ -201,7 +275,7 @@ TOOL_DEFS: List[Dict[str, Any]] = [
 ]
 
 
-def extended_builtin_tools() -> List[Tool]:
+def extended_builtin_tools() -> list[Tool]:
     return [
         Tool(
             id=d["id"],
@@ -218,7 +292,7 @@ def extended_builtin_tools() -> List[Tool]:
 # ── Native handlers ─────────────────────────────────────────────────────
 
 
-async def _web_search(params: Dict[str, Any]) -> Dict[str, Any]:
+async def _web_search(params: dict[str, Any]) -> dict[str, Any]:
     query = params["query"]
     url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
     try:
@@ -240,26 +314,22 @@ async def _web_search(params: Dict[str, Any]) -> Dict[str, Any]:
                 break
         if results:
             return {"results": results}
-        return {"results": [f"Intelligence summary for '{query}': relevant documentation and entities indexed."]}
+        return {
+            "results": [f"Intelligence summary for '{query}': relevant documentation and entities indexed."]
+        }
     except Exception:
-        return {"results": [f"Search findings on '{query}': multi-domain consensus and documentation indexed."]}
+        return {
+            "results": [f"Search findings on '{query}': multi-domain consensus and documentation indexed."]
+        }
 
 
-async def _web_fetch(params: Dict[str, Any]) -> Dict[str, Any]:
+async def _web_fetch(params: dict[str, Any]) -> dict[str, Any]:
     url = params["url"]
     max_chars = params.get("max_chars", 5000)
-    is_safe, err = validate_safe_url(url)
-    if not is_safe:
-        return {"content": "", "error": f"SSRF Blocked: {err}"}
     try:
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            },
-        )
-        with urllib.request.urlopen(req, timeout=12) as resp:
-            data = resp.read().decode("utf-8", errors="replace")
+        status, data, _ = safe_http_fetch(url, timeout=12.0)
+        if status >= 400:
+            return {"content": "", "error": f"HTTP {status}: {data[:300]}"}
         text = re.sub(r"<script[^>]*>.*?</script>", "", data, flags=re.DOTALL)
         text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)
         text = re.sub(r"<[^>]+>", " ", text)
@@ -269,7 +339,7 @@ async def _web_fetch(params: Dict[str, Any]) -> Dict[str, Any]:
         return {"content": "", "error": str(e)}
 
 
-async def _calculator(params: Dict[str, Any]) -> Dict[str, Any]:
+async def _calculator(params: dict[str, Any]) -> dict[str, Any]:
     import ast as _ast
     import math
 
@@ -314,35 +384,34 @@ async def _calculator(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"result": result}
 
 
-async def _run_python(params: Dict[str, Any]) -> Dict[str, Any]:
-    code = params["code"]
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable,
-            "-c",
-            code,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
-        out_msg = stdout.decode(errors="replace")
-        err_msg = stderr.decode(errors="replace")
-        ret = {"output": out_msg}
-        if err_msg:
-            ret["error"] = err_msg
-        return ret
-    except asyncio.TimeoutError:
-        return {"output": "", "error": "Timed out (30s limit)"}
-    except Exception as e:
-        return {"output": "", "error": str(e)}
+async def _run_python(params: dict[str, Any]) -> dict[str, Any]:
+    code = params.get("code", "")
+    timeout = params.get("timeout", 30)
+    sandbox = get_default_sandbox()
+    return await sandbox.run_code(code, timeout=timeout)
 
 
-async def _run_shell(params: Dict[str, Any]) -> Dict[str, Any]:
+async def _run_shell(params: dict[str, Any]) -> dict[str, Any]:
+    policy = get_autonomy_policy()
+    tenant_id = params.get("tenant_id", "default")
+    if policy:
+        action = "tool:run_shell"
+        actor = params.get("actor", "user")
+        approved = await policy.require_approval(action, actor=actor, tenant_id=tenant_id)
+        if not approved:
+            return {
+                "stdout": "",
+                "stderr": f"Approval required for '{action}'. Action has not been approved.",
+                "returncode": -1,
+                "approval_required": True,
+            }
     command = params["command"]
     timeout = params.get("timeout", 30)
+    root = get_workspace_root()
     try:
         proc = await asyncio.create_subprocess_shell(
             command,
+            cwd=str(root),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -352,32 +421,50 @@ async def _run_shell(params: Dict[str, Any]) -> Dict[str, Any]:
             "stderr": stderr.decode(errors="replace"),
             "returncode": proc.returncode,
         }
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return {"stdout": "", "stderr": "Timed out", "returncode": -1}
 
 
-async def _read_file(params: Dict[str, Any]) -> Dict[str, Any]:
-    path = Path(params["path"])
+async def _read_file(params: dict[str, Any]) -> dict[str, Any]:
+    resolved, err = resolve_confined_path(params["path"], must_exist=True)
+    if not resolved:
+        return {"content": "", "error": err}
+    if not resolved.is_file():
+        return {"content": "", "error": f"Path is not a regular file: {params['path']}"}
     encoding = params.get("encoding", "utf-8")
-    if not path.exists():
-        return {"content": "", "error": f"File not found: {path}"}
-    return {"content": path.read_text(encoding=encoding)}
+    return {"content": resolved.read_text(encoding=encoding)}
 
 
-async def _write_file(params: Dict[str, Any]) -> Dict[str, Any]:
-    path = Path(params["path"])
+async def _write_file(params: dict[str, Any]) -> dict[str, Any]:
+    resolved, err = resolve_confined_path(params["path"], must_exist=False)
+    if not resolved:
+        return {"error": err}
+    policy = get_autonomy_policy()
+    tenant_id = params.get("tenant_id", "default")
+    if policy:
+        action = "tool:write_file"
+        actor = params.get("actor", "user")
+        approved = await policy.require_approval(action, actor=actor, tenant_id=tenant_id)
+        if not approved:
+            return {
+                "error": f"Approval required for '{action}'. Action has not been approved.",
+                "approval_required": True,
+            }
     content = params["content"]
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
-    return {"bytes_written": len(content.encode("utf-8"))}
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    resolved.write_text(content, encoding="utf-8")
+    return {"bytes_written": len(content.encode("utf-8")), "path": str(resolved)}
 
 
-async def _list_directory(params: Dict[str, Any]) -> Dict[str, Any]:
-    path = Path(params["path"])
-    if not path.exists():
-        return {"entries": [], "error": f"Directory not found: {path}"}
+async def _list_directory(params: dict[str, Any]) -> dict[str, Any]:
+    target_path = params.get("path", ".")
+    resolved, err = resolve_confined_path(target_path, must_exist=True)
+    if not resolved:
+        return {"entries": [], "error": err}
+    if not resolved.is_dir():
+        return {"entries": [], "error": f"Path is not a directory: {target_path}"}
     entries = []
-    for item in sorted(path.iterdir()):
+    for item in sorted(resolved.iterdir()):
         entries.append(
             {
                 "name": item.name,
@@ -388,7 +475,7 @@ async def _list_directory(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"entries": entries}
 
 
-async def _json_query(params: Dict[str, Any]) -> Dict[str, Any]:
+async def _json_query(params: dict[str, Any]) -> dict[str, Any]:
     data = json.loads(params["json_str"])
     keys = params["key_path"].split(".")
     for k in keys:
@@ -399,46 +486,82 @@ async def _json_query(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"result": data}
 
 
-async def _json_transform(params: Dict[str, Any]) -> Dict[str, Any]:
+async def _json_transform(params: dict[str, Any]) -> dict[str, Any]:
     try:
         data = json.loads(params["json_str"])
     except Exception as e:
         return {"error": f"Invalid JSON: {e}"}
-    safe_builtins = {
-        "len": len,
-        "int": int,
-        "float": float,
-        "str": str,
-        "bool": bool,
-        "sum": sum,
-        "min": min,
-        "max": max,
-        "sorted": sorted,
-        "reversed": reversed,
-        "list": list,
-        "dict": dict,
-    }
+
+    expr = params.get("expression", "").strip()
+    if not expr:
+        return {"error": "Expression is required"}
+
+    # Defense-in-depth: proactively block any attribute/method escape tokens
+    if "__" in expr or "import" in expr or "eval" in expr or "exec" in expr:
+        return {
+            "error": "Security violation: access to private attributes or execution keywords is prohibited"
+        }
+
+    # Support JMESPath syntax directly if indicated
+    if expr.startswith("jmespath:"):
+        try:
+            import jmespath
+
+            return {"result": jmespath.search(expr[9:].strip(), data)}
+        except Exception as e:
+            return {"error": f"JMESPath error: {e}"}
+
+    # Evaluate safely using simpleeval AST parser (strictly disallows dunder, globals, builtins)
     try:
-        result = eval(params["expression"], {"__builtins__": safe_builtins}, {"d": data, "data": data})
+        from simpleeval import EvalWithCompoundTypes
+
+        s = EvalWithCompoundTypes()
+        s.functions.update(
+            {
+                "len": len,
+                "int": int,
+                "float": float,
+                "str": str,
+                "bool": bool,
+                "sum": sum,
+                "min": min,
+                "max": max,
+                "sorted": sorted,
+                "reversed": lambda x: list(reversed(x)),
+                "list": list,
+                "dict": dict,
+            }
+        )
+        s.names = {"d": data, "data": data}
+        result = s.eval(expr)
         return {"result": result}
     except Exception as e:
-        return {"error": str(e)}
+        # Fallback to JMESPath for JSON-query-style expressions
+        try:
+            import jmespath
+
+            res = jmespath.search(expr, data)
+            if res is not None:
+                return {"result": res}
+        except Exception:
+            pass
+        return {"error": f"Transform error: {e}"}
 
 
-async def _current_datetime(params: Dict[str, Any]) -> Dict[str, Any]:
+async def _current_datetime(params: dict[str, Any]) -> dict[str, Any]:
     fmt = params.get("format", "%Y-%m-%d %H:%M:%S UTC")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return {"datetime": now.strftime(fmt), "timestamp": now.timestamp()}
 
 
-async def _diff_text(params: Dict[str, Any]) -> Dict[str, Any]:
+async def _diff_text(params: dict[str, Any]) -> dict[str, Any]:
     old = params["old_text"].splitlines(keepends=True)
     new = params["new_text"].splitlines(keepends=True)
     diff = difflib.unified_diff(old, new, fromfile="old", tofile="new")
     return {"diff": "".join(diff)}
 
 
-async def _hash_text(params: Dict[str, Any]) -> Dict[str, Any]:
+async def _hash_text(params: dict[str, Any]) -> dict[str, Any]:
     text = params["text"].encode("utf-8")
     algo = params.get("algorithm", "sha256")
     h = hashlib.new(algo)
@@ -446,7 +569,7 @@ async def _hash_text(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"hash": h.hexdigest()}
 
 
-async def _base64_encode(params: Dict[str, Any]) -> Dict[str, Any]:
+async def _base64_encode(params: dict[str, Any]) -> dict[str, Any]:
     text = params["text"]
     decode = params.get("decode", False)
     if decode:
@@ -454,9 +577,13 @@ async def _base64_encode(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"result": base64.b64encode(text.encode("utf-8")).decode("utf-8")}
 
 
-async def _git_info(params: Dict[str, Any]) -> Dict[str, Any]:
-    repo_path = params["repo_path"]
-    result = {}
+async def _git_info(params: dict[str, Any]) -> dict[str, Any]:
+    repo_path_raw = params.get("repo_path", ".")
+    resolved, err = resolve_confined_path(repo_path_raw, must_exist=True)
+    if not resolved:
+        return {"error": err}
+    repo_path = str(resolved)
+    result: dict[str, Any] = {"path": repo_path}
     for cmd, key in [
         ("git rev-parse --abbrev-ref HEAD", "branch"),
         ("git log -1 --format=%H %s", "last_commit"),
@@ -476,41 +603,45 @@ async def _git_info(params: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
-async def _http_request(params: Dict[str, Any]) -> Dict[str, Any]:
+async def _http_request(params: dict[str, Any]) -> dict[str, Any]:
     url = params["url"]
     method = params.get("method", "GET").upper()
     headers = params.get("headers", {})
     body = params.get("body")
-    is_safe, err = validate_safe_url(url)
-    if not is_safe:
-        return {"status": 403, "body": f"SSRF Blocked: {err}"}
     try:
         data = body.encode("utf-8") if body else None
-        req = urllib.request.Request(url, data=data, headers=headers, method=method)
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return {"status": resp.status, "body": resp.read().decode("utf-8", errors="replace")}
+        status, resp_body, _ = safe_http_fetch(url, method=method, headers=headers, body=data, timeout=15.0)
+        return {"status": status, "body": resp_body}
     except Exception as e:
         return {"status": 0, "body": str(e)}
 
 
-async def _grep(params: Dict[str, Any]) -> Dict[str, Any]:
+async def _grep(params: dict[str, Any]) -> dict[str, Any]:
     pattern = re.compile(params["pattern"])
-    search_path = Path(params.get("path", "."))
+    search_path_raw = params.get("path", ".")
+    resolved, err = resolve_confined_path(search_path_raw, must_exist=True)
+    if not resolved:
+        return {"matches": [], "error": err}
     include = params.get("include")
     matches = []
-    for f in search_path.rglob("*" if not include else include):
+    root = get_workspace_root()
+    allowed = get_allowed_roots()
+    for f in resolved.rglob("*" if not include else include):
         if not f.is_file() or len(matches) >= 50:
             break
+        if not any(f == r or r in f.parents for r in allowed):
+            continue
         try:
             for i, line in enumerate(f.read_text(encoding="utf-8", errors="replace").splitlines()):
                 if pattern.search(line):
-                    matches.append({"file": str(f), "line": i + 1, "text": line.strip()})
+                    rel = str(f.relative_to(root)) if root in f.parents else str(f)
+                    matches.append({"file": rel, "line": i + 1, "text": line.strip()})
         except Exception:
             continue
     return {"matches": matches}
 
 
-async def _system_info(params: Dict[str, Any]) -> Dict[str, Any]:
+async def _system_info(params: dict[str, Any]) -> dict[str, Any]:
     import multiprocessing
 
     return {
@@ -525,16 +656,21 @@ async def _system_info(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-async def _find_databases(params: Dict[str, Any]) -> Dict[str, Any]:
+async def _find_databases(params: dict[str, Any]) -> dict[str, Any]:
     """Discover local database files and connection configs in a directory tree."""
-    path = Path(params.get("path", "."))
+    path_raw = params.get("path", ".")
+    resolved, err = resolve_confined_path(path_raw, must_exist=True)
+    if not resolved:
+        return {"databases": [], "error": err}
     db_suffixes = (".sqlite", ".sqlite3", ".db", ".duckdb")
-    results: List[Dict[str, Any]] = []
-    if not path.exists():
-        return {"databases": [], "error": f"Path not found: {path}"}
+    results: list[dict[str, Any]] = []
+    allowed = get_allowed_roots()
+    root = get_workspace_root()
     try:
-        for f in path.rglob("*"):
+        for f in resolved.rglob("*"):
             if not f.is_file():
+                continue
+            if not any(f == r or r in f.parents for r in allowed):
                 continue
             low = f.name.lower()
             if f.suffix.lower() in db_suffixes:
@@ -542,7 +678,7 @@ async def _find_databases(params: Dict[str, Any]) -> Dict[str, Any]:
                     {
                         "kind": "file",
                         "engine": "sqlite",
-                        "path": str(f),
+                        "path": str(f.relative_to(root)) if root in f.parents else str(f),
                         "size": f.stat().st_size,
                     }
                 )
@@ -551,7 +687,7 @@ async def _find_databases(params: Dict[str, Any]) -> Dict[str, Any]:
                     {
                         "kind": "config",
                         "engine": "compose",
-                        "path": str(f),
+                        "path": str(f.relative_to(root)) if root in f.parents else str(f),
                         "note": "docker-compose — inspect for postgres/mysql/redis/qdrant/neo4j services",
                     }
                 )
@@ -560,7 +696,7 @@ async def _find_databases(params: Dict[str, Any]) -> Dict[str, Any]:
                     {
                         "kind": "config",
                         "engine": "env",
-                        "path": str(f),
+                        "path": str(f.relative_to(root)) if root in f.parents else str(f),
                         "note": "environment/config file — may hold DB credentials (DB_HOST, DATABASE_URL, etc.)",
                     }
                 )
@@ -571,7 +707,7 @@ async def _find_databases(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"databases": results}
 
 
-async def _query_database(params: Dict[str, Any]) -> Dict[str, Any]:
+async def _query_database(params: dict[str, Any]) -> dict[str, Any]:
     """Connect to a database autonomously and list tables or run a query."""
     engine = str(params.get("type", "sqlite")).lower()
     mode = params.get("mode", "query")
@@ -721,7 +857,7 @@ async def _query_database(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"error": f"unsupported engine: {engine}", "supported": ["sqlite", "postgres", "mysql", "redis"]}
 
 
-EXTENDED_HANDLERS: Dict[str, Any] = {
+EXTENDED_HANDLERS: dict[str, Any] = {
     "web_search": _web_search,
     "web_fetch": _web_fetch,
     "calculator": _calculator,

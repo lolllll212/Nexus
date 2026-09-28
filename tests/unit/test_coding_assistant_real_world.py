@@ -10,7 +10,6 @@ Covers:
 - Claude artifact generation, language tagging, and thinking process extraction
 """
 
-import json
 import pytest
 from starlette.testclient import TestClient
 
@@ -20,13 +19,13 @@ from nexus.infrastructure.api.main import create_app
 @pytest.fixture
 def client():
     app = create_app()
-    with TestClient(app) as c:
-        yield c
+    return TestClient(app, headers={"Authorization": "Bearer sk-test-1"})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. Real-World Algorithmic Problem Solving & Execution
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def test_real_world_lru_cache_algorithm(client):
     """Test implementing and executing an LRU Cache with capacity constraints."""
@@ -77,9 +76,9 @@ def has_cycle(num_nodes, edges):
     adj = defaultdict(list)
     for u, v in edges:
         adj[u].append(v)
-    
+
     visited = [0] * num_nodes  # 0=unvisited, 1=visiting, 2=visited
-    
+
     def dfs(node):
         visited[node] = 1
         for neighbor in adj[node]:
@@ -114,6 +113,7 @@ print("Graph cycle detection tests passed.")
 # 2. Real-World Code Debugging and Error Reporting
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def test_real_world_debugging_syntax_and_logic_error(client):
     """Verify that syntax errors and runtime exceptions in buggy code are properly reported."""
     broken_code = """
@@ -134,6 +134,7 @@ print(compute_metrics([]))
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. Real-World Unit Test Runner Harness
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def test_real_world_test_runner_success(client):
     """Test running a full unittest test suite against production code."""
@@ -191,6 +192,7 @@ class TestMultiply(unittest.TestCase):
 # 4. Real-World Technical Web Research Integration
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def test_real_world_coding_chat_with_web_research(client):
     """Test asking for technical documentation/research and verifying tool invocation."""
     res = client.post(
@@ -219,6 +221,7 @@ def test_real_world_coding_chat_with_web_research(client):
 # 5. Real-World GitHub Repository Inspection Integration
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def test_real_world_coding_chat_with_github_inspection(client):
     """Test inspecting repository git status and metadata."""
     res = client.post(
@@ -239,6 +242,7 @@ def test_real_world_coding_chat_with_github_inspection(client):
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. Real-World Python Code Execution from Prompt
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def test_real_world_coding_chat_executes_python_blocks(client):
     """Test that embedded Python scripts in the prompt are automatically executed in sandbox."""
@@ -267,6 +271,7 @@ print(f"Fact 6: {fact(6)}")
 # ─────────────────────────────────────────────────────────────────────────────
 # 7. Claude Artifacts & Templates Endpoints
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def test_real_world_coding_templates(client):
     """Test fetching pre-configured prompt templates for real-world tasks."""

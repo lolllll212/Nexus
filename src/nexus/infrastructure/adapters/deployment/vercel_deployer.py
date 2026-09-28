@@ -86,8 +86,6 @@ class VercelDeployer(DeploymentProvider):
         return None
 
     async def undeploy(self, deployment_id: str) -> None:
-        resp = await self._client.delete(
-            f"{self._api_base}/{deployment_id}", headers=self._headers()
-        )
+        resp = await self._client.delete(f"{self._api_base}/{deployment_id}", headers=self._headers())
         if resp.status_code >= 400:
             raise DeploymentError(f"Vercel delete error {resp.status_code}: {resp.text[:200]}")

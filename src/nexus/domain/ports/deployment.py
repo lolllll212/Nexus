@@ -10,19 +10,18 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict
-
 
 
 @dataclass
 class DeploymentRequest:
     """What the brain wants deployed."""
+
     tool_id: str
     name: str
     code: str
     requirements: list = field(default_factory=list)
-    resources: Dict = field(default_factory=dict)  # cpu, memory
-    environment: Dict[str, str] = field(default_factory=dict)
+    resources: dict = field(default_factory=dict)  # cpu, memory
+    environment: dict[str, str] = field(default_factory=dict)
     auto_scale: bool = False
     max_instances: int = 1
 
@@ -30,11 +29,12 @@ class DeploymentRequest:
 @dataclass
 class DeploymentInfo:
     """What the platform returned."""
+
     endpoint: str
     platform: str
     deployment_id: str
     status: str = "active"
-    metadata: Dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
 
 
 class DeploymentProvider(ABC):

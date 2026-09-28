@@ -4,8 +4,9 @@ Tests for Integrations (GitHub/Gmail), Autonomous Research, Workflows, and Audio
 
 import pytest
 from fastapi.testclient import TestClient
+
 from nexus.infrastructure.api.main import create_app
-from tests.fakes.container import FakeContainer
+from tests.fakes.container import TEST_API_KEY_1, FakeContainer
 
 
 @pytest.fixture
@@ -13,7 +14,7 @@ def client():
     app = create_app()
     fake = FakeContainer()
     app.state.container = fake
-    return TestClient(app)
+    return TestClient(app, headers={"Authorization": f"Bearer {TEST_API_KEY_1}"})
 
 
 def test_github_integration_endpoints(client):

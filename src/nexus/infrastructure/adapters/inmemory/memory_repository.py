@@ -8,7 +8,6 @@ offline dreaming, evals, and local demos.
 from __future__ import annotations
 
 import datetime
-from typing import Dict, List, Optional
 
 from nexus.domain.entities.memory import Memory
 from nexus.domain.ports.memory_repository import MemoryRepository
@@ -16,8 +15,8 @@ from nexus.domain.ports.memory_repository import MemoryRepository
 
 class InMemoryMemoryRepository(MemoryRepository):
     def __init__(self) -> None:
-        self.memories: Dict[str, Memory] = {}
-        self._tenant: Dict[str, str] = {}
+        self.memories: dict[str, Memory] = {}
+        self._tenant: dict[str, str] = {}
 
     async def ensure_collection(self, tenant_id: str = "default") -> None:
         return None
@@ -30,8 +29,8 @@ class InMemoryMemoryRepository(MemoryRepository):
         self._tenant[memory.id] = tenant_id
 
     async def retrieve(
-        self, query: str, limit: int = 10, memory_types: Optional[list] = None, tenant_id: str = "default"
-    ) -> List[Memory]:
+        self, query: str, limit: int = 10, memory_types: list | None = None, tenant_id: str = "default"
+    ) -> list[Memory]:
         results = [m for m in self.memories.values() if self._tenant.get(m.id) == tenant_id]
         if memory_types:
             results = [m for m in results if m.memory_type in memory_types]
@@ -45,12 +44,12 @@ class InMemoryMemoryRepository(MemoryRepository):
             return [m for m in scored if _score(m, q) > 0][:limit]
         return list(reversed(results))[:limit]
 
-    async def get_by_id(self, memory_id: str) -> Optional[Memory]:
+    async def get_by_id(self, memory_id: str) -> Memory | None:
         return self.memories.get(memory_id)
 
     async def find_stale(
         self, threshold_days: int, limit: int = 100, min_accesses: int = 1, tenant_id: str = "default"
-    ) -> List[Memory]:
+    ) -> list[Memory]:
         cutoff = _utcnow() - datetime.timedelta(days=threshold_days)
         stale = [
             m
@@ -65,7 +64,7 @@ class InMemoryMemoryRepository(MemoryRepository):
         self.memories.pop(memory_id, None)
         self._tenant.pop(memory_id, None)
 
-    async def delete_many(self, memory_ids: List[str], tenant_id: str = "default") -> None:
+    async def delete_many(self, memory_ids: list[str], tenant_id: str = "default") -> None:
         for memory_id in memory_ids:
             self.memories.pop(memory_id, None)
             self._tenant.pop(memory_id, None)
@@ -76,7 +75,7 @@ class InMemoryMemoryRepository(MemoryRepository):
 
     async def find_by_emotional_weight(
         self, min_intensity: float, limit: int = 100, tenant_id: str = "default"
-    ) -> List[Memory]:
+    ) -> list[Memory]:
         charged = [
             m
             for m in self.memories.values()

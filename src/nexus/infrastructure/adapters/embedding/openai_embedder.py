@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 from nexus.domain.ports.llm_provider import EmbeddingProvider
 
 
@@ -21,7 +19,7 @@ class OpenAIEmbedder(EmbeddingProvider):
         api_key: str,
         model: str = "text-embedding-3-large",
         dimension: int = 1536,
-        base_url: Optional[str] = None,
+        base_url: str | None = None,
     ) -> None:
         # Local servers don't check the key; accept any value.
         self._api_key = api_key or "local-no-key"
@@ -40,12 +38,12 @@ class OpenAIEmbedder(EmbeddingProvider):
             return AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
         return AsyncOpenAI(api_key=self._api_key)
 
-    async def embed(self, text: str) -> List[float]:
+    async def embed(self, text: str) -> list[float]:
         client = self._client()
         resp = await client.embeddings.create(model=self._model, input=text)
         return resp.data[0].embedding
 
-    async def embed_batch(self, texts: List[str]) -> List[List[float]]:
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         client = self._client()
         resp = await client.embeddings.create(model=self._model, input=texts)
         return [d.embedding for d in resp.data]

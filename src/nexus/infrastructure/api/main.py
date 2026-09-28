@@ -10,12 +10,12 @@ import logging
 import os
 import time
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response, HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from nexus.domain.exceptions import (
@@ -32,7 +32,6 @@ from nexus.domain.exceptions import (
     ToolNotFoundError,
     UnauthorizedError,
 )
-from nexus.infrastructure.di.container import Config, Container
 from nexus.infrastructure.api.dependencies import get_container
 from nexus.infrastructure.api.routes import (
     analyze,
@@ -52,30 +51,36 @@ from nexus.infrastructure.api.routes import (
     tools,
     workflows,
 )
+from nexus.infrastructure.di.container import Config, Container
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    container = Container()
-    if container.config.json_logs:
-        from nexus.infrastructure.adapters.observability.observability import configure_logging
+    container = getattr(app.state, "container", None)
+    owns_container = False
+    if container is None:
+        container = Container()
+        owns_container = True
+        if container.config.json_logs:
+            from nexus.infrastructure.adapters.observability.observability import configure_logging
 
-        configure_logging(json_format=True)
-    await container.start()
-    app.state.container = container
+            configure_logging(json_format=True)
+        await container.start()
+        app.state.container = container
 
-    # The full subconscious coordinator (cortex events -> synthesis, patterns,
-    # dreaming, and the subcortex loops) - built by the composition root so
-    # handler subscriptions always match what the container wired.
-    coordinator = container.subconscious
-    await coordinator.start()
-    app.state.coordinator = coordinator
+        coordinator = container.subconscious
+        await coordinator.start()
+        app.state.coordinator = coordinator
 
     yield
 
-    try:
-        await coordinator.stop()
-    finally:
+    if owns_container:
+        coordinator = getattr(app.state, "coordinator", None)
+        if coordinator:
+            try:
+                await coordinator.stop()
+            except Exception:
+                pass
         await container.shutdown()
 
 
@@ -184,13 +189,15 @@ def create_app(config: Config | None = None) -> FastAPI:
         index_file = _target_dir / "index.html"
         if index_file.exists() and ("text/html" in accept or "application/json" not in accept):
             return HTMLResponse(content=index_file.read_text(encoding="utf-8"))
-        return JSONResponse({
-            "name": "NEXUS",
-            "tagline": "a new kind of brain",
-            "version": "0.1.0",
-            "conscious_loop": "/v1/chat",
-            "subconscious": "/v1/system/dream",
-        })
+        return JSONResponse(
+            {
+                "name": "NEXUS",
+                "tagline": "a new kind of brain",
+                "version": "0.1.0",
+                "conscious_loop": "/v1/chat",
+                "subconscious": "/v1/system/dream",
+            }
+        )
 
     @app.get("/metrics", tags=["meta"], include_in_schema=False)
     async def prometheus_metrics(request: Request) -> Response:
@@ -200,12 +207,14 @@ def create_app(config: Config | None = None) -> FastAPI:
             if rendered:
                 return Response(content=rendered, media_type="text/plain; version=0.0.4")
         from nexus.infrastructure.api.routes.telemetry import generate_prometheus_metrics
+
         text = await generate_prometheus_metrics(get_container(request))
         return Response(content=text, media_type="text/plain; version=0.0.4")
 
     @app.get("/dashboard", tags=["meta"], include_in_schema=False)
     async def dashboard() -> HTMLResponse:
         from pathlib import Path
+
         dashboard_path = Path(__file__).parent / "static" / "dashboard.html"
         content = dashboard_path.read_text(encoding="utf-8")
         return HTMLResponse(content=content)

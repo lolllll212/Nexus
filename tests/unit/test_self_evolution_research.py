@@ -20,8 +20,7 @@ from nexus.infrastructure.api.main import create_app
 @pytest.fixture
 def client():
     app = create_app()
-    with TestClient(app) as c:
-        yield c
+    return TestClient(app, headers={"Authorization": "Bearer sk-test-1"})
 
 
 def test_deep_research_generates_self_evolution_reflection(client):

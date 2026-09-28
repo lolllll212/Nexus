@@ -12,38 +12,6 @@ import json
 import os
 from dataclasses import dataclass, field
 
-from nexus.domain.value_objects.synapse import SynapseConfig
-
-# Ports (abstractions)
-from nexus.domain.ports.auth import Authenticator
-from nexus.domain.ports.cognition import ActionPolicyStore, CorticalColumnRegistry
-from nexus.domain.ports.event_bus import Event, EventBus, EventTopic
-from nexus.domain.ports.execution import ToolExecutor
-from nexus.domain.ports.llm_provider import LLMProvider, EmbeddingProvider
-from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
-from nexus.domain.ports.observability import Metrics, Tracer
-from nexus.domain.ports.rate_limiter import RateLimiter
-from nexus.domain.ports.quota import QuotaService
-from nexus.domain.ports.sandbox import Sandbox
-from nexus.domain.ports.secrets import SecretStore
-from nexus.domain.ports.speech import SpeechToText, TextToSpeech
-from nexus.domain.ports.swarm import AgentRepository, SwarmRepository
-from nexus.domain.ports.tool_registry import ToolRegistry
-from nexus.domain.ports.deployment import DeploymentProvider
-from nexus.domain.ports.activity_feed import ActivityFeed
-
-# Application (use cases)
-from nexus.application.cortex.process_message import ProcessMessageUseCase
-from nexus.application.cortex.session_manager import SessionManager
-from nexus.application.interfaces.subconscious_coordinator import SubconsciousCoordinator
-from nexus.application.subcortex.amygdala import AmygdalaUseCase
-from nexus.application.subcortex.basal_ganglia import BasalGangliaUseCase
-from nexus.application.subcortex.synthesis import EntitySynthesisUseCase
-from nexus.application.subcortex.dreaming.dream_session import DreamSessionUseCase
-from nexus.application.subcortex.pattern_detection import PatternDetectionUseCase
-from nexus.application.subcortex.thalamus import ThalamicGatingUseCase
-from nexus.application.tools.generate_tool import GenerateToolUseCase
-from nexus.application.tools.self_heal import SelfHealUseCase
 from nexus.application.autonomy.goals import (
     ApproveGoalUseCase,
     AutonomyLoopUseCase,
@@ -52,8 +20,40 @@ from nexus.application.autonomy.goals import (
     GetGoalUseCase,
     ListGoalsUseCase,
 )
+
+# Application (use cases)
+from nexus.application.cortex.process_message import ProcessMessageUseCase
+from nexus.application.cortex.session_manager import SessionManager
+from nexus.application.interfaces.subconscious_coordinator import SubconsciousCoordinator
+from nexus.application.subcortex.amygdala import AmygdalaUseCase
+from nexus.application.subcortex.basal_ganglia import BasalGangliaUseCase
+from nexus.application.subcortex.dreaming.dream_session import DreamSessionUseCase
+from nexus.application.subcortex.pattern_detection import PatternDetectionUseCase
+from nexus.application.subcortex.synthesis import EntitySynthesisUseCase
+from nexus.application.subcortex.thalamus import ThalamicGatingUseCase
+from nexus.application.tools.generate_tool import GenerateToolUseCase
+from nexus.application.tools.self_heal import SelfHealUseCase
+from nexus.domain.ports.activity_feed import ActivityFeed
+
+# Ports (abstractions)
+from nexus.domain.ports.auth import Authenticator
 from nexus.domain.ports.autonomy import AutonomyPolicy
+from nexus.domain.ports.cognition import ActionPolicyStore, CorticalColumnRegistry
+from nexus.domain.ports.deployment import DeploymentProvider
+from nexus.domain.ports.event_bus import Event, EventBus, EventTopic
+from nexus.domain.ports.execution import ToolExecutor
 from nexus.domain.ports.goal_repository import GoalRepository
+from nexus.domain.ports.llm_provider import EmbeddingProvider, LLMProvider
+from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
+from nexus.domain.ports.observability import Metrics, Tracer
+from nexus.domain.ports.quota import QuotaService
+from nexus.domain.ports.rate_limiter import RateLimiter
+from nexus.domain.ports.sandbox import Sandbox
+from nexus.domain.ports.secrets import SecretStore
+from nexus.domain.ports.speech import SpeechToText, TextToSpeech
+from nexus.domain.ports.swarm import AgentRepository, SwarmRepository
+from nexus.domain.ports.tool_registry import ToolRegistry
+from nexus.domain.value_objects.synapse import SynapseConfig
 
 
 def _parse_json_env(name: str, default: dict | None = None) -> dict:
@@ -72,10 +72,16 @@ class Config:
 
     openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
     nvidia_api_key: str = field(
-        default_factory=lambda: os.getenv("NVIDIA_API_KEY") or os.getenv("NIM_API_KEY") or os.getenv("NEXUS_NVIDIA_API_KEY", "")
+        default_factory=lambda: os.getenv("NVIDIA_API_KEY")
+        or os.getenv("NIM_API_KEY")
+        or os.getenv("NEXUS_NVIDIA_API_KEY", "")
     )
-    nim_base_url: str = field(default_factory=lambda: os.getenv("NEXUS_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1"))
-    nim_model: str = field(default_factory=lambda: os.getenv("NEXUS_NIM_MODEL", "meta/llama-3.3-70b-instruct"))
+    nim_base_url: str = field(
+        default_factory=lambda: os.getenv("NEXUS_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
+    )
+    nim_model: str = field(
+        default_factory=lambda: os.getenv("NEXUS_NIM_MODEL", "meta/llama-3.3-70b-instruct")
+    )
     llm_provider: str = field(default_factory=lambda: os.getenv("NEXUS_LLM_PROVIDER", "openai").lower())
     llm_model: str = field(default_factory=lambda: os.getenv("NEXUS_LLM_MODEL", "gpt-4o"))
     llm_max_tokens: int = field(default_factory=lambda: int(os.getenv("NEXUS_LLM_MAX_TOKENS", "8192")))
@@ -166,7 +172,7 @@ class Config:
     # ---- Plugins ----
     plugins_dir: str = field(default_factory=lambda: os.getenv("NEXUS_PLUGINS_DIR", "plugins"))
     # ---- Sandbox (P1 security) ----
-    sandbox_backend: str = field(default_factory=lambda: os.getenv("NEXUS_SANDBOX_BACKEND", "subprocess"))
+    sandbox_backend: str = field(default_factory=lambda: os.getenv("NEXUS_SANDBOX_BACKEND", "docker"))
     # ---- Observability (P2) ----
     otel_enabled: bool = field(
         default_factory=lambda: os.getenv("NEXUS_OTEL_ENABLED", "false").lower() == "true"
@@ -212,11 +218,11 @@ class Container:
         self.working_memory: ShortTermMemory = self._build_working_memory()
         self.tool_registry: ToolRegistry = self._build_tool_registry()
         self.deployer: DeploymentProvider | None = self._build_deployer()
+        self.goal_repo: GoalRepository = self._build_goal_repo()
+        self.autonomy_policy: AutonomyPolicy = self._build_autonomy_policy()
         self.executor: ToolExecutor = self._build_executor()
         self.column_registry: CorticalColumnRegistry = self._build_column_registry()
         self.policy_store: ActionPolicyStore = self._build_policy_store()
-        self.goal_repo: GoalRepository = self._build_goal_repo()
-        self.autonomy_policy: AutonomyPolicy = self._build_autonomy_policy()
         self.agent_repo: AgentRepository = self._build_agent_repo()
         self.swarm_repo: SwarmRepository = self._build_swarm_repo()
 
@@ -296,7 +302,6 @@ class Container:
         )
 
         # ---- Swarm (P4) ----
-        from nexus.infrastructure.adapters.swarm.executor import SwarmAgentExecutor
         from nexus.application.swarm.swarm import (
             CreateSwarmUseCase,
             GetAgentUseCase,
@@ -306,6 +311,7 @@ class Container:
             RegisterAgentUseCase,
             SwarmCoordinatorUseCase,
         )
+        from nexus.infrastructure.adapters.swarm.executor import SwarmAgentExecutor
 
         self.register_agent = RegisterAgentUseCase(self.agent_repo)
         self.list_agents = ListAgentsUseCase(self.agent_repo)
@@ -573,9 +579,16 @@ class Container:
         return LocalDeployer()
 
     def _build_executor(self) -> ToolExecutor:
+        from nexus.infrastructure.adapters.execution.extended_tools import (
+            EXTENDED_HANDLERS,
+            set_autonomy_policy,
+            set_default_sandbox,
+        )
         from nexus.infrastructure.adapters.execution.registry_tool_executor import RegistryBackedToolExecutor
-        from nexus.infrastructure.adapters.execution.extended_tools import EXTENDED_HANDLERS
         from nexus.infrastructure.adapters.plugins.loader import PluginLoader
+
+        set_autonomy_policy(self.autonomy_policy)
+        set_default_sandbox(self.sandbox)
 
         # Start with extended builtin handlers
         all_handlers = dict(EXTENDED_HANDLERS)
@@ -588,7 +601,9 @@ class Container:
                 all_handlers.update(self.plugin_loader.handlers)
         self._plugin_infos = plugin_results
 
-        return RegistryBackedToolExecutor(self.tool_registry, self.sandbox, all_handlers)
+        return RegistryBackedToolExecutor(
+            self.tool_registry, self.sandbox, all_handlers, autonomy_policy=self.autonomy_policy
+        )
 
     def _build_column_registry(self) -> CorticalColumnRegistry:
         from nexus.infrastructure.adapters.cognition import InMemoryCorticalColumnRegistry

@@ -18,24 +18,25 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Awaitable, Callable, List, Optional
+from typing import TYPE_CHECKING
 
 from nexus.domain.entities.conversation import Conversation, MessageRole
-from nexus.domain.entities.memory import Memory, MemoryType, EmotionalWeight
+from nexus.domain.entities.memory import EmotionalWeight, Memory, MemoryType
 from nexus.domain.entities.thought import Thought, ThoughtType
-from nexus.domain.ports.event_bus import Event, EventBus, EventTopic, EventPriority
+from nexus.domain.ports.event_bus import Event, EventBus, EventPriority, EventTopic
 from nexus.domain.ports.llm_provider import LLMProvider
 from nexus.domain.ports.observability import Metrics, NoopMetrics, NoopTracer, Tracer
 
 if TYPE_CHECKING:
     from nexus.application.cortex.session_manager import SessionManager
     from nexus.domain.ports.quota import QuotaService
-from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
-from nexus.domain.ports.execution import ToolExecutor
-from nexus.domain.ports.tool_registry import ToolRegistry
-from nexus.domain.exceptions import InvalidToolCallError, LLMUnavailableError, QuotaExceededError
 from nexus.application.cortex.react_prompt import REACT_SYSTEM_PROMPT
+from nexus.domain.exceptions import InvalidToolCallError, LLMUnavailableError, QuotaExceededError
+from nexus.domain.ports.execution import ToolExecutor
+from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
+from nexus.domain.ports.tool_registry import ToolRegistry
 
 
 @dataclass
@@ -44,8 +45,8 @@ class MessageResult:
 
     response: str
     session_id: str
-    thoughts: List[Thought]
-    tools_used: List[str]
+    thoughts: list[Thought]
+    tools_used: list[str]
     memories_recalled: int
 
 
@@ -71,10 +72,10 @@ class ProcessMessageUseCase:
         tools: ToolRegistry,
         executor: ToolExecutor,
         event_bus: EventBus,
-        session_manager: "SessionManager",
+        session_manager: SessionManager,
         tracer: Tracer | None = None,
         metrics: Metrics | None = None,
-        memory_quota: "QuotaService | None" = None,
+        memory_quota: QuotaService | None = None,
     ) -> None:
         self._llm = llm
         self._memory_repo = memory_repo
@@ -92,13 +93,13 @@ class ProcessMessageUseCase:
         self,
         user_id: str,
         message: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         stream: bool = False,
         tenant_id: str = "default",
-        image_urls: Optional[List[str]] = None,
-        system_prompt: Optional[str] = None,
-        tools: Optional[ToolRegistry] = None,
-        on_event: Optional[Callable[[dict], Awaitable[None]]] = None,
+        image_urls: list[str] | None = None,
+        system_prompt: str | None = None,
+        tools: ToolRegistry | None = None,
+        on_event: Callable[[dict], Awaitable[None]] | None = None,
     ) -> MessageResult:
         started = time.perf_counter()
         async with self._tracer.span("process_message", {"user_id": user_id, "tenant_id": tenant_id}):
@@ -113,8 +114,8 @@ class ProcessMessageUseCase:
             memories = await self._recall(message, conversation)
 
             # --- 3. Run the ReAct loop (optionally multimodal / persona'd). ---
-            thoughts: List[Thought] = []
-            tools_used: List[str] = []
+            thoughts: list[Thought] = []
+            tools_used: list[str] = []
             active_tools = tools if tools is not None else self._tools
             response = await self._react_loop(
                 conversation,
@@ -153,13 +154,15 @@ class ProcessMessageUseCase:
                 labels={"tenant_id": tenant_id},
             )
 
-            return MessageResult(
+            result = MessageResult(
                 response=response,
                 session_id=conversation.session_id,
                 thoughts=thoughts,
                 tools_used=tools_used,
                 memories_recalled=len(memories),
             )
+            return result
+        return result
 
     # ------------------------------------------------------------------ #
     #  Internal orchestration steps
@@ -182,7 +185,7 @@ class ProcessMessageUseCase:
             )
         )
 
-    async def _recall(self, query: str, conversation: Conversation) -> List[Memory]:
+    async def _recall(self, query: str, conversation: Conversation) -> list[Memory]:
         """Hybrid recall: vector similarity + graph traversal on active concepts."""
         tenant = conversation.tenant_id
         # Vector recall (semantic similarity)
@@ -194,7 +197,7 @@ class ProcessMessageUseCase:
             semantic = []
 
         # Graph recall (concepts connected to currently active ones)
-        graph_recalled: List[Memory] = []
+        graph_recalled: list[Memory] = []
         for concept_id in conversation.active_concepts[:5]:
             try:
                 # Retrieve memories linked to connected concepts
@@ -210,13 +213,14 @@ class ProcessMessageUseCase:
                         break
                     related = await self._concept_repo.get(conn.target_id, tenant_id=tenant)
                     if related:
-                        await self._concept_repo.upsert_connection(conn.reinforce(), tenant_id=tenant)
+                        conn.reinforce()
+                        await self._concept_repo.upsert_connection(conn, tenant_id=tenant)
             except Exception:
                 continue
 
         # Merge, de-duplicate by id, record accesses
         seen = set()
-        merged: List[Memory] = []
+        merged: list[Memory] = []
         for m in [*semantic, *graph_recalled]:
             if m.id not in seen:
                 seen.add(m.id)
@@ -231,19 +235,19 @@ class ProcessMessageUseCase:
     async def _react_loop(
         self,
         conversation: Conversation,
-        memories: List[Memory],
-        thoughts: List[Thought],
-        tools_used: List[str],
-        image_urls: Optional[List[str]] = None,
-        system_prompt: Optional[str] = None,
-        tools: Optional[ToolRegistry] = None,
-        on_event: Optional[Callable[[dict], Awaitable[None]]] = None,
+        memories: list[Memory],
+        thoughts: list[Thought],
+        tools_used: list[str],
+        image_urls: list[str] | None = None,
+        system_prompt: str | None = None,
+        tools: ToolRegistry | None = None,
+        on_event: Callable[[dict], Awaitable[None]] | None = None,
     ) -> str:
         """Autonomous ReAct: Think -> Act -> Observe -> Repeat until final answer."""
         context = self._build_context(conversation, memories, image_urls, system_prompt)
         active_tools = tools if tools is not None else self._tools
         iteration = 0
-        seen_tools: List[str] = []
+        seen_tools: list[str] = []
         total_tokens = self._estimate_tokens(context)
 
         tool_catalog = []
@@ -410,14 +414,14 @@ class ProcessMessageUseCase:
     def _build_context(
         self,
         conversation: Conversation,
-        memories: List[Memory],
-        image_urls: Optional[List[str]] = None,
-        system_prompt: Optional[str] = None,
-    ) -> List[dict]:
+        memories: list[Memory],
+        image_urls: list[str] | None = None,
+        system_prompt: str | None = None,
+    ) -> list[dict]:
         ctx = conversation.to_llm_context()
 
         # Build system messages in order of priority
-        sys_msgs: List[dict] = []
+        sys_msgs: list[dict] = []
 
         # 1. Agent/persona prompt — primary directive, always first
         if system_prompt:
@@ -446,7 +450,7 @@ class ProcessMessageUseCase:
             ctx = self._attach_images(ctx, image_urls)
         return ctx
 
-    def _attach_images(self, context: List[dict], image_urls: List[str]) -> List[dict]:
+    def _attach_images(self, context: list[dict], image_urls: list[str]) -> list[dict]:
         """Convert the most recent user message into OpenAI content blocks with images.
 
         `content` becomes a list of {type: text|image_url} parts - the OpenAI
@@ -461,11 +465,11 @@ class ProcessMessageUseCase:
                 break
         return context
 
-    def _format_memories(self, memories: List[Memory]) -> str:
+    def _format_memories(self, memories: list[Memory]) -> str:
         """Legacy method — memories now injected in _build_context."""
         return "Relevant memories:\n" + "\n".join(f"- {m.content}" for m in memories)
 
-    def _estimate_tokens(self, messages: List[dict]) -> int:
+    def _estimate_tokens(self, messages: list[dict]) -> int:
         """Rough token estimate: ~4 chars per token for English text."""
         total = 0
         for msg in messages:
@@ -478,7 +482,7 @@ class ProcessMessageUseCase:
                         total += len(part["text"]) // 4 + 4
         return total
 
-    def _synthesize_from_observations(self, context: List[dict], reason: str) -> str:
+    def _synthesize_from_observations(self, context: list[dict], reason: str) -> str:
         """Assemble a forced final answer from what's already been gathered."""
         observations = [
             str(m.get("content", "")) for m in context if "[OBSERVATION]" in str(m.get("content", ""))
@@ -486,7 +490,7 @@ class ProcessMessageUseCase:
         synthesis = "\n".join(observations[-3:]) or f"No observations gathered ({reason})."
         return f"FINAL ANSWER (auto-synthesized, {reason}):\n{synthesis}"
 
-    async def _summarize_context(self, context: List[dict], tools: ToolRegistry) -> List[dict]:
+    async def _summarize_context(self, context: list[dict], tools: ToolRegistry) -> list[dict]:
         """Compress old conversation messages to stay within token budget.
 
         Strategy:
@@ -555,7 +559,7 @@ class ProcessMessageUseCase:
                 return reasoning[idx + len(marker) :].strip()
         return reasoning.strip()
 
-    def _extract_last_content(self, context: List[dict]) -> str:
+    def _extract_last_content(self, context: list[dict]) -> str:
         """Get the last meaningful content from context."""
         for msg in reversed(context):
             content = msg.get("content", "")

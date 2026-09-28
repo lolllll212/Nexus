@@ -7,15 +7,15 @@ for hands-free J.A.R.V.I.S. operating system interactions.
 
 from __future__ import annotations
 
-import time
-from typing import Any, Dict, Optional
-from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from typing import Any
 
-from nexus.infrastructure.api.dependencies import get_container
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel, Field
+
+from nexus.infrastructure.api.dependencies import get_container, require_identity
 from nexus.infrastructure.di.container import Container
 
-router = APIRouter(prefix="/api/audio", tags=["audio"])
+router = APIRouter(prefix="/api/audio", tags=["audio"], dependencies=[Depends(require_identity)])
 
 
 class TTSRequest(BaseModel):
@@ -42,7 +42,7 @@ class STTResponse(BaseModel):
 
 
 @router.get("/status")
-async def get_audio_status() -> Dict[str, Any]:
+async def get_audio_status() -> dict[str, Any]:
     return {
         "stt": {
             "engine": "Whisper-1 / Web Speech Recognition",
@@ -81,8 +81,8 @@ async def text_to_speech(
 
 @router.post("/stt", response_model=STTResponse)
 async def speech_to_text(
-    audio_file: Optional[UploadFile] = File(None),
-    transcript_hint: Optional[str] = Form(None),
+    audio_file: UploadFile | None = File(None),
+    transcript_hint: str | None = Form(None),
     container: Container = Depends(get_container),
 ) -> STTResponse:
     # If a transcript hint was sent (e.g. from browser Web Speech), return it cleanly

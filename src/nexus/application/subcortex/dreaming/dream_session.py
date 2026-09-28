@@ -14,20 +14,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import List
 
+from nexus.application.subcortex.dreaming.compress import CompressionResult, CompressionUseCase
+from nexus.application.subcortex.dreaming.consolidate import ConsolidationResult, ConsolidationUseCase
+from nexus.application.subcortex.dreaming.prune import PruningResult, PruningUseCase
+from nexus.application.subcortex.dreaming.simulate import SimulationResult, SimulationUseCase
 from nexus.domain.ports.event_bus import Event, EventBus, EventTopic
+from nexus.domain.ports.execution import ToolExecutor
 from nexus.domain.ports.llm_provider import LLMProvider
 from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
 from nexus.domain.ports.observability import Metrics, NoopMetrics, NoopTracer, Tracer
-from nexus.domain.ports.execution import ToolExecutor
 from nexus.domain.ports.sandbox import Sandbox
 from nexus.domain.value_objects.synapse import SynapseConfig
-
-from nexus.application.subcortex.dreaming.compress import CompressionUseCase, CompressionResult
-from nexus.application.subcortex.dreaming.prune import PruningUseCase, PruningResult
-from nexus.application.subcortex.dreaming.simulate import SimulationUseCase, SimulationResult
-from nexus.application.subcortex.dreaming.consolidate import ConsolidationUseCase, ConsolidationResult
 
 
 @dataclass
@@ -160,8 +158,9 @@ class DreamSessionUseCase:
                 )
             )
             return result
+        return result
 
-    async def _measure_recall(self, probes: List[str], tenant_id: str = "default") -> float | None:
+    async def _measure_recall(self, probes: list[str], tenant_id: str = "default") -> float | None:
         """Fraction of probe queries that retrieve at least one memory.
 
         A probe is a raw episodic memory's own content. If `retrieve` finds

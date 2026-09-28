@@ -9,11 +9,11 @@ Tests for production hardening features:
 
 import hashlib
 import hmac
-import pytest
+
 from starlette.testclient import TestClient
 
+from nexus.infrastructure.adapters.security.ssrf import validate_safe_url
 from nexus.infrastructure.api.main import create_app
-from nexus.infrastructure.adapters.security.ssrf import validate_safe_url, is_safe_ip
 from nexus.infrastructure.api.routes.integrations import verify_github_signature
 
 
@@ -89,7 +89,7 @@ def test_prometheus_metrics_endpoint():
         assert "nexus_requests_total" in text
 
         # JSON Telemetry
-        res_json = client.get("/api/system/telemetry")
+        res_json = client.get("/api/system/telemetry", headers={"Authorization": "Bearer sk-test-1"})
         assert res_json.status_code == 200
         data = res_json.json()
         assert data["status"] == "online"
@@ -99,7 +99,7 @@ def test_prometheus_metrics_endpoint():
 
 def test_nim_streaming_endpoint():
     app = create_app()
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Authorization": "Bearer sk-test-1"}) as client:
         res = client.post(
             "/api/nim/chat/stream",
             json={"prompt": "Provide production status report.", "tier": "cortex"},
@@ -156,9 +156,8 @@ def test_request_id_and_head_probes():
 
 def test_websocket_telemetry():
     app = create_app()
-    with TestClient(app) as client:
-        with client.websocket_connect("/ws/telemetry") as ws:
-            data = ws.receive_json()
-            assert data["type"] == "telemetry_pulse"
-            assert "uptime_seconds" in data
-            assert data["tools_count"] >= 20
+    with TestClient(app) as client, client.websocket_connect("/ws/telemetry") as ws:
+        data = ws.receive_json()
+        assert data["type"] == "telemetry_pulse"
+        assert "uptime_seconds" in data
+        assert data["tools_count"] >= 20

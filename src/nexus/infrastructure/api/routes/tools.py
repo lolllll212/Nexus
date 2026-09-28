@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from typing import List
 
 from nexus.application.tools.generate_tool import ToolSpecRequest
 from nexus.infrastructure.api.dependencies import (
@@ -37,9 +36,9 @@ class GenerateRequest(BaseModel):
     name: str
     description: str = ""
     problem_statement: str = Field(..., min_length=10)
-    requirements: List[str] = Field(default_factory=list)
-    input_examples: List[dict] = Field(default_factory=list)
-    expected_outputs: List[dict] = Field(default_factory=list)
+    requirements: list[str] = Field(default_factory=list)
+    input_examples: list[dict] = Field(default_factory=list)
+    expected_outputs: list[dict] = Field(default_factory=list)
 
 
 class GenerateResponse(BaseModel):
@@ -49,7 +48,7 @@ class GenerateResponse(BaseModel):
     endpoint: str | None = None
 
 
-@router.get("", response_model=List[ToolOut])
+@router.get("", response_model=list[ToolOut])
 async def list_tools(container: Container = Depends(get_container)):
     tools = await container.tool_registry.list_all()
     return [

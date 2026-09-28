@@ -14,12 +14,12 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 
-from nexus.application.subcortex.synthesis import EntitySynthesisUseCase
-from nexus.application.subcortex.pattern_detection import PatternDetectionUseCase
-from nexus.application.subcortex.dreaming.dream_session import DreamSessionUseCase
-from nexus.application.subcortex.thalamus import ThalamicGatingUseCase
-from nexus.application.subcortex.basal_ganglia import BasalGangliaUseCase
 from nexus.application.subcortex.amygdala import AmygdalaUseCase
+from nexus.application.subcortex.basal_ganglia import BasalGangliaUseCase
+from nexus.application.subcortex.dreaming.dream_session import DreamSessionUseCase
+from nexus.application.subcortex.pattern_detection import PatternDetectionUseCase
+from nexus.application.subcortex.synthesis import EntitySynthesisUseCase
+from nexus.application.subcortex.thalamus import ThalamicGatingUseCase
 from nexus.domain.ports.event_bus import Event, EventBus, EventTopic
 
 
@@ -137,7 +137,7 @@ class SubconsciousCoordinator:
             wait = (next_dream - now).total_seconds()
             try:
                 await asyncio.wait_for(self._sleep_tick(), timeout=min(wait, 3600))
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
             now = datetime.utcnow()

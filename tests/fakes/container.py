@@ -6,8 +6,6 @@ but injects in-memory adapters, so API route tests can run with zero external in
 
 from __future__ import annotations
 
-from nexus.application.cortex.process_message import ProcessMessageUseCase
-from nexus.application.cortex.session_manager import SessionManager
 from nexus.application.autonomy.goals import (
     ApproveGoalUseCase,
     AutonomyLoopUseCase,
@@ -16,15 +14,8 @@ from nexus.application.autonomy.goals import (
     GetGoalUseCase,
     ListGoalsUseCase,
 )
-from nexus.application.swarm.swarm import (
-    CreateSwarmUseCase,
-    GetAgentUseCase,
-    GetSwarmUseCase,
-    ListAgentsUseCase,
-    ListSwarmsUseCase,
-    RegisterAgentUseCase,
-    SwarmCoordinatorUseCase,
-)
+from nexus.application.cortex.process_message import ProcessMessageUseCase
+from nexus.application.cortex.session_manager import SessionManager
 from nexus.application.interfaces.subconscious_coordinator import SubconsciousCoordinator
 from nexus.application.subcortex.amygdala import AmygdalaUseCase
 from nexus.application.subcortex.basal_ganglia import BasalGangliaUseCase
@@ -35,23 +26,29 @@ from nexus.application.subcortex.spatial.grid_cells import GridCellNavigationUse
 from nexus.application.subcortex.spatial.hex_scaling import BoundlessScalingUseCase
 from nexus.application.subcortex.synthesis import EntitySynthesisUseCase
 from nexus.application.subcortex.thalamus import ThalamicGatingUseCase
+from nexus.application.swarm.swarm import (
+    CreateSwarmUseCase,
+    GetAgentUseCase,
+    GetSwarmUseCase,
+    ListAgentsUseCase,
+    ListSwarmsUseCase,
+    RegisterAgentUseCase,
+    SwarmCoordinatorUseCase,
+)
 from nexus.application.tools.generate_tool import GenerateToolUseCase
 from nexus.application.tools.self_heal import SelfHealUseCase
 from nexus.domain.ports.observability import NoopTracer
 from nexus.domain.value_objects.synapse import SynapseConfig
-
 from nexus.infrastructure.adapters.auth.api_key_authenticator import ApiKeyAuthenticator
 from nexus.infrastructure.adapters.autonomy.executor import CortexStepExecutor
 from nexus.infrastructure.adapters.autonomy.goal_repository import InMemoryGoalRepository
 from nexus.infrastructure.adapters.autonomy.policy import DefaultAutonomyPolicy
-from nexus.infrastructure.adapters.security.quota_service import RateLimitQuota
-from nexus.infrastructure.adapters.swarm.executor import SwarmAgentExecutor
-from nexus.infrastructure.adapters.swarm.repositories import InMemoryAgentRepository, InMemorySwarmRepository
-from nexus.infrastructure.adapters.observability.observability import InMemoryMetrics
 from nexus.infrastructure.adapters.observability.activity_feed import InMemoryActivityFeed
+from nexus.infrastructure.adapters.observability.observability import InMemoryMetrics
 from nexus.infrastructure.adapters.security.rate_limiter import SlidingWindowRateLimiter
 from nexus.infrastructure.adapters.security.secrets import EnvSecretStore
-
+from nexus.infrastructure.adapters.swarm.executor import SwarmAgentExecutor
+from nexus.infrastructure.adapters.swarm.repositories import InMemoryAgentRepository, InMemorySwarmRepository
 from tests.fakes import (
     FakeActionPolicyStore,
     FakeConceptRepository,
@@ -95,6 +92,7 @@ class FakeContainer:
         self.llm = FakeLLM(script=llm_script)
         self.background_llm = FakeLLM(script=llm_script)
         from nexus.infrastructure.adapters.llm.nvidia_nim_provider import NvidiaNimProvider
+
         self.nim_provider = NvidiaNimProvider(api_key="mock-key")
         self.speech_to_text = FakeSpeechToText()
         self.text_to_speech = FakeTextToSpeech()

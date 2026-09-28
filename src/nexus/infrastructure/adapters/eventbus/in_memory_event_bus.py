@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Dict, List
 
 from nexus.domain.ports.event_bus import Event, EventBus, EventHandler, EventTopic
 
@@ -12,7 +11,7 @@ class InMemoryEventBus(EventBus):
     """Thread-safe in-process pub/sub. Useful for local dev and unit tests."""
 
     def __init__(self) -> None:
-        self._subscribers: Dict[str, List[EventHandler]] = {}
+        self._subscribers: dict[str, list[EventHandler]] = {}
         self._handler_tasks: set[asyncio.Task] = set()
         self._drain_timeout = 5.0
 

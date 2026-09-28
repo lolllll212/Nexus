@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Dict, List
 
 from nexus.domain.ports.event_bus import Event, EventBus, EventHandler, EventTopic
 
@@ -22,8 +21,8 @@ class RedisEventBus(EventBus):
         import redis.asyncio as aioredis
 
         self._redis = aioredis.Redis(host=host, port=port, db=db, decode_responses=True)
-        self._subscribers: Dict[str, List[EventHandler]] = {}
-        self._listener_tasks: List[asyncio.Task] = []
+        self._subscribers: dict[str, list[EventHandler]] = {}
+        self._listener_tasks: list[asyncio.Task] = []
         self._handler_tasks: set[asyncio.Task] = set()
         self._running = False
 

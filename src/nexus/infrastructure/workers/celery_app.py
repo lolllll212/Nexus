@@ -80,8 +80,10 @@ def _on_worker_shutdown(**kwargs) -> None:
 
 def async_task(func):
     """Decorator to run an async function as a Celery task."""
+
     @celery_app.task(bind=True)
     @wraps(func)
     def wrapper(self, *args, **kwargs):
         return asyncio.run(func(self, *args, **kwargs))
+
     return wrapper

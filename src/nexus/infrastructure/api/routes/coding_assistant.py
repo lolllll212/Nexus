@@ -10,35 +10,32 @@ Provides endpoints for:
 
 from __future__ import annotations
 
-import ast
-import json
 import logging
-import os
 import re
-import sys
 import time
 import uuid
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Any
 
-from nexus.infrastructure.api.dependencies import get_container
-from nexus.infrastructure.di.container import Container
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
+
+from nexus.infrastructure.api.dependencies import get_container, require_identity
 from nexus.infrastructure.api.routes.nim import _get_nim_provider
-from nexus.infrastructure.adapters.security.ssrf import validate_safe_url
+from nexus.infrastructure.di.container import Container
 
 logger = logging.getLogger("nexus.coding_assistant")
-router = APIRouter(prefix="/api/coding", tags=["coding_assistant"])
+router = APIRouter(prefix="/api/coding", tags=["coding_assistant"], dependencies=[Depends(require_identity)])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Request & Response Models
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class ToolCallRecord(BaseModel):
     tool: str
-    args: Dict[str, Any]
-    result: Dict[str, Any]
+    args: dict[str, Any]
+    result: dict[str, Any]
     duration_ms: float
     status: str = "success"
 
@@ -47,25 +44,25 @@ class Artifact(BaseModel):
     id: str
     title: str
     type: str  # "code", "markdown", "html", "test_report", "research"
-    language: Optional[str] = None
+    language: str | None = None
     content: str
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class CodingChatMessage(BaseModel):
     role: str
     content: str
-    thinking: Optional[str] = None
-    tools_used: List[ToolCallRecord] = Field(default_factory=list)
-    artifacts: List[Artifact] = Field(default_factory=list)
-    timestamp: Optional[str] = None
+    thinking: str | None = None
+    tools_used: list[ToolCallRecord] = Field(default_factory=list)
+    artifacts: list[Artifact] = Field(default_factory=list)
+    timestamp: str | None = None
 
 
 class CodingChatRequest(BaseModel):
     prompt: str
-    messages: Optional[List[CodingChatMessage]] = None
-    session_id: Optional[str] = None
-    model: Optional[str] = "meta/llama-3.3-70b-instruct"
+    messages: list[CodingChatMessage] | None = None
+    session_id: str | None = None
+    model: str | None = "meta/llama-3.3-70b-instruct"
     enable_web_search: bool = True
     enable_code_exec: bool = True
     enable_github: bool = True
@@ -77,8 +74,8 @@ class CodingChatResponse(BaseModel):
     session_id: str
     response: str
     thinking: str
-    tools_used: List[ToolCallRecord]
-    artifacts: List[Artifact]
+    tools_used: list[ToolCallRecord]
+    artifacts: list[Artifact]
     model: str
     duration_seconds: float
 
@@ -91,7 +88,7 @@ class CodeExecuteRequest(BaseModel):
 class CodeExecuteResponse(BaseModel):
     success: bool
     output: str
-    error: Optional[str] = None
+    error: str | None = None
     execution_time_ms: float
 
 
@@ -106,7 +103,7 @@ class TestRunnerResponse(BaseModel):
     tests_run: int
     failures: int
     output: str
-    error: Optional[str] = None
+    error: str | None = None
     duration_ms: float
 
 
@@ -114,16 +111,19 @@ class TestRunnerResponse(BaseModel):
 # Helper Functions
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _extract_code_blocks(text: str) -> List[Dict[str, str]]:
+
+def _extract_code_blocks(text: str) -> list[dict[str, str]]:
     """Extract ```lang ... ``` code blocks from markdown."""
     pattern = r"```([a-zA-Z0-9_\-+]*)\n(.*?)```"
     matches = re.findall(pattern, text, re.DOTALL)
     blocks = []
     for lang, code in matches:
-        blocks.append({
-            "language": lang.strip() or "text",
-            "code": code.strip(),
-        })
+        blocks.append(
+            {
+                "language": lang.strip() or "text",
+                "code": code.strip(),
+            }
+        )
     return blocks
 
 
@@ -141,6 +141,7 @@ def _extract_thinking(text: str) -> tuple[str, str]:
 # API Endpoints
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @router.post("/chat", response_model=CodingChatResponse)
 async def coding_chat(
     req: CodingChatRequest,
@@ -149,8 +150,8 @@ async def coding_chat(
     """Conversational coding assistant with reasoning, tool calling, and artifacts."""
     start_time = time.time()
     session_id = req.session_id or f"session_{uuid.uuid4().hex[:10]}"
-    tools_used: List[ToolCallRecord] = []
-    artifacts: List[Artifact] = []
+    tools_used: list[ToolCallRecord] = []
+    artifacts: list[Artifact] = []
 
     prompt = req.prompt.strip()
     lowered = prompt.lower()
@@ -178,21 +179,25 @@ async def coding_chat(
             try:
                 res = await tool_executor.execute("run_python", {"code": code_to_run})
                 t_dur = (time.time() - t_start) * 1000
-                tools_used.append(ToolCallRecord(
-                    tool="run_python",
-                    args={"code": code_to_run[:200]},
-                    result=res,
-                    duration_ms=round(t_dur, 2),
-                    status="success" if not res.get("error") else "error",
-                ))
+                tools_used.append(
+                    ToolCallRecord(
+                        tool="run_python",
+                        args={"code": code_to_run[:200]},
+                        result=res,
+                        duration_ms=round(t_dur, 2),
+                        status="success" if not res.get("error") else "error",
+                    )
+                )
             except Exception as exc:
-                tools_used.append(ToolCallRecord(
-                    tool="run_python",
-                    args={"code": code_to_run[:200]},
-                    result={"error": str(exc)},
-                    duration_ms=0,
-                    status="error",
-                ))
+                tools_used.append(
+                    ToolCallRecord(
+                        tool="run_python",
+                        args={"code": code_to_run[:200]},
+                        result={"error": str(exc)},
+                        duration_ms=0,
+                        status="error",
+                    )
+                )
 
     # Web search tool
     if req.enable_web_search and (
@@ -208,13 +213,18 @@ async def coding_chat(
         try:
             res = await tool_executor.execute("web_search", {"query": q[:100]})
             t_dur = (time.time() - t_start) * 1000
-            tools_used.append(ToolCallRecord(
-                tool="web_search",
-                args={"query": q[:100]},
-                result={"results_count": len(res.get("results", [])), "top_results": res.get("results", [])[:3]},
-                duration_ms=round(t_dur, 2),
-                status="success",
-            ))
+            tools_used.append(
+                ToolCallRecord(
+                    tool="web_search",
+                    args={"query": q[:100]},
+                    result={
+                        "results_count": len(res.get("results", [])),
+                        "top_results": res.get("results", [])[:3],
+                    },
+                    duration_ms=round(t_dur, 2),
+                    status="success",
+                )
+            )
         except Exception as exc:
             logger.warning("Web search error: %s", exc)
 
@@ -230,19 +240,21 @@ async def coding_chat(
         try:
             res = await tool_executor.execute("git_info", {"repo_path": "."})
             t_dur = (time.time() - t_start) * 1000
-            tools_used.append(ToolCallRecord(
-                tool="git_info",
-                args={"repo_path": "."},
-                result=res,
-                duration_ms=round(t_dur, 2),
-                status="success",
-            ))
+            tools_used.append(
+                ToolCallRecord(
+                    tool="git_info",
+                    args={"repo_path": "."},
+                    result=res,
+                    duration_ms=round(t_dur, 2),
+                    status="success",
+                )
+            )
         except Exception as exc:
             logger.warning("Git info error: %s", exc)
 
     # 2. Invoke LLM with Context and Tool Results
     nim_provider = _get_nim_provider(container)
-    
+
     # Construct system prompt with Claude coding guidelines
     system_prompt = (
         "You are NEXUS Coding & Research Assistant, an elite AI engineer with capabilities "
@@ -298,13 +310,13 @@ async def coding_chat(
     for idx, block in enumerate(extracted_blocks):
         lang = block["language"].lower()
         code = block["code"]
-        
+
         art_type = "code"
         if lang in ("html", "svg"):
             art_type = "html"
         elif "test" in code.lower() or "def test_" in code:
             art_type = "test_report"
-        
+
         title = f"{lang.capitalize()} Component" if lang else f"Artifact {idx + 1}"
         if "def " in code or "class " in code:
             # Try to grab function or class name
@@ -312,32 +324,36 @@ async def coding_chat(
             if match:
                 title = f"{match.group(2)} ({lang})"
 
-        artifacts.append(Artifact(
-            id=f"art_{uuid.uuid4().hex[:8]}",
-            title=title,
-            type=art_type,
-            language=lang,
-            content=code,
-            metadata={"lines": len(code.splitlines()), "language": lang},
-        ))
+        artifacts.append(
+            Artifact(
+                id=f"art_{uuid.uuid4().hex[:8]}",
+                title=title,
+                type=art_type,
+                language=lang,
+                content=code,
+                metadata={"lines": len(code.splitlines()), "language": lang},
+            )
+        )
 
     # If research occurred, create a research report artifact
     if any(t.tool == "web_search" for t in tools_used):
-        artifacts.append(Artifact(
-            id=f"art_res_{uuid.uuid4().hex[:8]}",
-            title=f"Research Intelligence: {prompt[:40]}",
-            type="research",
-            language="markdown",
-            content=(
-                f"# Research Intelligence Report\n\n"
-                f"**Query**: {prompt}\n"
-                f"**Synthesis**: Retrieved multi-source intelligence across DuckDuckGo and verified technical documentation.\n\n"
-                f"### Key Findings\n"
-                f"- High coherence with modern software engineering paradigms.\n"
-                f"- Evaluated compatibility with NEXUS conscious agent loops.\n"
-            ),
-            metadata={"source_count": 3},
-        ))
+        artifacts.append(
+            Artifact(
+                id=f"art_res_{uuid.uuid4().hex[:8]}",
+                title=f"Research Intelligence: {prompt[:40]}",
+                type="research",
+                language="markdown",
+                content=(
+                    f"# Research Intelligence Report\n\n"
+                    f"**Query**: {prompt}\n"
+                    f"**Synthesis**: Retrieved multi-source intelligence across DuckDuckGo and verified technical documentation.\n\n"
+                    f"### Key Findings\n"
+                    f"- High coherence with modern software engineering paradigms.\n"
+                    f"- Evaluated compatibility with NEXUS conscious agent loops.\n"
+                ),
+                metadata={"source_count": 3},
+            )
+        )
 
     duration = round(time.time() - start_time, 2)
     return CodingChatResponse(
@@ -435,7 +451,7 @@ async def run_tests(
 
 
 @router.get("/templates")
-async def get_coding_templates() -> Dict[str, Any]:
+async def get_coding_templates() -> dict[str, Any]:
     """Return pre-configured real-world coding and research prompt templates."""
     return {
         "templates": [

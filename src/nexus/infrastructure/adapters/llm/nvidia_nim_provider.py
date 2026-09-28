@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import AsyncGenerator, Dict, List, Optional
+from collections.abc import AsyncGenerator
 
 from nexus.domain.exceptions import LLMUnavailableError
 from nexus.domain.ports.llm_provider import StreamingLLMProvider
@@ -91,10 +91,10 @@ class NvidiaNimProvider(StreamingLLMProvider):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         model: str = DEFAULT_NIM_MODEL,
         temperature: float = 0.5,
-        base_url: Optional[str] = None,
+        base_url: str | None = None,
         default_max_tokens: int = 4096,
     ) -> None:
         self._api_key = (api_key or "").strip()
@@ -132,7 +132,7 @@ class NvidiaNimProvider(StreamingLLMProvider):
         key = self._api_key if self.has_api_key else "nvapi-dummy"
         return AsyncOpenAI(api_key=key, base_url=self._base_url)
 
-    def _simulated_response(self, messages: List[Dict[str, str]]) -> str:
+    def _simulated_response(self, messages: list[dict[str, str]]) -> str:
         """Realistic fallback when no NVIDIA API key is configured or offline."""
         last_msg = messages[-1]["content"] if messages else ""
         lower = last_msg.lower()
@@ -161,10 +161,10 @@ class NvidiaNimProvider(StreamingLLMProvider):
 
     async def complete(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         temperature: float = 0.5,
         max_tokens: int | None = None,
-        tools: Optional[List[Dict]] = None,
+        tools: list[dict] | None = None,
     ) -> str:
         if not self.has_api_key:
             return self._simulated_response(messages)
@@ -187,11 +187,11 @@ class NvidiaNimProvider(StreamingLLMProvider):
 
     async def complete_with_tools(
         self,
-        messages: List[Dict[str, str]],
-        tools: List[Dict],
+        messages: list[dict[str, str]],
+        tools: list[dict],
         temperature: float = 0.5,
         max_tokens: int | None = None,
-    ) -> Dict:
+    ) -> dict:
         if not self.has_api_key:
             # Simulated tool call if requested, or simulated text
             text = self._simulated_response(messages)
@@ -231,9 +231,12 @@ class NvidiaNimProvider(StreamingLLMProvider):
         content: str,
         schema: JSONSchema,
         instructions: str = "",
-    ) -> Dict:
+    ) -> dict:
         messages = [
-            {"role": "system", "content": instructions + " Return ONLY valid JSON matching the requested schema."},
+            {
+                "role": "system",
+                "content": instructions + " Return ONLY valid JSON matching the requested schema.",
+            },
             {"role": "user", "content": content},
         ]
         if not self.has_api_key:
@@ -252,37 +255,7 @@ class NvidiaNimProvider(StreamingLLMProvider):
             logger.warning("NVIDIA NIM extract_structured fallback: %s", exc)
             return {"raw": content, "note": "parsed_fallback"}
 
-    async def stream(
-        self,
-        messages: List[Dict[str, str]],
-        temperature: float = 0.5,
-        max_tokens: int | None = None,
-    ) -> AsyncGenerator[str, None]:
-        if not self.has_api_key:
-            sim = self._simulated_response(messages)
-            words = sim.split(" ")
-            for w in words:
-                yield w + " "
-            return
-
-        try:
-            client = self._client()
-            stream_resp = await client.chat.completions.create(
-                model=self._model,
-                messages=messages,
-                temperature=temperature if temperature is not None else self._temperature,
-                max_tokens=max_tokens or self._default_max_tokens,
-                stream=True,
-            )
-            async for chunk in stream_resp:
-                if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
-        except Exception as exc:
-            logger.warning("NVIDIA NIM stream error: %s", exc)
-            sim = self._simulated_response(messages)
-            yield sim
-
-    def get_supported_models(self) -> List[Dict]:
+    def get_supported_models(self) -> list[dict]:
         return SUPPORTED_NIM_MODELS
 
     def get_tier_model(self, tier: str) -> str:
@@ -296,7 +269,7 @@ class NvidiaNimProvider(StreamingLLMProvider):
 
     async def stream(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int | None = None,
     ) -> AsyncGenerator[str, None]:
@@ -330,7 +303,7 @@ class NvidiaNimProvider(StreamingLLMProvider):
                 yield word + " "
                 await asyncio.sleep(0.01)
 
-    async def verify_connection(self) -> Dict:
+    async def verify_connection(self) -> dict:
         """Check connection to NVIDIA NIM endpoint."""
         if not self.has_api_key:
             return {
@@ -342,6 +315,7 @@ class NvidiaNimProvider(StreamingLLMProvider):
             }
         try:
             import httpx
+
             async with httpx.AsyncClient(timeout=5.0) as client:
                 res = await client.get(
                     f"{self._base_url}/models",

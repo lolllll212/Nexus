@@ -7,9 +7,9 @@ Kept out of tests/ so the same cases (and rubric) can run both as pytest
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, List, Optional
 
 from nexus.domain.ports.llm_provider import LLMProvider
 
@@ -19,9 +19,9 @@ class EvalCase:
     """A single evaluation scenario."""
 
     task: str
-    expected_tools: List[str] = field(default_factory=list)
-    expected_keywords: List[str] = field(default_factory=list)
-    forbidden_keywords: List[str] = field(default_factory=list)
+    expected_tools: list[str] = field(default_factory=list)
+    expected_keywords: list[str] = field(default_factory=list)
+    forbidden_keywords: list[str] = field(default_factory=list)
     max_iterations: int = 5
 
 
@@ -30,7 +30,7 @@ class EvalResult:
     """Result of running one eval case."""
 
     case: EvalCase
-    tools_called: List[str]
+    tools_called: list[str]
     answer: str
     passed: bool
     duration_ms: int
@@ -39,7 +39,7 @@ class EvalResult:
 
 # ── Golden Set ────────────────────────────────────────────────────────────
 
-GOLDEN_SET: List[EvalCase] = [
+GOLDEN_SET: list[EvalCase] = [
     EvalCase(
         task="List all Python files in the current directory",
         expected_tools=["list_directory"],
@@ -87,11 +87,11 @@ class EvalRunner:
     same harness is unit-testable and live-runnable.
     """
 
-    def __init__(self, container_factory: Callable[[], "object"]) -> None:
+    def __init__(self, container_factory: Callable[[], object]) -> None:
         self._container_factory = container_factory
-        self.results: List[EvalResult] = []
+        self.results: list[EvalResult] = []
 
-    async def run_case(self, case: EvalCase, llm: Optional[LLMProvider] = None) -> EvalResult:
+    async def run_case(self, case: EvalCase, llm: LLMProvider | None = None) -> EvalResult:
         """Run a single eval case against the (overridable) container."""
         container = self._container_factory()
         if llm is not None:
@@ -144,7 +144,7 @@ class EvalRunner:
             details="; ".join(details),
         )
 
-    async def run_all(self, llm: Optional[LLMProvider] = None) -> List[EvalResult]:
+    async def run_all(self, llm: LLMProvider | None = None) -> list[EvalResult]:
         self.results = [await self.run_case(case, llm=llm) for case in GOLDEN_SET]
         return self.results
 
@@ -199,7 +199,7 @@ class EvalRunner:
         }
 
 
-def write_report_html(results: List[EvalResult], out_path: Path) -> None:
+def write_report_html(results: list[EvalResult], out_path: Path) -> None:
     """Write the eval report as a self-contained HTML artifact."""
     rows = []
     for r in results:
@@ -228,9 +228,9 @@ def write_report_html(results: List[EvalResult], out_path: Path) -> None:
 
 
 __all__ = [
+    "GOLDEN_SET",
     "EvalCase",
     "EvalResult",
-    "GOLDEN_SET",
     "EvalRunner",
     "write_report_html",
 ]
