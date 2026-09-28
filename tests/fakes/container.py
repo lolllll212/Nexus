@@ -94,6 +94,8 @@ class FakeContainer:
         self.embedder = FakeEmbedder()
         self.llm = FakeLLM(script=llm_script)
         self.background_llm = FakeLLM(script=llm_script)
+        from nexus.infrastructure.adapters.llm.nvidia_nim_provider import NvidiaNimProvider
+        self.nim_provider = NvidiaNimProvider(api_key="mock-key")
         self.speech_to_text = FakeSpeechToText()
         self.text_to_speech = FakeTextToSpeech()
         self.sandbox = FakeSandbox()

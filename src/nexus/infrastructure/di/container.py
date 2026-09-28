@@ -71,6 +71,12 @@ class Config:
     """Runtime configuration loaded from env vars."""
 
     openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
+    nvidia_api_key: str = field(
+        default_factory=lambda: os.getenv("NVIDIA_API_KEY") or os.getenv("NIM_API_KEY") or os.getenv("NEXUS_NVIDIA_API_KEY", "")
+    )
+    nim_base_url: str = field(default_factory=lambda: os.getenv("NEXUS_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1"))
+    nim_model: str = field(default_factory=lambda: os.getenv("NEXUS_NIM_MODEL", "meta/llama-3.3-70b-instruct"))
+    llm_provider: str = field(default_factory=lambda: os.getenv("NEXUS_LLM_PROVIDER", "openai").lower())
     llm_model: str = field(default_factory=lambda: os.getenv("NEXUS_LLM_MODEL", "gpt-4o"))
     llm_max_tokens: int = field(default_factory=lambda: int(os.getenv("NEXUS_LLM_MAX_TOKENS", "8192")))
     embedding_model: str = field(
@@ -194,6 +200,7 @@ class Container:
         # ---- Ports (concrete adapters chosen here) ----
         self.event_bus: EventBus = self._build_event_bus()
         self.embedder: EmbeddingProvider = self._build_embedder()
+        self.nim_provider = self._build_nim_provider()
         self.llm: LLMProvider = self._build_llm()
         self.background_llm: LLMProvider = self._build_background_llm()
         self.speech_to_text: SpeechToText = self._build_speech_to_text()
@@ -350,6 +357,8 @@ class Container:
     def _resolve_secrets_into_config(self) -> None:
         for env_name, attr in (
             ("OPENAI_API_KEY", "openai_api_key"),
+            ("NVIDIA_API_KEY", "nvidia_api_key"),
+            ("NIM_API_KEY", "nvidia_api_key"),
             ("NEO4J_PASSWORD", "neo4j_password"),
         ):
             value = self.secrets.get(env_name)
@@ -441,7 +450,20 @@ class Container:
             base_url=self.config.embedding_base_url,
         )
 
+    def _build_nim_provider(self):
+        from nexus.infrastructure.adapters.llm.nvidia_nim_provider import NvidiaNimProvider
+
+        return NvidiaNimProvider(
+            api_key=self.config.nvidia_api_key,
+            model=self.config.nim_model,
+            base_url=self.config.nim_base_url,
+            default_max_tokens=self.config.llm_max_tokens,
+        )
+
     def _build_llm(self) -> LLMProvider:
+        if self.config.llm_provider in ("nvidia", "nim"):
+            return self.nim_provider
+
         from nexus.infrastructure.adapters.llm.openai_provider import OpenAIProvider
 
         return OpenAIProvider(

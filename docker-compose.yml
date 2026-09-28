@@ -40,6 +40,11 @@ services:
     ports: ["8000:8000"]
     environment: &nexus_env
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      NEXUS_LLM_PROVIDER: ${NEXUS_LLM_PROVIDER:-nvidia}
+      NEXUS_NIM_MODEL: ${NEXUS_NIM_MODEL:-meta/llama-3.3-70b-instruct}
+      NEXUS_NIM_BASE_URL: ${NEXUS_NIM_BASE_URL:-https://integrate.api.nvidia.com/v1}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       NEXUS_LLM_MODEL: ${NEXUS_LLM_MODEL:-gpt-4o}
       NEXUS_LLM_BASE_URL: ${NEXUS_LLM_BASE_URL:-}
       NEXUS_EMBEDDING_MODEL: ${NEXUS_EMBEDDING_MODEL:-text-embedding-3-large}

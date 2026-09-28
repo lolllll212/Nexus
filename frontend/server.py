@@ -104,6 +104,10 @@ class H(BaseHTTPRequestHandler):
 
     def do_GET(self):
         p = self.path.split("?")[0]
+        if p == "/":
+            idx = os.path.join(ROOT, "index.html")
+            if os.path.isfile(idx):
+                return self._send(200, open(idx, "rb").read(), "text/html; charset=utf-8")
         if p in ("/", "/holo.html"):
             try:
                 body = open(os.path.join(ROOT, "holo.html"), "rb").read()
@@ -176,5 +180,5 @@ class H(BaseHTTPRequestHandler):
         return self._send(200, {"ok": True})
 
 if __name__ == "__main__":
-    print(f"HOLO deck on http://localhost:{PORT}  ·  notes: {notes_dir()}")
-    ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
+    print(f"HOLO deck on http://0.0.0.0:{PORT}  ·  notes: {notes_dir()}")
+    ThreadingHTTPServer(("0.0.0.0", PORT), H).serve_forever()
