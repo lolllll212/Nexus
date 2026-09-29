@@ -1,7 +1,7 @@
 {
   "name": "nexus-ai-workshop-os",
   "version": "1.0.0",
-  "description": "NEXUS AI Workshop OS - Futuristic Second Brain Knowledge Graph with NVIDIA NIM and J.A.R.V.I.S. HUD",
+  "description": "NEXUS AI Workshop OS - Futuristic Second Brain Knowledge Graph with NVIDIA NIM and NEXUS AI HUD",
   "scripts": {
     "build": "cd web && npm run build && cp -r ../frontend/dist/* ../frontend/",
     "dev": "cd web && npm run dev",

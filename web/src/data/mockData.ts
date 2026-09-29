@@ -61,7 +61,7 @@ export const INITIAL_GRAPH_DATA: GraphData = {
     { id: "Inventory Tracker", group: "Tools", val: 7, hub: "Local Businesses", desc: "Real-time stock alerts, inventory forecasting, and reorder triggers." },
     { id: "Lead Enrichment Engine", group: "Skills", val: 8, hub: "Local Businesses", desc: "Web scraping and public registry lookup for client prospecting." },
     { id: "Local SEO Optimizer", group: "Skills", val: 7, hub: "Local Businesses", desc: "Keyword density analyzer, Google My Business review summarizer." },
-    { id: "Customer Voice Agent", group: "Suites", val: 9, hub: "Local Businesses", desc: "Voice-enabled J.A.R.V.I.S. answering incoming business inquiries." },
+    { id: "Customer Voice Agent", group: "Suites", val: 9, hub: "Local Businesses", desc: "Voice-enabled NEXUS AI answering incoming business inquiries." },
     { id: "Invoice Dispatcher", group: "Tools", val: 7, hub: "Local Businesses", desc: "PDF invoice generator and payment status webhook tracker." },
     { id: "Tenant Quota Isolation", group: "Concepts", val: 8, hub: "Local Businesses", desc: "Multi-tenant boundary enforcement and per-organization limits." },
     { id: "PostgreSQL Ledger", group: "Worlds", val: 8, hub: "Local Businesses", desc: "Transactional database storing accounting records and audit trails." },
@@ -90,7 +90,7 @@ export const INITIAL_GRAPH_DATA: GraphData = {
     { id: "diff_text", group: "Tools", val: 5, hub: "Claude Code", desc: "Compute visual unified diff between two code buffers." },
 
     // Worlds & Simulation Clusters
-    { id: "Stark Industries Sim", group: "Worlds", val: 10, hub: "AI Workshop", desc: "J.A.R.V.I.S. simulated runtime with tactile HUD and holographic overlays." },
+    { id: "Stark Industries Sim", group: "Worlds", val: 10, hub: "AI Workshop", desc: "NEXUS AI simulated runtime with tactile HUD and holographic overlays." },
     { id: "Apollo 11 Capsule", group: "Worlds", val: 8, hub: "AI Workshop", desc: "Smithsonian 3D photogrammetry scan grabbable in mid-air." },
     { id: "Triceratops BioSphere", group: "Worlds", val: 8, hub: "AI Workshop", desc: "High-fidelity paleontological 3D model with skeletal mesh." },
     { id: "Production Cloud", group: "Worlds", val: 8, hub: "Local Businesses", desc: "Railway / Vercel deployment targets with live SSL endpoints." },

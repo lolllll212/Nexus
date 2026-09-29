@@ -1,5 +1,5 @@
 /**
- * Tactical J.A.R.V.I.S. Audio Synthesizer (Web Audio API)
+ * Tactical NEXUS AI Audio Synthesizer (Web Audio API)
  * Generates instantaneous procedural sci-fi HUD tones without external audio assets.
  */
 

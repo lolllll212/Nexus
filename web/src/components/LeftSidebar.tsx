@@ -13,7 +13,8 @@ import {
   Activity, 
   CheckCircle2, 
   ShieldCheck,
-  Code
+  Code,
+  Film
 } from 'lucide-react';
 import { NodeCategory } from '../types';
 
@@ -25,6 +26,7 @@ interface LeftSidebarProps {
   onOpenClaudeStudio: () => void;
   onOpenResearchMode: () => void;
   onOpenWorkflowMode: () => void;
+  onOpenVideoMode?: () => void;
   onOpenAgentsModal?: () => void;
   onOpenIntegrationsModal?: () => void;
 }
@@ -37,11 +39,13 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   onOpenClaudeStudio,
   onOpenResearchMode,
   onOpenWorkflowMode,
+  onOpenVideoMode,
   onOpenAgentsModal,
   onOpenIntegrationsModal,
 }) => {
   const workspaces: { name: string; category?: NodeCategory; icon: any; count: number; action?: () => void }[] = [
     { name: 'Knowledge', category: 'CONCEPT', icon: Layers, count: 489 },
+    { name: 'Video Studio', icon: Film, count: 12, action: onOpenVideoMode },
     { name: 'Research', category: 'RESEARCH', icon: Globe, count: 54, action: onOpenResearchMode },
     { name: 'Workflows', category: 'WORKFLOW', icon: Zap, count: 24, action: onOpenWorkflowMode },
     { name: 'Agents', category: 'AGENT', icon: Bot, count: 10, action: onOpenAgentsModal },

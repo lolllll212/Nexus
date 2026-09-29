@@ -26,7 +26,7 @@ export const JarvisHUD: React.FC<JarvisHUDProps> = ({
     <div
       onClick={onClick}
       className="relative w-44 h-44 cursor-pointer select-none group flex items-center justify-center transition-transform hover:scale-105"
-      title="Click to interact with J.A.R.V.I.S. (NVIDIA NIM Cortex)"
+      title="Click to interact with NEXUS AI (NVIDIA NIM Cortex)"
     >
       {/* Background glow */}
       <div className="absolute inset-0 rounded-full bg-cyan-500/10 blur-xl group-hover:bg-cyan-400/20 transition-all pointer-events-none"></div>
@@ -118,9 +118,9 @@ export const JarvisHUD: React.FC<JarvisHUDProps> = ({
           <div className="w-2 h-2 rounded-full bg-cyan-300 shadow-[0_0_6px_#00f0ff]"></div>
         </div>
 
-        {/* J.A.R.V.I.S. Title */}
+        {/* NEXUS AI Title */}
         <div className="font-mono font-bold text-xs tracking-[0.25em] text-cyan-200 group-hover:text-white transition-colors text-shadow-cyan">
-          J.A.R.V.I.S.
+          NEXUS AI
         </div>
 
         {/* Subtitle status */}
@@ -138,3 +138,5 @@ export const JarvisHUD: React.FC<JarvisHUDProps> = ({
     </div>
   );
 };
+
+export const NexusHUD = JarvisHUD;

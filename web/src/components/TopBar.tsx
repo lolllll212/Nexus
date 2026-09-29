@@ -20,7 +20,8 @@ import {
   Mic,
   ShieldCheck,
   Bot,
-  Radio
+  Radio,
+  Film
 } from 'lucide-react';
 
 interface TopBarProps {
@@ -51,6 +52,7 @@ export const TopBar: React.FC<TopBarProps> = ({
     { id: 'RESEARCH', label: 'RESEARCH', icon: Search },
     { id: 'WORKFLOW', label: 'WORKFLOW', icon: Zap },
     { id: 'ARCHITECTURE', label: 'ARCHITECTURE', icon: Cpu },
+    { id: 'VIDEO', label: 'VIDEO', icon: Film },
   ];
 
   return (
@@ -126,13 +128,14 @@ export const TopBar: React.FC<TopBarProps> = ({
           <span>SYSTEM ONLINE</span>
         </div>
 
-        {/* Voice Cortex Assistant Trigger */}
+        {/* Dedicated Prominent Voice Cortex Button with Hotkey 'M' */}
         <button
           onClick={onOpenVoiceCortex}
-          className="p-1.5 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-slate-900 transition-colors cursor-pointer"
-          title="Voice Cortex"
+          className="flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-bold text-cyan-200 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-400/60 hover:border-cyan-300 transition-all shadow-[0_0_12px_rgba(0,240,255,0.3)] cursor-pointer group"
+          title="Toggle Hands-Free Voice Cortex (Hotkey: M)"
         >
-          <Mic className="w-4 h-4" />
+          <Mic className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform animate-pulse" />
+          <span className="tracking-wide">VOICE (M)</span>
         </button>
 
         {/* Command Center Palette Trigger */}

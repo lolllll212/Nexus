@@ -10,7 +10,8 @@ interface RightSidebarProps {
   systemStates: SystemStates;
   onToggleState: (stateKey: keyof SystemStates) => void;
   hasNimKey: boolean;
-  onOpenJarvis: () => void;
+  onOpenJarvis?: () => void;
+  onOpenNexus?: () => void;
 }
 
 export const RightSidebar: React.FC<RightSidebarProps> = ({
@@ -21,7 +22,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
   onToggleState,
   hasNimKey,
   onOpenJarvis,
+  onOpenNexus,
 }) => {
+  const handleOpen = onOpenNexus || onOpenJarvis || (() => {});
   const [telemetry, setTelemetry] = React.useState<{ uptime_seconds?: number; tools_count?: number } | null>(null);
 
   React.useEffect(() => {
@@ -104,17 +107,17 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
         </div>
       </div>
 
-      {/* 2. J.A.R.V.I.S. HUD (Middle/Bottom Right) */}
+      {/* 2. NEXUS AI HUD (Middle/Bottom Right) */}
       <div className="py-4 flex flex-col items-center justify-center relative">
         <JarvisHUD
           ringActive={systemStates.RING}
           statusText={systemStates.ONLINE ? (hasNimKey ? 'NIM ONLINE' : 'READY') : 'OFFLINE'}
           hasNimKey={hasNimKey}
-          onClick={onOpenJarvis}
+          onClick={handleOpen}
         />
         <div className="mt-1 text-[10px] font-mono text-cyan-400/70 uppercase tracking-widest flex items-center gap-1">
           <Zap className="w-2.5 h-2.5 text-cyan-400" />
-          Click HUD to consult J.A.R.V.I.S.
+          Click HUD to consult NEXUS AI
         </div>
       </div>
 

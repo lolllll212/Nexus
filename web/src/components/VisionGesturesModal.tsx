@@ -17,7 +17,8 @@ interface VisionGesturesModalProps {
   isOpen: boolean;
   onClose: () => void;
   onGestureDetected: (gesture: string) => void;
-  onOpenJarvisWithPrompt: (prompt: string) => void;
+  onOpenJarvisWithPrompt?: (prompt: string) => void;
+  onOpenPrompt?: (prompt: string) => void;
 }
 
 export const VisionGesturesModal: React.FC<VisionGesturesModalProps> = ({
@@ -25,6 +26,7 @@ export const VisionGesturesModal: React.FC<VisionGesturesModalProps> = ({
   onClose,
   onGestureDetected,
   onOpenJarvisWithPrompt,
+  onOpenPrompt,
 }) => {
   const [activeTab, setActiveTab] = useState<'camera' | 'screen' | 'gestures'>('camera');
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -197,7 +199,7 @@ export const VisionGesturesModal: React.FC<VisionGesturesModalProps> = ({
 
   const handleAnalyzeScreen = () => {
     setScreenAnalysis(
-      "J.A.R.V.I.S. Visual Vision Telemetry: Active display buffer captured. " +
+      "NEXUS AI Visual Vision Telemetry: Active display buffer captured. " +
       "Detected browser workspace containing Second Brain knowledge graph OS, " +
       "terminal running FastAPI on port 8000, and active NVIDIA NIM reasoning cortex. " +
       "Zero anomalies detected; cognitive latency within nominal 12ms threshold."
@@ -352,7 +354,7 @@ export const VisionGesturesModal: React.FC<VisionGesturesModalProps> = ({
                   <div className="text-center p-6 space-y-3">
                     <Monitor className="w-10 h-10 text-cyan-400/40 mx-auto animate-pulse" />
                     <div className="text-xs font-mono text-slate-400">
-                      Share your screen, application window, or browser tab with J.A.R.V.I.S.
+                      Share your screen, application window, or browser tab with NEXUS AI
                     </div>
                     <button
                       onClick={toggleScreenShare}
@@ -371,7 +373,7 @@ export const VisionGesturesModal: React.FC<VisionGesturesModalProps> = ({
                     className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-400 hover:from-cyan-400 hover:to-teal-300 text-black font-semibold text-xs font-mono flex items-center gap-1.5 shadow-md"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>Analyze Screen with J.A.R.V.I.S.</span>
+                    <span>Analyze Screen with NEXUS AI</span>
                   </button>
 
                   <button

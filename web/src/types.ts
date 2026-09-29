@@ -18,9 +18,55 @@ export type NodeCategory =
   | 'FILE' 
   | 'SOURCE';
 
-export type OperatingMode = 'GRAPH' | 'RESEARCH' | 'WORKFLOW' | 'ARCHITECTURE';
+export type OperatingMode = 'GRAPH' | 'RESEARCH' | 'WORKFLOW' | 'ARCHITECTURE' | 'VIDEO';
 
 export type LayoutAlgorithm = 'FORCE' | 'RING' | 'CLUSTER' | 'RADIAL';
+
+export type VideoAspectRatio = '16:9' | '9:16' | '1:1' | '21:9';
+export type VideoResolution = '720p' | '1080p' | '4K';
+
+export interface CameraMotionParams {
+  pan: number;          // -10 to +10 (horizontal sweep)
+  tilt: number;         // -10 to +10 (vertical angle)
+  zoom: number;         // -10 to +10 (in / out)
+  roll: number;         // -10 to +10 (dutch roll)
+  speed: number;        // 0.2 to 2.5
+  motionBrush: number;  // 0 to 10 intensity
+  motionVectors: boolean;
+}
+
+export interface TimelineClip {
+  id: string;
+  title: string;
+  start: number;       // seconds
+  duration: number;    // seconds
+  color: string;
+  thumbnail?: string;
+  type?: 'video' | 'audio' | 'keyframe' | 'effect';
+}
+
+export interface TimelineTrack {
+  id: string;
+  name: string;
+  type: 'video' | 'audio' | 'keyframes' | 'effects';
+  clips: TimelineClip[];
+  muted?: boolean;
+  locked?: boolean;
+}
+
+export interface VideoRenderTask {
+  id: string;
+  prompt: string;
+  model: string;
+  ratio: VideoAspectRatio;
+  resolution: VideoResolution;
+  status: 'queued' | 'rendering' | 'completed' | 'failed';
+  progress: number;
+  durationSec: number;
+  videoUrl?: string;
+  thumbnailUrl?: string;
+  timestamp: string;
+}
 
 export interface NexusNode {
   id: string;

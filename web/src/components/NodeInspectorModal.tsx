@@ -6,7 +6,8 @@ import { playHudClick, playChime } from '../utils/soundEffects';
 interface NodeInspectorModalProps {
   node: GraphNode | null;
   onClose: () => void;
-  onAskJarvis: (prompt: string) => void;
+  onAskJarvis?: (prompt: string) => void;
+  onAskNexus?: (prompt: string) => void;
   onDeepResearch: (query: string) => void;
 }
 
@@ -14,6 +15,7 @@ export const NodeInspectorModal: React.FC<NodeInspectorModalProps> = ({
   node,
   onClose,
   onAskJarvis,
+  onAskNexus,
   onDeepResearch,
 }) => {
   const [copied, setCopied] = React.useState(false);
@@ -29,7 +31,8 @@ export const NodeInspectorModal: React.FC<NodeInspectorModalProps> = ({
 
   const handleAsk = () => {
     playChime();
-    onAskJarvis(`Provide an architectural and semantic analysis of the Second Brain node: "${node.label}" (Group: ${node.group}, ID: ${node.id}). How does it correlate with other cognitive clusters?`);
+    const dispatcher = onAskNexus || onAskJarvis || (() => {});
+    dispatcher(`Provide an architectural and semantic analysis of the Second Brain node: "${node.label}" (Group: ${node.group}, ID: ${node.id}). How does it correlate with other cognitive clusters?`);
     onClose();
   };
 
@@ -115,7 +118,7 @@ export const NodeInspectorModal: React.FC<NodeInspectorModalProps> = ({
               className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-500 hover:from-cyan-500 hover:to-teal-400 text-black font-semibold text-xs flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(0,240,255,0.3)] transition-all cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Query J.A.R.V.I.S.</span>
+              <span>Query NEXUS AI</span>
             </button>
 
             <button

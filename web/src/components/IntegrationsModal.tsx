@@ -396,7 +396,7 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({
                     </span>
                   </div>
                   <p className="text-xs font-sans text-slate-400 mt-1">
-                    Inbox synchronized with J.A.R.V.I.S. cognitive briefing engine
+                    Inbox synchronized with NEXUS AI cognitive briefing engine
                   </p>
                 </div>
 

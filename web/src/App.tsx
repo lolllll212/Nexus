@@ -20,6 +20,7 @@ import { TopBar } from './components/TopBar';
 import { CommandCenter } from './components/CommandCenter';
 import { ClaudeCodingStudio } from './components/ClaudeCodingStudio';
 import { VoiceCortex } from './components/VoiceCortex';
+import { RunwayVideoStudioView } from './components/RunwayVideoStudioView';
 import { AgentOrchestrationModal } from './components/AgentOrchestrationModal';
 import { IntegrationsModal } from './components/IntegrationsModal';
 import { InformationFlowTicker } from './components/InformationFlowTicker';
@@ -59,6 +60,9 @@ export const App: React.FC = () => {
       if (e.key === 'c' || e.key === 'C') {
         setIsClaudeStudioOpen((prev) => !prev);
         playHudClick();
+      } else if (e.key === 'm' || e.key === 'M') {
+        setIsVoiceCortexOpen((prev) => !prev);
+        playHudClick();
       } else if (e.key === 'a' || e.key === 'A') {
         setIsAgentsModalOpen((prev) => !prev);
         playHudClick();
@@ -76,6 +80,9 @@ export const App: React.FC = () => {
         playHudClick();
       } else if (e.key === '4') {
         setCurrentMode('ARCHITECTURE');
+        playHudClick();
+      } else if (e.key === '5') {
+        setCurrentMode('VIDEO');
         playHudClick();
       } else if (e.key === 'Escape') {
         if (isClaudeStudioOpen) setIsClaudeStudioOpen(false);
@@ -236,6 +243,38 @@ export const App: React.FC = () => {
     setCurrentMode('GRAPH');
   }, []);
 
+  // Sync Runway Gen-3 Alpha Video into knowledge graph as a new video node
+  const handleInjectVideoIntoGraph = useCallback((title: string, prompt: string, metadata: any) => {
+    playSuccessChime();
+    const vidId = `vid-runway-${Date.now()}`;
+    const newVidNode: NexusNode = {
+      id: vidId,
+      name: `Video: ${title}`,
+      category: 'WEBSITE',
+      val: 26,
+      importance: 92,
+      confidence: 97,
+      hub: 'AI Workshop',
+      description: `Runway Gen-3 Alpha video render: "${prompt}". Aspect Ratio: ${metadata.ratio || '16:9'}, Resolution: ${metadata.resolution || '1080p'}.`,
+      source: 'Runway Gen-3 Studio',
+      lastUpdated: 'Just now',
+      tags: ['Video', 'Gen-3 Alpha', 'Runway', 'Neural Render'],
+      pulsing: true,
+      metadata,
+      x: 480 + (Math.random() - 0.5) * 140,
+      y: 400 + (Math.random() - 0.5) * 140,
+    };
+
+    setNodes((prev) => [newVidNode, ...prev]);
+    setLinks((prev) => [
+      { source: 'code-core', target: vidId, relation: 'RENDERS', active: true },
+      { source: vidId, target: 'res-core', relation: 'SYNERGIZES_WITH', active: true },
+      ...prev,
+    ]);
+    setSelectedNode(newVidNode);
+    setCurrentMode('GRAPH');
+  }, []);
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#030508] text-slate-100 font-sans antialiased select-none">
       {/* ── Minimal Floating Top Bar ─────────────────────────────────────────── */}
@@ -269,6 +308,7 @@ export const App: React.FC = () => {
         onOpenClaudeStudio={() => setIsClaudeStudioOpen(true)}
         onOpenResearchMode={() => setCurrentMode('RESEARCH')}
         onOpenWorkflowMode={() => setCurrentMode('WORKFLOW')}
+        onOpenVideoMode={() => setCurrentMode('VIDEO')}
         onOpenAgentsModal={() => setIsAgentsModalOpen(true)}
         onOpenIntegrationsModal={() => setIsIntegrationsModalOpen(true)}
       />
@@ -322,6 +362,13 @@ export const App: React.FC = () => {
 
         {currentMode === 'ARCHITECTURE' && (
           <ArchitectureView />
+        )}
+
+        {currentMode === 'VIDEO' && (
+          <RunwayVideoStudioView
+            onInjectVideoIntoGraph={handleInjectVideoIntoGraph}
+            onOpenClaudeStudio={() => setIsClaudeStudioOpen(true)}
+          />
         )}
       </main>
 
@@ -391,7 +438,7 @@ export const App: React.FC = () => {
         onCommand={(cmd, text) => {
           handleExecuteCommand(text, 'GRAPH');
         }}
-        onOpenJarvisWithPrompt={(prompt) => {
+        onOpenPrompt={(prompt) => {
           handleExecuteCommand(prompt, 'RESEARCH');
         }}
       />

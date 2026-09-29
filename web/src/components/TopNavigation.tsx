@@ -29,7 +29,8 @@ interface TopNavigationProps {
   onToggle3D: () => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
-  onOpenJarvis: () => void;
+  onOpenJarvis?: () => void;
+  onOpenNexus?: () => void;
   onOpenResearch: () => void;
   onOpenWorkflows: () => void;
   onOpenIntegrations: () => void;
@@ -50,12 +51,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   isFullscreen,
   onToggleFullscreen,
   onOpenJarvis,
+  onOpenNexus,
   onOpenResearch,
   onOpenWorkflows,
   onOpenIntegrations,
   onOpenVision,
   onOpenCodingStudio,
 }) => {
+  const handleOpenNexus = onOpenNexus || onOpenJarvis || (() => {});
   return (
     <div className="fixed top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full glass-panel border border-[rgba(0,240,255,0.25)] shadow-[0_8px_32px_rgba(0,0,0,0.6),0_0_15px_rgba(0,240,255,0.1)] select-none max-w-[95vw] overflow-x-auto">
       {/* Fit Button */}
@@ -174,14 +177,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
 
       <div className="w-[1px] h-4 bg-cyan-500/20 mx-0.5 shrink-0"></div>
 
-      {/* J.A.R.V.I.S. NIM Assistant Quick Trigger */}
+      {/* NEXUS AI Assistant Quick Trigger */}
       <button
-        onClick={onOpenJarvis}
+        onClick={handleOpenNexus}
         className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono text-cyan-200 hover:text-white bg-gradient-to-r from-cyan-950/90 to-blue-950/90 border border-cyan-400/50 hover:border-cyan-300 transition-all shadow-[0_0_10px_rgba(0,240,255,0.25)] shrink-0"
-        title="Open J.A.R.V.I.S. AI Terminal (NVIDIA NIM)"
+        title="Open NEXUS AI Terminal (NVIDIA NIM)"
       >
         <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-spin-slow" />
-        <span>J.A.R.V.I.S.</span>
+        <span>NEXUS AI</span>
       </button>
 
       {/* Fullscreen Toggle */}

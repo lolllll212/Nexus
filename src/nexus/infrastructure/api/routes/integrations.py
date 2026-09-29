@@ -375,7 +375,7 @@ async def get_integrations_overview() -> dict[str, Any]:
                 "id": "audio_cortex",
                 "name": "Voice Cortex (STT / TTS)",
                 "status": "connected",
-                "description": "Continuous microphone transcription & vocal Jarvis speech",
+                "description": "Continuous microphone transcription & vocal NEXUS speech",
                 "badge": "Ready",
                 "metrics": "Whisper + Web Speech API",
                 "icon": "mic",

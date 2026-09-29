@@ -42,7 +42,7 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
       id: 'init-1',
       role: 'assistant',
       content:
-        'Greetings, sir. J.A.R.V.I.S. online. NVIDIA NIM inference cortex is active. All 4 hubs and 8 node clusters are synchronized. How may I assist your second brain exploration today?',
+        'Greetings. NEXUS AI online. NVIDIA NIM inference cortex is active. All hubs and node clusters are synchronized. How may I assist your second brain exploration today?',
       model: nimStatus?.active_model || 'meta/llama-3.3-70b-instruct',
       timestamp: '00:00:01',
     },
@@ -200,7 +200,7 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
       });
       speakText(replyText);
     } catch (err: any) {
-      const fallbackReply = `J.A.R.V.I.S. simulated diagnostic: All systems nominal. Processing query '${textToSend}'. NVIDIA NIM local routing ready.`;
+      const fallbackReply = `NEXUS AI diagnostic: All systems nominal. Processing query '${textToSend}'. NVIDIA NIM local routing ready.`;
       const errorMsg: ChatMessage = {
         id: `bot-fallback-${Date.now()}`,
         role: 'assistant',
@@ -258,7 +258,7 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
             </div>
             <div>
               <div className="text-xs font-mono font-bold tracking-widest text-cyan-200 uppercase flex items-center gap-2">
-                J.A.R.V.I.S. COGNITIVE INTERFACE
+                NEXUS AI COGNITIVE INTERFACE
                 <span className="text-[9.5px] px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-400/40 text-cyan-300 font-normal">
                   NVIDIA NIM
                 </span>
@@ -389,7 +389,7 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
               }`}
             >
               <div className="text-[9.5px] text-slate-500 mb-1 flex items-center gap-1.5">
-                <span>{msg.role === 'user' ? 'OPERATOR' : 'J.A.R.V.I.S.'}</span>
+                <span>{msg.role === 'user' ? 'OPERATOR' : 'NEXUS AI'}</span>
                 {msg.model && msg.role === 'assistant' && (
                   <span className="text-cyan-500/70">· {msg.model}</span>
                 )}
@@ -411,7 +411,7 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
             <div className="flex flex-col items-start">
               <div className="text-[9.5px] text-cyan-400 mb-1 flex items-center gap-1 font-mono">
                 <Loader2 className="w-3 h-3 animate-spin text-cyan-400" />
-                J.A.R.V.I.S. reasoning via NVIDIA NIM...
+                NEXUS AI reasoning via NVIDIA NIM...
               </div>
               <div className="max-w-[85%] rounded-xl px-4 py-2 bg-[#040e1d]/80 border border-cyan-400/30 text-cyan-300 font-mono text-xs animate-pulse">
                 Synthesizing knowledge graph vectors...
@@ -442,7 +442,7 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Ask J.A.R.V.I.S. to analyze the brain, query nodes, or generate code..."
+            placeholder="Ask NEXUS AI to analyze the brain, query nodes, or generate code..."
             className="flex-1 px-4 py-2.5 text-xs font-mono text-cyan-100 bg-slate-900/90 border border-cyan-500/30 rounded-xl focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 placeholder:text-slate-500 shadow-inner"
           />
           <button
@@ -458,3 +458,5 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
     </div>
   );
 };
+
+export const NexusModal = JarvisModal;

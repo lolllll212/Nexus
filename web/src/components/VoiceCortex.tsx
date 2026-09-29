@@ -3,7 +3,8 @@ import { Mic, MicOff, Volume2, VolumeX, Sparkles, AudioWaveform as Waveform } fr
 
 interface VoiceCortexProps {
   onCommand: (command: string, rawText: string) => void;
-  onOpenJarvisWithPrompt: (prompt: string) => void;
+  onOpenJarvisWithPrompt?: (prompt: string) => void;
+  onOpenPrompt?: (prompt: string) => void;
   voiceEnabled: boolean;
   onToggleVoice: () => void;
 }
@@ -11,6 +12,7 @@ interface VoiceCortexProps {
 export const VoiceCortex: React.FC<VoiceCortexProps> = ({
   onCommand,
   onOpenJarvisWithPrompt,
+  onOpenPrompt,
   voiceEnabled,
   onToggleVoice,
 }) => {
@@ -20,6 +22,8 @@ export const VoiceCortex: React.FC<VoiceCortexProps> = ({
 
   const recognitionRef = useRef<any>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const dispatchPrompt = onOpenPrompt || onOpenJarvisWithPrompt || (() => {});
 
   useEffect(() => {
     // Check Web Speech Recognition support
@@ -81,8 +85,8 @@ export const VoiceCortex: React.FC<VoiceCortexProps> = ({
     } else if (lower.includes('fit') || lower.includes('2d') || lower.includes('recenter')) {
       onCommand('FIT', text);
     } else {
-      // Direct question to Jarvis
-      onOpenJarvisWithPrompt(text);
+      // Direct question to NEXUS AI
+      dispatchPrompt(text);
     }
   };
 
@@ -108,11 +112,11 @@ export const VoiceCortex: React.FC<VoiceCortexProps> = ({
 
   const simulateVoiceInput = () => {
     const simulatedPhrases = [
-      "Jarvis, research autonomous AI agent swarms",
-      "Jarvis, summarize my unread emails",
-      "Jarvis, check latest GitHub pull requests",
-      "Jarvis, fit graph to 2D view",
-      "Jarvis, analyze AI Workshop hub",
+      "NEXUS, research autonomous AI agent swarms",
+      "NEXUS, summarize my unread emails",
+      "NEXUS, check latest GitHub pull requests",
+      "NEXUS, fit graph to 2D view",
+      "NEXUS, analyze AI Workshop hub",
     ];
     const phrase = simulatedPhrases[Math.floor(Math.random() * simulatedPhrases.length)];
     setTranscript("Listening...");
@@ -173,7 +177,7 @@ export const VoiceCortex: React.FC<VoiceCortexProps> = ({
               ? 'bg-cyan-500 text-black shadow-[0_0_15px_#00f0ff] animate-pulse'
               : 'bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-400/50 text-cyan-200'
           }`}
-          title={isListening ? "Listening... Click to stop" : "Voice STT: Click or speak to J.A.R.V.I.S."}
+          title={isListening ? "Listening... Click to stop" : "Voice STT: Click or speak to NEXUS AI"}
         >
           {isListening ? <Mic className="w-4 h-4" /> : <Mic className="w-4 h-4 text-cyan-400" />}
           <span>{isListening ? 'LISTENING...' : 'VOICE CORTEX'}</span>

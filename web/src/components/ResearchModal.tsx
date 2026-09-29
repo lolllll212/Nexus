@@ -57,7 +57,8 @@ interface ResearchModalProps {
   isOpen: boolean;
   onClose: () => void;
   onRefreshGraph: () => void;
-  onOpenJarvisWithPrompt: (prompt: string) => void;
+  onOpenJarvisWithPrompt?: (prompt: string) => void;
+  onOpenPrompt?: (prompt: string) => void;
 }
 
 export const ResearchModal: React.FC<ResearchModalProps> = ({
@@ -65,7 +66,9 @@ export const ResearchModal: React.FC<ResearchModalProps> = ({
   onClose,
   onRefreshGraph,
   onOpenJarvisWithPrompt,
+  onOpenPrompt,
 }) => {
+  const dispatchPrompt = onOpenPrompt || onOpenJarvisWithPrompt || (() => {});
   const [query, setQuery] = useState('');
   const [maxSources, setMaxSources] = useState(4);
   const [autoIngest, setAutoIngest] = useState(true);
@@ -504,16 +507,16 @@ export const ResearchModal: React.FC<ResearchModalProps> = ({
                 </div>
               </div>
 
-              {/* Consult Jarvis Action */}
+              {/* Consult NEXUS AI Action */}
               <button
                 onClick={() => {
                   onClose();
-                  onOpenJarvisWithPrompt(`Synthesize findings from autonomous research on: '${result.query}'. Deep dive into: ${result.extracted_concepts.join(', ')}.`);
+                  dispatchPrompt(`Synthesize findings from autonomous research on: '${result.query}'. Deep dive into: ${result.extracted_concepts.join(', ')}.`);
                 }}
                 className="w-full py-2 px-4 rounded-xl bg-gradient-to-r from-cyan-950 to-blue-950 hover:from-cyan-900 hover:to-blue-900 border border-cyan-400/40 text-cyan-200 text-xs font-mono flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(0,240,255,0.2)] transition-all"
               >
                 <Sparkles className="w-4 h-4 text-cyan-400" />
-                <span>Deep Dive with J.A.R.V.I.S. (NVIDIA NIM)</span>
+                <span>Deep Dive with NEXUS AI (NVIDIA NIM)</span>
               </button>
             </div>
           )}
