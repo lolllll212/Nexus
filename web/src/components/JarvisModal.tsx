@@ -12,7 +12,8 @@ import {
   CheckCircle2, 
   Loader2 
 } from 'lucide-react';
-import { NimStatus, NimModel } from '../types';
+import { NimStatus, NimModel, AgentStatus } from '../types';
+import { speakWithStatus, stopAnySpeaking } from '../utils/voiceManager';
 
 interface JarvisModalProps {
   isOpen: boolean;
@@ -20,6 +21,8 @@ interface JarvisModalProps {
   initialPrompt?: string;
   nimStatus: NimStatus | null;
   onRefreshNimStatus: () => void;
+  agentStatus?: AgentStatus;
+  onStatusChange?: (status: AgentStatus) => void;
 }
 
 interface ChatMessage {
@@ -36,6 +39,8 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
   initialPrompt,
   nimStatus,
   onRefreshNimStatus,
+  agentStatus = 'idle',
+  onStatusChange,
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -75,25 +80,19 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
-  // Voice synthesis helper
+  // Voice synthesis helper coordinating with centralized AgentStatus
   const speakText = (text: string) => {
-    if (!voiceEnabled || !('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.05;
-    utterance.pitch = 0.95;
-    // Look for a British or crisp voice if available
-    const voices = window.speechSynthesis.getVoices();
-    const jarvisVoice =
-      voices.find((v) => v.lang.includes('en-GB') || v.name.includes('Daniel') || v.name.includes('Oliver')) ||
-      voices.find((v) => v.lang.includes('en'));
-    if (jarvisVoice) utterance.voice = jarvisVoice;
-    window.speechSynthesis.speak(utterance);
+    if (!voiceEnabled) return;
+    speakWithStatus(text, onStatusChange);
   };
+
+  const isBusy = isLoading || agentStatus === 'thinking' || agentStatus === 'speaking';
 
   const handleSend = async (customText?: string) => {
     const textToSend = customText || inputPrompt;
-    if (!textToSend.trim() || isLoading) return;
+    if (!textToSend.trim() || isBusy) return;
+
+    if (onStatusChange) onStatusChange('thinking');
 
     const userMsg: ChatMessage = {
       id: `usr-${Date.now()}`,
@@ -440,17 +439,26 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
           <input
             type="text"
             value={inputPrompt}
+            disabled={isBusy}
             onChange={(e) => setInputPrompt(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Ask NEXUS AI to analyze the brain, query nodes, or generate code..."
-            className="flex-1 px-4 py-2.5 text-xs font-mono text-cyan-100 bg-slate-900/90 border border-cyan-500/30 rounded-xl focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 placeholder:text-slate-500 shadow-inner"
+            placeholder={
+              agentStatus === 'thinking'
+                ? 'NEXUS is thinking... Input locked'
+                : agentStatus === 'speaking'
+                ? 'NEXUS is speaking... Input locked'
+                : 'Ask NEXUS AI to analyze the brain, query nodes, or generate code...'
+            }
+            className={`flex-1 px-4 py-2.5 text-xs font-mono text-cyan-100 bg-slate-900/90 border border-cyan-500/30 rounded-xl focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 placeholder:text-slate-500 shadow-inner ${
+              isBusy ? 'opacity-60 cursor-not-allowed' : ''
+            }`}
           />
           <button
             onClick={() => handleSend()}
-            disabled={!inputPrompt.trim() || isLoading}
+            disabled={!inputPrompt.trim() || isBusy}
             className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-400 hover:from-cyan-400 hover:to-teal-300 disabled:opacity-40 text-black font-semibold font-mono text-xs flex items-center gap-1.5 shadow-[0_0_15px_rgba(0,240,255,0.4)] transition-all cursor-pointer disabled:cursor-not-allowed"
           >
-            <span>Transmit</span>
+            <span>{isLoading ? 'Thinking...' : 'Transmit'}</span>
             <Send className="w-3.5 h-3.5" />
           </button>
         </div>

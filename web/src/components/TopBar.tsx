@@ -1,6 +1,7 @@
 import React from 'react';
 import { 
-  OperatingMode 
+  OperatingMode,
+  AgentStatus 
 } from '../types';
 import { 
   Share2, 
@@ -21,7 +22,9 @@ import {
   ShieldCheck,
   Bot,
   Radio,
-  Film
+  Film,
+  Loader2,
+  Volume2
 } from 'lucide-react';
 
 interface TopBarProps {
@@ -34,6 +37,7 @@ interface TopBarProps {
   onOpenVoiceCortex: () => void;
   onOpenAgentsModal: () => void;
   onOpenIntegrationsModal: () => void;
+  agentStatus?: AgentStatus;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -46,6 +50,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenVoiceCortex,
   onOpenAgentsModal,
   onOpenIntegrationsModal,
+  agentStatus = 'idle',
 }) => {
   const modes: { id: OperatingMode; label: string; icon: any }[] = [
     { id: 'GRAPH', label: 'GRAPH', icon: Share2 },
@@ -128,14 +133,45 @@ export const TopBar: React.FC<TopBarProps> = ({
           <span>SYSTEM ONLINE</span>
         </div>
 
-        {/* Dedicated Prominent Voice Cortex Button with Hotkey 'M' */}
+        {/* Dedicated Prominent Voice Cortex Button with Status Feedback */}
         <button
           onClick={onOpenVoiceCortex}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-bold text-cyan-200 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-400/60 hover:border-cyan-300 transition-all shadow-[0_0_12px_rgba(0,240,255,0.3)] cursor-pointer group"
-          title="Toggle Hands-Free Voice Cortex (Hotkey: M)"
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-bold transition-all cursor-pointer group shadow-sm ${
+            agentStatus === 'listening'
+              ? 'bg-cyan-500 text-black shadow-[0_0_18px_#00f0ff] animate-pulse'
+              : agentStatus === 'thinking'
+              ? 'bg-purple-950/90 border border-purple-400 text-purple-300 shadow-[0_0_12px_rgba(168,85,247,0.3)]'
+              : agentStatus === 'speaking'
+              ? 'bg-amber-950/90 border border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
+              : 'text-cyan-200 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-400/60 hover:border-cyan-300 shadow-[0_0_12px_rgba(0,240,255,0.3)]'
+          }`}
+          title={
+            agentStatus === 'listening'
+              ? 'Voice Cortex is listening... Click to stop'
+              : agentStatus === 'thinking'
+              ? 'Agent is thinking... Mic locked to prevent echo'
+              : agentStatus === 'speaking'
+              ? 'Agent is speaking... Mic locked to prevent echo'
+              : 'Toggle Hands-Free Voice Cortex (Hotkey: M)'
+          }
         >
-          <Mic className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform animate-pulse" />
-          <span className="tracking-wide">VOICE (M)</span>
+          {agentStatus === 'thinking' ? (
+            <Loader2 className="w-3.5 h-3.5 text-purple-400 animate-spin" />
+          ) : agentStatus === 'speaking' ? (
+            <Volume2 className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+          ) : (
+            <Mic className={`w-3.5 h-3.5 ${agentStatus === 'listening' ? 'text-black' : 'text-cyan-400'} animate-pulse`} />
+          )}
+
+          <span className="tracking-wide">
+            {agentStatus === 'listening'
+              ? 'LISTENING'
+              : agentStatus === 'thinking'
+              ? 'THINKING'
+              : agentStatus === 'speaking'
+              ? 'SPEAKING'
+              : 'VOICE (M)'}
+          </span>
         </button>
 
         {/* Command Center Palette Trigger */}

@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   NexusNode, 
   NexusLink, 
   NodeCategory, 
   OperatingMode, 
-  ResearchClaim 
+  ResearchClaim,
+  AgentStatus 
 } from './types';
 import { 
   INITIAL_NEXUS_NODES, 
@@ -25,10 +26,14 @@ import { AgentOrchestrationModal } from './components/AgentOrchestrationModal';
 import { IntegrationsModal } from './components/IntegrationsModal';
 import { InformationFlowTicker } from './components/InformationFlowTicker';
 import { playHudClick, playChime, playSuccessChime } from './utils/soundEffects';
+import { speakWithStatus, stopAnySpeaking } from './utils/voiceManager';
 
 export const App: React.FC = () => {
-  // Operating Modes: 'GRAPH' | 'RESEARCH' | 'WORKFLOW' | 'ARCHITECTURE'
+  // Operating Modes: 'GRAPH' | 'RESEARCH' | 'WORKFLOW' | 'ARCHITECTURE' | 'VIDEO'
   const [currentMode, setCurrentMode] = useState<OperatingMode>('GRAPH');
+
+  // Explicit Agent Status State: 'idle' | 'listening' | 'thinking' | 'speaking'
+  const [agentStatus, setAgentStatus] = useState<AgentStatus>('idle');
 
   // Living Knowledge Graph Data
   const [nodes, setNodes] = useState<NexusNode[]>(INITIAL_NEXUS_NODES);
@@ -46,6 +51,14 @@ export const App: React.FC = () => {
   const [isIntegrationsModalOpen, setIsIntegrationsModalOpen] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Unified Command Queue to prevent state race conditions
+  const commandQueueRef = useRef<{
+    id: string;
+    query: string;
+    actionType: 'RESEARCH' | 'WORKFLOW' | 'CODE' | 'MEMORY' | 'GRAPH';
+  }[]>([]);
+  const isProcessingCommandRef = useRef(false);
 
   // Deep research initial query state
   const [researchTopic, setResearchTopic] = useState('Recursive Self-Evolution & AST Guard Sandboxes in Autonomous LLMs');
@@ -160,10 +173,13 @@ export const App: React.FC = () => {
     ]);
   }, []);
 
-  // Inject command or research result into the live knowledge graph
-  const handleExecuteCommand = useCallback(
-    (query: string, actionType: 'RESEARCH' | 'WORKFLOW' | 'CODE' | 'MEMORY' | 'GRAPH') => {
-      playChime();
+  // Direct execution of single knowledge graph action
+  const executeCommandDirect = useCallback(
+    (
+      query: string,
+      actionType: 'RESEARCH' | 'WORKFLOW' | 'CODE' | 'MEMORY' | 'GRAPH',
+      onComplete: () => void
+    ) => {
       const newId = `cmd-${Date.now()}`;
       const categoryMap: Record<typeof actionType, NodeCategory> = {
         RESEARCH: 'RESEARCH',
@@ -208,8 +224,54 @@ export const App: React.FC = () => {
       if (actionType === 'RESEARCH') {
         setResearchTopic(query);
       }
+
+      onComplete();
     },
     []
+  );
+
+  // FIX 3: Unified Queue Processor preventing state race conditions
+  const processNextCommand = useCallback(() => {
+    if (commandQueueRef.current.length === 0) {
+      isProcessingCommandRef.current = false;
+      setAgentStatus('idle');
+      return;
+    }
+
+    const next = commandQueueRef.current.shift()!;
+    isProcessingCommandRef.current = true;
+    setAgentStatus('thinking');
+
+    executeCommandDirect(next.query, next.actionType, () => {
+      if (voiceEnabled) {
+        // Spoken confirmation - voice synthesis coordinates agentStatus to 'speaking'
+        const spokenConfirmation = `NEXUS processed: ${next.query.slice(0, 42)}`;
+        speakWithStatus(spokenConfirmation, setAgentStatus, () => {
+          processNextCommand();
+        });
+      } else {
+        setTimeout(() => {
+          processNextCommand();
+        }, 500);
+      }
+    });
+  }, [voiceEnabled, executeCommandDirect]);
+
+  // Inject command or research result into the live knowledge graph with queueing
+  const handleExecuteCommand = useCallback(
+    (query: string, actionType: 'RESEARCH' | 'WORKFLOW' | 'CODE' | 'MEMORY' | 'GRAPH') => {
+      playChime();
+      commandQueueRef.current.push({
+        id: `cmd-${Date.now()}-${Math.random()}`,
+        query,
+        actionType,
+      });
+
+      if (!isProcessingCommandRef.current) {
+        processNextCommand();
+      }
+    },
+    [processNextCommand]
   );
 
   // Sync Deep Research output into knowledge graph as a new document node
@@ -297,6 +359,7 @@ export const App: React.FC = () => {
         onOpenVoiceCortex={() => setIsVoiceCortexOpen(true)}
         onOpenAgentsModal={() => setIsAgentsModalOpen(true)}
         onOpenIntegrationsModal={() => setIsIntegrationsModalOpen(true)}
+        agentStatus={agentStatus}
       />
 
       {/* ── Left Sidebar: Workspaces, Search & System Telemetry ─────────────── */}
@@ -396,6 +459,7 @@ export const App: React.FC = () => {
             setCurrentMode('RESEARCH');
           }}
           onOpenVoiceCortex={() => setIsVoiceCortexOpen(true)}
+          agentStatus={agentStatus}
         />
       )}
 
@@ -435,6 +499,8 @@ export const App: React.FC = () => {
       <VoiceCortex
         voiceEnabled={voiceEnabled}
         onToggleVoice={() => setVoiceEnabled(!voiceEnabled)}
+        agentStatus={agentStatus}
+        onStatusChange={setAgentStatus}
         onCommand={(cmd, text) => {
           handleExecuteCommand(text, 'GRAPH');
         }}

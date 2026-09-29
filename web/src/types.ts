@@ -20,6 +20,8 @@ export type NodeCategory =
 
 export type OperatingMode = 'GRAPH' | 'RESEARCH' | 'WORKFLOW' | 'ARCHITECTURE' | 'VIDEO';
 
+export type AgentStatus = 'idle' | 'listening' | 'thinking' | 'speaking';
+
 export type LayoutAlgorithm = 'FORCE' | 'RING' | 'CLUSTER' | 'RADIAL';
 
 export type VideoAspectRatio = '16:9' | '9:16' | '1:1' | '21:9';
