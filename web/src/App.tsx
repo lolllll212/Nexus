@@ -20,6 +20,9 @@ import { TopBar } from './components/TopBar';
 import { CommandCenter } from './components/CommandCenter';
 import { ClaudeCodingStudio } from './components/ClaudeCodingStudio';
 import { VoiceCortex } from './components/VoiceCortex';
+import { AgentOrchestrationModal } from './components/AgentOrchestrationModal';
+import { IntegrationsModal } from './components/IntegrationsModal';
+import { InformationFlowTicker } from './components/InformationFlowTicker';
 import { playHudClick, playChime, playSuccessChime } from './utils/soundEffects';
 
 export const App: React.FC = () => {
@@ -38,13 +41,15 @@ export const App: React.FC = () => {
   // Modals & Overlays
   const [isClaudeStudioOpen, setIsClaudeStudioOpen] = useState(false);
   const [isVoiceCortexOpen, setIsVoiceCortexOpen] = useState(false);
+  const [isAgentsModalOpen, setIsAgentsModalOpen] = useState(false);
+  const [isIntegrationsModalOpen, setIsIntegrationsModalOpen] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Deep research initial query state
   const [researchTopic, setResearchTopic] = useState('Recursive Self-Evolution & AST Guard Sandboxes in Autonomous LLMs');
 
-  // Keyboard Shortcuts (C for Claude Studio, 1-4 for Modes, Esc to close)
+  // Keyboard Shortcuts (C for Claude Studio, A for Agents, I for Integrations, 1-4 for Modes, Esc to close)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
@@ -53,6 +58,12 @@ export const App: React.FC = () => {
 
       if (e.key === 'c' || e.key === 'C') {
         setIsClaudeStudioOpen((prev) => !prev);
+        playHudClick();
+      } else if (e.key === 'a' || e.key === 'A') {
+        setIsAgentsModalOpen((prev) => !prev);
+        playHudClick();
+      } else if (e.key === 'i' || e.key === 'I') {
+        setIsIntegrationsModalOpen((prev) => !prev);
         playHudClick();
       } else if (e.key === '1') {
         setCurrentMode('GRAPH');
@@ -68,13 +79,15 @@ export const App: React.FC = () => {
         playHudClick();
       } else if (e.key === 'Escape') {
         if (isClaudeStudioOpen) setIsClaudeStudioOpen(false);
+        else if (isAgentsModalOpen) setIsAgentsModalOpen(false);
+        else if (isIntegrationsModalOpen) setIsIntegrationsModalOpen(false);
         else if (selectedNode) setSelectedNode(null);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isClaudeStudioOpen, selectedNode]);
+  }, [isClaudeStudioOpen, isAgentsModalOpen, isIntegrationsModalOpen, selectedNode]);
 
   // Fullscreen Handler
   const toggleFullscreen = useCallback(() => {
@@ -243,6 +256,8 @@ export const App: React.FC = () => {
           input?.focus();
         }}
         onOpenVoiceCortex={() => setIsVoiceCortexOpen(true)}
+        onOpenAgentsModal={() => setIsAgentsModalOpen(true)}
+        onOpenIntegrationsModal={() => setIsIntegrationsModalOpen(true)}
       />
 
       {/* ── Left Sidebar: Workspaces, Search & System Telemetry ─────────────── */}
@@ -254,10 +269,19 @@ export const App: React.FC = () => {
         onOpenClaudeStudio={() => setIsClaudeStudioOpen(true)}
         onOpenResearchMode={() => setCurrentMode('RESEARCH')}
         onOpenWorkflowMode={() => setCurrentMode('WORKFLOW')}
+        onOpenAgentsModal={() => setIsAgentsModalOpen(true)}
+        onOpenIntegrationsModal={() => setIsIntegrationsModalOpen(true)}
       />
 
       {/* ── Center Viewport: Mode Dependent ─────────────────────────────────── */}
       <main className="flex-1 h-full relative overflow-hidden bg-[#05070c]">
+        {/* Real-time Information Flow Ticker (Cortex vs Subcortex) in Graph Mode */}
+        {currentMode === 'GRAPH' && (
+          <div className="absolute top-16 right-6 z-20 max-w-lg">
+            <InformationFlowTicker />
+          </div>
+        )}
+
         {currentMode === 'GRAPH' && (
           <NexusCanvas
             nodes={nodes}
@@ -341,6 +365,24 @@ export const App: React.FC = () => {
           />
         </div>
       )}
+
+      {/* ── Autonomous Agent Orchestration Layer Modal (10 Agents) ─────────── */}
+      <AgentOrchestrationModal
+        isOpen={isAgentsModalOpen}
+        onClose={() => setIsAgentsModalOpen(false)}
+        onOpenClaudeStudio={() => setIsClaudeStudioOpen(true)}
+        onOpenResearchMode={(t) => {
+          if (t) setResearchTopic(t);
+          setCurrentMode('RESEARCH');
+        }}
+      />
+
+      {/* ── External Integration Universe Modal (16 Integrations) ───────────── */}
+      <IntegrationsModal
+        isOpen={isIntegrationsModalOpen}
+        onClose={() => setIsIntegrationsModalOpen(false)}
+        onRefreshGraph={() => {}}
+      />
 
       {/* ── Spoken Voice Cortex Assistant ───────────────────────────────────── */}
       <VoiceCortex

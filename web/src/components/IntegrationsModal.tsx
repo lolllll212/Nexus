@@ -13,8 +13,24 @@ import {
   FileCode,
   GitPullRequest,
   Check,
-  RefreshCw
+  RefreshCw,
+  Database,
+  Calendar,
+  Folder,
+  MessageSquare,
+  Hash,
+  CheckSquare,
+  ArrowUpRight,
+  Radio,
+  Cpu,
+  Zap,
+  Terminal,
+  Activity,
+  Globe
 } from 'lucide-react';
+import { ENTERPRISE_INTEGRATIONS } from '../data/nexusGraphData';
+import { IntegrationService } from '../types';
+import { playHudClick, playSuccessChime } from '../utils/soundEffects';
 
 interface IntegrationsModalProps {
   isOpen: boolean;
@@ -27,7 +43,10 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({
   onClose,
   onRefreshGraph,
 }) => {
-  const [activeTab, setActiveTab] = useState<'github' | 'gmail' | 'overview'>('github');
+  const [activeTab, setActiveTab] = useState<'universe' | 'github' | 'gmail'>('universe');
+  const [integrationList, setIntegrationList] = useState<IntegrationService[]>(ENTERPRISE_INTEGRATIONS);
+  const [universeFilter, setUniverseFilter] = useState<string>('all');
+  const [testedId, setTestedId] = useState<string | null>(null);
 
   // GitHub state
   const [repos, setRepos] = useState<any[]>([]);
@@ -168,8 +187,26 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({
             {/* Tabs */}
             <div className="flex bg-[#040e1d] p-1 rounded-xl border border-cyan-500/20 text-xs font-mono">
               <button
-                onClick={() => setActiveTab('github')}
-                className={`px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all ${
+                onClick={() => {
+                  setActiveTab('universe');
+                  playHudClick();
+                }}
+                className={`px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activeTab === 'universe'
+                    ? 'bg-cyan-600 text-black font-semibold shadow-md'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Universe (16)</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('github');
+                  playHudClick();
+                }}
+                className={`px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
                   activeTab === 'github'
                     ? 'bg-cyan-600 text-black font-semibold shadow-md'
                     : 'text-slate-400 hover:text-slate-200'
@@ -180,8 +217,11 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({
               </button>
 
               <button
-                onClick={() => setActiveTab('gmail')}
-                className={`px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all ${
+                onClick={() => {
+                  setActiveTab('gmail');
+                  playHudClick();
+                }}
+                className={`px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
                   activeTab === 'gmail'
                     ? 'bg-cyan-600 text-black font-semibold shadow-md'
                     : 'text-slate-400 hover:text-slate-200'
@@ -190,23 +230,11 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({
                 <Mail className="w-3.5 h-3.5" />
                 <span>Gmail</span>
               </button>
-
-              <button
-                onClick={() => setActiveTab('overview')}
-                className={`px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all ${
-                  activeTab === 'overview'
-                    ? 'bg-cyan-600 text-black font-semibold shadow-md'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Services</span>
-              </button>
             </div>
 
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg bg-slate-900/60 border border-slate-800 text-slate-400 hover:text-red-400 hover:border-red-400/40 transition-all"
+              className="p-1.5 rounded-lg bg-slate-900/60 border border-slate-800 text-slate-400 hover:text-red-400 hover:border-red-400/40 transition-all cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -491,30 +519,111 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: SERVICES OVERVIEW */}
-          {activeTab === 'overview' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {services.map((svc) => (
-                <div
-                  key={svc.id}
-                  className="p-4 rounded-xl bg-[#040e1d] border border-cyan-500/25 space-y-2 shadow-lg"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-mono font-bold text-white">
-                      {svc.name}
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-500/30 text-emerald-300 font-mono">
-                      {svc.badge}
-                    </span>
-                  </div>
-                  <p className="text-xs font-sans text-slate-300">
-                    {svc.description}
-                  </p>
-                  <div className="text-[10.5px] font-mono text-cyan-400 pt-1 border-t border-cyan-500/10">
-                    {svc.metrics}
-                  </div>
-                </div>
-              ))}
+          {/* TAB 1: INTEGRATION UNIVERSE (16 ENTERPRISE SERVICES) */}
+          {activeTab === 'universe' && (
+            <div className="space-y-4">
+              {/* Category Filter Chips */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs font-mono">
+                {['all', 'code', 'storage', 'communication', 'productivity', 'database', 'llm', 'system'].map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => {
+                      setUniverseFilter(cat);
+                      playHudClick();
+                    }}
+                    className={`px-3 py-1 rounded-lg uppercase tracking-wider text-[10px] font-bold border transition-all cursor-pointer ${
+                      universeFilter === cat
+                        ? 'bg-cyan-950 border-cyan-400 text-cyan-300 shadow-[0_0_10px_rgba(0,240,255,0.3)]'
+                        : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              {/* 16 Integrations Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {integrationList
+                  .filter((item) => universeFilter === 'all' || item.category === universeFilter)
+                  .map((svc) => {
+                    const isTested = testedId === svc.id;
+                    const IconComponent = (() => {
+                      switch (svc.id) {
+                        case 'github': return GitBranch;
+                        case 'drive': return Folder;
+                        case 'calendar': return Calendar;
+                        case 'slack': return MessageSquare;
+                        case 'discord': return Hash;
+                        case 'notion': return FileCode;
+                        case 'jira': return CheckSquare;
+                        case 'linear': return ArrowUpRight;
+                        case 'gmail': return Mail;
+                        case 'postgres': return Database;
+                        case 'apis': return Radio;
+                        case 'ollama': return Cpu;
+                        case 'openai': return Sparkles;
+                        case 'anthropic': return Terminal;
+                        case 'groq': return Zap;
+                        case 'nvidia_nim': return Cpu;
+                        default: return Globe;
+                      }
+                    })();
+
+                    return (
+                      <div
+                        key={svc.id}
+                        className="p-3.5 rounded-2xl bg-slate-950/80 border border-cyan-500/20 hover:border-cyan-400/50 transition-all space-y-2 shadow-lg group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-2 rounded-xl bg-cyan-950/60 border border-cyan-500/30 text-cyan-400 group-hover:text-cyan-300">
+                              <IconComponent className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <span className="text-xs font-mono font-bold text-white block">
+                                {svc.name}
+                              </span>
+                              <span className="text-[9px] font-mono text-slate-500 uppercase">
+                                {svc.category} &bull; {svc.endpoint || 'Cloud Protocol'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-mono font-bold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            {svc.badge}
+                          </span>
+                        </div>
+
+                        <p className="text-[11px] text-slate-300 leading-snug font-sans">
+                          {svc.description}
+                        </p>
+
+                        <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono">
+                          <span className="text-cyan-400 font-medium">
+                            {svc.metrics}
+                          </span>
+
+                          <button
+                            onClick={() => {
+                              playSuccessChime();
+                              setTestedId(svc.id);
+                              setTimeout(() => setTestedId(null), 2500);
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[9px] font-bold border transition-all cursor-pointer ${
+                              isTested
+                                ? 'bg-emerald-950 border-emerald-400 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
+                                : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-cyan-300 hover:border-cyan-400/40'
+                            }`}
+                          >
+                            {isTested ? '✓ Ping: 12ms OK' : `Test Ping (${svc.pingMs || 15}ms)`}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
             </div>
           )}
         </div>

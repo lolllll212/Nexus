@@ -21,9 +21,14 @@
 
 **NEXUS** is an enterprise-grade autonomous AI cognitive operating system built on strict hexagonal architecture (ports & adapters). It merges high-velocity interactive reasoning (**The Cortex**) with continuous background memory consolidation and synthesis (**The Subcortex**).
 
-The system features two interconnected frontend experiences:
-1. **AI WORKSHOP OS &bull; J.A.R.V.I.S. HUD**: A full-screen holographic operating system featuring a real-time D3 force-directed knowledge graph, computer vision tracking, tactical reticles, hand gesture navigation, and voice interaction.
-2. **NEXUS Coding & Research Studio**: A dedicated Claude-style coding environment featuring chain-of-thought `<thinking>` accordions, real-time tool execution cards, an isolated Python execution sandbox, interactive split-view artifacts, and GitHub/web research integration.
+The system features four dedicated spatial operating modes and interconnected frontend experiences:
+1. **LIVING KNOWLEDGE GRAPH (Tactical OS)**: A full-screen graphite/near-black operating canvas featuring a real-time D3 force-directed knowledge graph, 18 node categories, 5 major enterprise clusters, 3D isometric perspective projection, animated edge data streams, holographic tooltips, and an 11-action tactical context menu.
+2. **AUTONOMOUS DEEP RESEARCH MODE**: Multi-hop recursive research engine with directed claim trees, competing hypothesis branches, automated citation corroboration, and one-click graph ingestion.
+3. **AUTONOMOUS WORKFLOW CANVAS**: Visual DAG step orchestrator with live status telemetry, execution logs, agent handoffs, and instant knowledge conversion.
+4. **HEXAGONAL ARCHITECTURE VIEWER**: Interactive diagram of Ports & Adapters, showing strict domain isolation, adapter latencies, and communication protocols.
+5. **AUTONOMOUS AGENT ORCHESTRATION LAYER**: Live telemetry HUD for 10 autonomous enterprise agents (Researcher, Coder, Planner, Browser, Vision, Data Analyst, Writer, Executor, Memory, Fact Checker) with status, tasks, models, tools, latencies, tokens, and animated inter-agent message bus.
+6. **EXTERNAL INTEGRATION UNIVERSE**: Dedicated interface for 16 enterprise integrations (GitHub, Google Drive, Google Calendar, Slack, Discord, Notion, Jira, Linear, Gmail, Postgres, REST APIs, Webhooks, Ollama, OpenAI, Anthropic, Groq).
+7. **NEXUS Coding & Research Studio**: A dedicated Claude-style coding environment featuring chain-of-thought `<thinking>` accordions, real-time tool execution cards, an isolated Python execution sandbox, interactive split-view artifacts, and GitHub/web research integration.
 
 ---
 
@@ -81,11 +86,62 @@ NEXUS enforces clean hexagonal separation where core domain entities are isolate
 * **Live WebSocket Telemetry (`/ws/telemetry`)**: 2-second push stream delivering system pulses to connected HUDs.
 * **Probes & Tracing**: Liveness (`/healthz`) and readiness (`/readyz`) supporting both `GET` and `HEAD` requests, with `X-Request-ID` correlation and `X-Response-Time-Ms` timing headers.
 
-### 4. Interactive J.A.R.V.I.S. Second Brain OS
-* **D3 Force-Directed Network Graph**: 70+ interactive nodes categorized across 4 Hubs (Skill Suites, Local Businesses, AI Workshop, Claude Code) and 8 Node Types.
-* **Concept Inspector**: Click any graph node to view synaptic weight, inspect neighbors, trigger deep research, or consult J.A.R.V.I.S.
-* **Vision & Gestures**: Real-time camera viewer, screen sharing (`getDisplayMedia`), and MediaPipe hand gesture recognition (Pinch, Open Palm, Closed Fist, Peace Sign).
-* **Audio Cortex**: Web Audio API procedural sound synthesizer and Whisper STT / Web Speech TTS integration.
+### 4. Four Main Spatial Operating Modes
+* **Mode 1: Living Knowledge Graph (`GRAPH`)**:
+  * Real-time Canvas & D3 force-directed knowledge graph with 18 node categories and 5 major enterprise clusters (Deep Research Lab, Claude Coding Studio, Cognitive Memory, Autonomous Workflows, Integration Universe).
+  * **Tactical Controls**: `FIT`, `FOCUS`, `RESET`, `ZOOM (+/-)`, `LAYOUT (Force, Ring, Cluster, Radial)`, `TRACE`, `EXPAND`, `2D/3D`.
+  * **3D Isometric View**: Perspective projection with elevation pillars, z-depth based on node importance, ground shadows, and perspective grid.
+  * **Intelligent Right-Click Context Menu**:
+    * `RESEARCH`: Deep Research Node
+    * `TRACE CONNECTIONS`: High-intensity synaptic pulse tracing
+    * `OPEN SOURCE`: View source document and citations
+    * `ADD TO WORKFLOW`: Append to autonomous execution canvas
+    * `CREATE TASK`: Decompose into actionable planner task
+    * `ASK NEXUS`: Natural language query via Command Center
+    * `SUMMARIZE`: Instant executive synthesis dossier
+    * `MEMORIZE`: Subcortex Qdrant vector checkpointing
+    * `EXECUTE`: Dispatch directly to Claude Coding Studio
+    * `PIN / UNPIN`: Lock or release physics simulation coordinate
+    * `FILTER`: Filter graph viewport by node category
+  * **Compact Holographic Tooltip**: HUD-styled metadata card with category, confidence %, importance score, hub, source, and synapse counts.
+* **Mode 2: Deep Research Mode (`RESEARCH`)**:
+  * Visual multi-stage research pipeline: Query Formulation &rarr; Broad Crawl &rarr; Citation Graph &rarr; Contradiction Detection &rarr; Synthesis.
+  * Competing hypothesis tree with empirical claim verification badges and real-time operational trace.
+  * Direct "Inject Into Graph" artifact publisher.
+* **Mode 3: Autonomous Workflow Canvas (`WORKFLOW`)**:
+  * Step-by-step DAG pipeline execution view with real-time logs, duration metrics, agent assignments, and tool telemetry.
+  * Interactive step inspection and dynamic "Export to Knowledge Universe" action.
+* **Mode 4: Hexagonal Ports & Adapters Architecture (`ARCHITECTURE`)**:
+  * Interactive architectural diagram showing Core Domain Entities isolated from Primary Adapters (REST, SSE, WebSockets, CLI) and Secondary Adapters (NVIDIA NIM, OpenAI, Anthropic, Qdrant, Neo4j, Redis, Sandboxes).
+  * Live adapter ping latency, protocol inspection, and fault isolation telemetry.
+
+### 5. Autonomous Agent Orchestration Layer (10 Enterprise Agents)
+A multi-agent swarm architecture coordinating specialized autonomous agents over a shared message bus:
+1. **Researcher Agent**: Multi-hop arXiv preprint crawling and paper extraction.
+2. **Coder Agent**: Sandbox code generation, AST validation, and test repair.
+3. **Planner Agent**: Hierarchical task decomposition and DAG dependency scheduling.
+4. **Browser Agent**: Headless web crawling, DOM extraction, and SSRF security guard.
+5. **Vision Agent**: MediaPipe gesture tracking, camera HUD reticles, and diagram parsing.
+6. **Data Analyst Agent**: Fourier spatial grid analysis, vector clustering, and stats profiling.
+7. **Writer Agent**: Executive synthesis dossiers, citation formatting, and LaTeX exports.
+8. **Executor Agent**: Isolated Docker/cgroup sandbox container process execution.
+9. **Memory Agent**: Subcortex Fourier grid indexing and Qdrant vector consolidation.
+10. **Fact Checker Agent**: Cross-source empirical validation and contradiction scoring.
+
+### 6. External Integration Universe (16 Enterprise Integrations)
+A complete unified integration cockpit connecting NEXUS to the modern enterprise ecosystem:
+* **Code & CI/CD**: GitHub Enterprise (repos, PRs, issues, webhooks)
+* **Storage & Cloud**: Google Drive (docs, PDFs, spreadsheets)
+* **Productivity & Issues**: Google Calendar, Notion, Jira, Linear
+* **Communication**: Slack Enterprise, Discord Bot & Voice, Gmail Workspace
+* **Databases & APIs**: PostgreSQL + pgvector, REST API Engine, HMAC Webhooks
+* **Foundation LLMs**: Ollama (Air-gapped local execution), OpenAI API, Anthropic Claude (Extended Thinking), Groq (480+ t/s LPU), NVIDIA NIM (Llama 3.3 70B & Nemotron)
+
+### 7. Real-Time Cortex vs. Subcortex Information Flow Ticker
+A cybernetic telemetry ticker monitoring conscious ReAct thoughts alongside unconscious background operations:
+* **`[CORTEX]` ReAct Engine & Thalamus Router**: Active reasoning steps, multi-modal perception routing, and tool execution.
+* **`[SUBCORTEX]` Basal Ganglia & Amygdala**: Habit policy enforcement, emotional valence scoring, and safety validation.
+* **`[SUBCORTEX]` Dreaming & Fourier Grid Cells**: Nightly memory consolidation, stale synapse pruning, and 6-fold spatial lattice routing.
 
 ---
 

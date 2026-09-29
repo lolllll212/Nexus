@@ -18,7 +18,9 @@ import {
   Sparkles,
   Command,
   Mic,
-  ShieldCheck
+  ShieldCheck,
+  Bot,
+  Radio
 } from 'lucide-react';
 
 interface TopBarProps {
@@ -29,6 +31,8 @@ interface TopBarProps {
   isFullscreen: boolean;
   onOpenCommandCenter: () => void;
   onOpenVoiceCortex: () => void;
+  onOpenAgentsModal: () => void;
+  onOpenIntegrationsModal: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -39,6 +43,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   isFullscreen,
   onOpenCommandCenter,
   onOpenVoiceCortex,
+  onOpenAgentsModal,
+  onOpenIntegrationsModal,
 }) => {
   const modes: { id: OperatingMode; label: string; icon: any }[] = [
     { id: 'GRAPH', label: 'GRAPH', icon: Share2 },
@@ -56,33 +62,6 @@ export const TopBar: React.FC<TopBarProps> = ({
           <span>NEXUS</span>
         </span>
 
-        <div className="hidden lg:flex items-center gap-1 text-[11px] text-slate-400">
-          <button
-            onClick={() => onModeChange('GRAPH')}
-            className={`px-2.5 py-1 rounded-xl transition-colors cursor-pointer ${
-              currentMode === 'GRAPH' ? 'text-cyan-300 font-bold bg-cyan-950/50' : 'hover:text-slate-200'
-            }`}
-          >
-            WORKSHOP
-          </button>
-          <button
-            onClick={() => onModeChange('RESEARCH')}
-            className={`px-2.5 py-1 rounded-xl transition-colors cursor-pointer ${
-              currentMode === 'RESEARCH' ? 'text-cyan-300 font-bold bg-cyan-950/50' : 'hover:text-slate-200'
-            }`}
-          >
-            RESEARCH
-          </button>
-          <button
-            onClick={() => onModeChange('WORKFLOW')}
-            className={`px-2.5 py-1 rounded-xl transition-colors cursor-pointer ${
-              currentMode === 'WORKFLOW' ? 'text-cyan-300 font-bold bg-cyan-950/50' : 'hover:text-slate-200'
-            }`}
-          >
-            WORKFLOWS
-          </button>
-        </div>
-
         {/* Dedicated Claude Coding Studio Launcher */}
         <button
           onClick={onOpenClaudeStudio}
@@ -92,6 +71,28 @@ export const TopBar: React.FC<TopBarProps> = ({
           <Terminal className="w-3.5 h-3.5 text-amber-400" />
           <span>Claude Studio</span>
           <span className="text-[9px] px-1 py-0.2 rounded bg-amber-900/80 text-amber-200 ml-1">C</span>
+        </button>
+
+        {/* Autonomous Agents Orchestration Layer Launcher */}
+        <button
+          onClick={onOpenAgentsModal}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold text-purple-300 bg-purple-950/60 hover:bg-purple-900/80 border border-purple-500/40 transition-all shadow-[0_0_10px_rgba(168,85,247,0.2)] cursor-pointer"
+          title="Autonomous Agent Orchestration Layer (10 Active Agents)"
+        >
+          <Bot className="w-3.5 h-3.5 text-purple-400" />
+          <span>AGENTS</span>
+          <span className="text-[9px] px-1 py-0.2 rounded bg-purple-900/80 text-purple-200 font-mono">10</span>
+        </button>
+
+        {/* External Integration Universe Launcher */}
+        <button
+          onClick={onOpenIntegrationsModal}
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold text-cyan-300 bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-500/40 transition-all shadow-[0_0_10px_rgba(6,182,212,0.2)] cursor-pointer"
+          title="External Integration Universe (16 Integrations)"
+        >
+          <Radio className="w-3.5 h-3.5 text-cyan-400" />
+          <span>INTEGRATIONS</span>
+          <span className="text-[9px] px-1 py-0.2 rounded bg-cyan-900/80 text-cyan-200 font-mono">16</span>
         </button>
       </div>
 

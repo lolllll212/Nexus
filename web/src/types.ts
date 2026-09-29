@@ -37,6 +37,7 @@ export interface NexusNode {
   metadata?: Record<string, any>;
   pulsing?: boolean;
   status?: 'active' | 'idle' | 'executing' | 'warning' | 'synced';
+  pinned?: boolean;
   x?: number;
   y?: number;
   vx?: number;
@@ -51,6 +52,46 @@ export interface NexusLink {
   relation: string;        // 'PRODUCES' | 'CALLS' | 'EXTRACTED_FROM' | 'DEPENDS_ON' | 'SYNTHESIZES' | 'AUTHENTICATES'
   strength?: number;
   active?: boolean;
+  traced?: boolean;
+}
+
+export interface AutonomousAgent {
+  id: string;
+  name: string;
+  role: 'Researcher' | 'Coder' | 'Planner' | 'Browser' | 'Vision' | 'Data Analyst' | 'Writer' | 'Executor' | 'Memory' | 'Fact Checker';
+  status: 'active' | 'thinking' | 'executing' | 'idle';
+  task: string;
+  model: string;
+  tools: string[];
+  latency: number;
+  tokens: string;
+  progress: number;
+  avatarColor: string;
+  activeContextTokens: number;
+}
+
+export interface InterAgentMessage {
+  id: string;
+  timestamp: string;
+  fromAgent: string;
+  toAgent: string;
+  type: 'TASK_HANDOFF' | 'DATA_PAYLOAD' | 'VERIFICATION_REQUEST' | 'AST_ARTIFACT' | 'SYNAPSE_SIGNAL';
+  content: string;
+  status: 'delivered' | 'processing' | 'verified';
+}
+
+export interface IntegrationService {
+  id: string;
+  name: string;
+  category: 'code' | 'storage' | 'communication' | 'productivity' | 'database' | 'llm' | 'system';
+  status: 'connected' | 'active' | 'syncing' | 'ready';
+  description: string;
+  badge: string;
+  metrics: string;
+  icon: string;
+  endpoint?: string;
+  lastSync?: string;
+  pingMs?: number;
 }
 
 export interface ResearchClaim {

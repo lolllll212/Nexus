@@ -25,6 +25,8 @@ interface LeftSidebarProps {
   onOpenClaudeStudio: () => void;
   onOpenResearchMode: () => void;
   onOpenWorkflowMode: () => void;
+  onOpenAgentsModal?: () => void;
+  onOpenIntegrationsModal?: () => void;
 }
 
 export const LeftSidebar: React.FC<LeftSidebarProps> = ({
@@ -35,16 +37,18 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   onOpenClaudeStudio,
   onOpenResearchMode,
   onOpenWorkflowMode,
+  onOpenAgentsModal,
+  onOpenIntegrationsModal,
 }) => {
   const workspaces: { name: string; category?: NodeCategory; icon: any; count: number; action?: () => void }[] = [
     { name: 'Knowledge', category: 'CONCEPT', icon: Layers, count: 489 },
     { name: 'Research', category: 'RESEARCH', icon: Globe, count: 54, action: onOpenResearchMode },
-    { name: 'Projects', category: 'PROJECT', icon: FolderKanban, count: 18 },
     { name: 'Workflows', category: 'WORKFLOW', icon: Zap, count: 24, action: onOpenWorkflowMode },
-    { name: 'Agents', category: 'AGENT', icon: Bot, count: 6 },
+    { name: 'Agents', category: 'AGENT', icon: Bot, count: 10, action: onOpenAgentsModal },
+    { name: 'Projects', category: 'PROJECT', icon: FolderKanban, count: 18 },
     { name: 'Memory', category: 'MEMORY', icon: Database, count: 1420 },
+    { name: 'Integrations', category: 'API', icon: Radio, count: 16, action: onOpenIntegrationsModal },
     { name: 'Files', category: 'FILE', icon: FileText, count: 312 },
-    { name: 'Integrations', category: 'API', icon: Radio, count: 14 },
   ];
 
   const recentActivities = [
@@ -173,7 +177,12 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
           <div className="flex items-center justify-between">
             <span className="text-slate-500">AGENTS</span>
-            <span className="text-cyan-300 font-bold">06 RUNNING</span>
+            <span className="text-cyan-300 font-bold">10 RUNNING</span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-slate-500">INTEGRATIONS</span>
+            <span className="text-cyan-400 font-bold">16 CONNECTED</span>
           </div>
 
           <div className="flex items-center justify-between">
