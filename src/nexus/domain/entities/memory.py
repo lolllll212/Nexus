@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
+
+from nexus.domain.value_objects.clock import utc_now
 
 
 class MemoryType(Enum):
@@ -57,15 +59,15 @@ class Memory:
     metadata: dict[str, object] = field(default_factory=dict)
     emotional_weight: EmotionalWeight | None = None
     context_state: dict[str, object] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    last_accessed_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utc_now)
+    last_accessed_at: datetime = field(default_factory=utc_now)
     access_count: int = 0
     consolidated: bool = False  # True when compressed by dreaming
 
     def accessed(self) -> None:
         """Record that this memory was recalled. Drives decay/pruning."""
         self.access_count += 1
-        self.last_accessed_at = datetime.utcnow()
+        self.last_accessed_at = utc_now()
 
     def consolidate(self, new_content: str) -> Memory:
         """
@@ -82,5 +84,9 @@ class Memory:
 
     def is_stale(self, threshold_days: int, min_accesses: int = 1) -> bool:
         """Whether this memory should be pruned (dreaming phase 2)."""
-        age_days = (datetime.utcnow() - self.last_accessed_at).days
+        last = self.last_accessed_at
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        now = utc_now()
+        age_days = (now - last).days
         return age_days > threshold_days and self.access_count < min_accesses

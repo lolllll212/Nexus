@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from nexus.application.tools.generate_tool import ToolSpecRequest
 from nexus.infrastructure.api.dependencies import (
     get_container,
+    require_admin,
     require_identity,
     require_quota,
     require_rate_limit,
@@ -69,7 +70,11 @@ async def list_tools(container: Container = Depends(get_container)):
 @router.post(
     "/generate",
     response_model=GenerateResponse,
-    dependencies=[Depends(require_rate_limit("tool_gen")), Depends(require_quota("tool_gen"))],
+    dependencies=[
+        Depends(require_admin),
+        Depends(require_rate_limit("tool_gen")),
+        Depends(require_quota("tool_gen")),
+    ],
 )
 async def generate_tool(req: GenerateRequest, container: Container = Depends(get_container)):
     result = await container.tool_generator.execute(

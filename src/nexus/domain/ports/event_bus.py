@@ -15,6 +15,8 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
+from nexus.domain.value_objects.clock import utc_now
+
 
 class EventTopic(Enum):
     """Canonical event topics on the bus."""
@@ -55,7 +57,7 @@ class Event:
     payload: dict[str, Any]
     id: str = field(default_factory=lambda: str(uuid4()))
     priority: EventPriority = EventPriority.NORMAL
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=utc_now)
     correlation_id: str | None = None
 
 

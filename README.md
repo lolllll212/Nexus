@@ -11,7 +11,7 @@
 [![Tailwind CSS v4](https://img.shields.io/badge/tailwindcss-v4.0-38bdf8.svg)](https://tailwindcss.com/)
 [![NVIDIA NIM](https://img.shields.io/badge/NVIDIA-NIM%20Ready-76b900.svg)](https://developer.nvidia.com/nim)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests Passing](https://img.shields.io/badge/tests-244%20passed-brightgreen)](#testing)
+[![Tests Passing](https://img.shields.io/badge/tests-251%20passed-brightgreen)](#testing)
 
 </div>
 
@@ -319,23 +319,57 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ---
 
-## Testing
+## Testing & Security Hardening
 
-NEXUS includes a 240+ test suite covering unit operations, production hardening, real-world algorithmic problems, and self-evolution:
+NEXUS includes a 251+ test suite covering unit operations, production hardening, real-world algorithmic problems, and self-evolution:
 
 ```bash
-# Run all unit tests
-pytest tests/unit -q
+# Run full unit test suite
+pytest tests/unit/ -k "not test_neo4j and not test_qdrant and not test_inmemory_backend" -v
 
-# Run real-world coding and research tests
+# Run golden-set and dreaming Fourier evaluation harness
+pytest tests/eval/ -v
+
+# Run security audit hardening tests (SSRF, AST escape, command hashes, path confinement)
+pytest tests/unit/test_security_audit_hardening.py -v
+
+# Run role-based route authentication and admin authorization tests
+pytest tests/unit/test_route_authentication.py -v
+
+# Run real-world coding assistant and sandbox tests
 pytest tests/unit/test_coding_assistant_real_world.py -v
 
 # Run recursive self-evolution tests
 pytest tests/unit/test_self_evolution_research.py -v
 
-# Run production hardening tests (SSRF, metrics, probes, webhooks)
+# Run production hardening tests (SSRF IP pinning, metrics, probes, webhooks)
 pytest tests/unit/test_production_hardening.py -v
 ```
+
+### Security Architecture & Auditing Controls
+
+1. **Fail-Closed Autonomous Execution Gate**:
+   - `run_shell` and `write_file` strictly require approval policies. When no policy is configured, execution immediately fails closed.
+   - Approvals are cryptographically keyed on SHA-256 command and path hashes (`tool:run_shell:{cmd_hash}`) rather than broad per-tool authorizations.
+   - Tenant and actor identities are strictly pulled from request/session context (`set_execution_context`), preventing prompt injection attacks from overriding security identities.
+2. **Scrubbed Sandbox Shell Execution**:
+   - Shell commands execute in a clean environment where host environment variables, tokens, and API keys are completely stripped.
+3. **Database Confinement & Read-Only Enforcement**:
+   - SQLite queries are strictly confined to the workspace root via `resolve_confined_path(..., must_exist=True)` and opened in read-only mode (`mode=ro`).
+   - Write operations (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `CREATE`, `ATTACH`, `DETACH`) are permanently blocked.
+   - Network databases (PostgreSQL, MySQL, Redis) enforce an allowlisted host policy (`NEXUS_ALLOWED_DB_HOSTS`) and resolve credentials from secure environment/vault variables.
+4. **SSRF Guard with IP Pinning**:
+   - URLs are validated against private, loopback, and cloud metadata ranges (`169.254.169.254`, `100.100.100.200`, `metadata.google.internal`).
+   - The resolved IP address is pinned on connection to eliminate DNS rebinding (TOCTOU) attacks.
+5. **Secrets & Keys Denylist**:
+   - `resolve_confined_path` and `_grep` reject access to `.env*`, `*.pem`, `*.key`, `id_rsa*`, `.git/config`, `credentials*`, and `secrets.json`.
+6. **Agent Loop Reliability & Prompt Injection Delimiters**:
+   - Tool calls are parsed before checking for final answer, preventing accidental termination.
+   - Loop guard tracks `(tool_name, params_hash)` rather than raw tool names.
+   - Tool observation outputs are enclosed in `<tool_output>` untrusted data boundaries with anti-prompt-injection directives.
+   - Dynamic tool catalogs in error feedback allow autonomous model self-correction.
+7. **Admin RBAC Enforcement**:
+   - Administrative endpoints (`/v1/system/dream`, `/v1/system/self-heal`, `/v1/tools/generate`, `/api/nim/configure`, `/api/research/apply-upgrade`, `/v1/goals/approvals/grant`) require verified `Role.ADMIN` credentials, rejecting standard users with `403 Forbidden`.
 
 ---
 

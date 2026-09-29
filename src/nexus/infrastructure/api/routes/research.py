@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from nexus.domain.entities.tool import Tool
 from nexus.domain.value_objects.schema import JSONSchema
 from nexus.infrastructure.adapters.security.ssrf import validate_safe_url
-from nexus.infrastructure.api.dependencies import get_container, require_identity
+from nexus.infrastructure.api.dependencies import get_container, require_admin, require_identity
 from nexus.infrastructure.api.routes.graph import inject_dynamic_graph_node
 from nexus.infrastructure.di.container import Container
 
@@ -378,7 +378,7 @@ async def execute_research(
 async def apply_self_upgrade(
     req: ApplyUpgradeRequest,
     container: Container = Depends(get_container),
-    identity: Any = Depends(require_identity),
+    identity: Any = Depends(require_admin),
 ) -> ApplyUpgradeResponse:
     """
     Execute Self-Upgrade under Human Approval Gate:

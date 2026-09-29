@@ -83,9 +83,9 @@ async def test_pruning_batch_deletes_stale_unaccessed_memories():
     concept_repo = FakeConceptRepository()
 
     stale = Memory(content="old forgotten fact", memory_type=MemoryType.SEMANTIC)
-    stale.last_accessed_at = datetime.datetime.utcnow() - datetime.timedelta(days=120)
+    stale.last_accessed_at = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=120)
     fresh = Memory(content="recently used fact", memory_type=MemoryType.SEMANTIC)
-    fresh.last_accessed_at = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+    fresh.last_accessed_at = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1)
 
     await memory_repo.store(stale)
     await memory_repo.store(fresh)
@@ -107,7 +107,7 @@ async def test_pruning_spares_stale_but_frequently_accessed_memories():
     concept_repo = FakeConceptRepository()
 
     well_used = Memory(content="old but beloved", memory_type=MemoryType.SEMANTIC, access_count=5)
-    well_used.last_accessed_at = datetime.datetime.utcnow() - datetime.timedelta(days=120)
+    well_used.last_accessed_at = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=120)
 
     await memory_repo.store(well_used)
 

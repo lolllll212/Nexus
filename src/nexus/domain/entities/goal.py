@@ -7,6 +7,8 @@ from datetime import datetime
 from enum import Enum
 from uuid import uuid4
 
+from nexus.domain.value_objects.clock import utc_now
+
 
 class GoalStatus(Enum):
     """Lifecycle states of a goal."""
@@ -56,7 +58,7 @@ class GoalEvent:
     kind: str  # step_started|step_completed|step_failed|budget_decremented|approved|rejected|cancelled|regenerated_tool
     detail: str
     actor: str = "system"
-    ts: datetime = field(default_factory=datetime.utcnow)
+    ts: datetime = field(default_factory=utc_now)
 
 
 @dataclass
@@ -75,8 +77,8 @@ class Goal:
     requires_approval: bool = True
     approved_by: str | None = None
     approved_at: datetime | None = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utc_now)
+    updated_at: datetime = field(default_factory=utc_now)
     deadline: datetime | None = None
     plan: list[GoalStep] = field(default_factory=list)
     result: str | None = None
@@ -92,13 +94,13 @@ class Goal:
 
     def log(self, kind: str, detail: str, actor: str = "system") -> None:
         self.history.append(GoalEvent(kind=kind, detail=detail, actor=actor))
-        self.updated_at = datetime.utcnow()
+        self.updated_at = utc_now()
 
     def mark_active(self, approved_by: str | None = None) -> None:
         self.status = GoalStatus.ACTIVE
         if approved_by:
             self.approved_by = approved_by
-            self.approved_at = datetime.utcnow()
+            self.approved_at = utc_now()
         self.log("approved" if approved_by else "activated", f"activated by {approved_by or 'system'}")
 
     def mark_blocked(self, reason: str) -> None:

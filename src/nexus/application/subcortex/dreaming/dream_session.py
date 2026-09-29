@@ -13,7 +13,9 @@ Emits events so the cortex can be notified of new knowledge at dawn.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+from nexus.domain.value_objects.clock import utc_now
 
 from nexus.application.subcortex.dreaming.compress import CompressionResult, CompressionUseCase
 from nexus.application.subcortex.dreaming.consolidate import ConsolidationResult, ConsolidationUseCase
@@ -31,7 +33,7 @@ from nexus.domain.value_objects.synapse import SynapseConfig
 @dataclass
 class DreamSessionResult:
     session_id: str
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=utc_now)
     completed_at: datetime | None = None
     compression: CompressionResult | None = None
     pruning: PruningResult | None = None
@@ -84,7 +86,7 @@ class DreamSessionUseCase:
 
     async def run(self, emotional_intensity: float = 0.0, tenant_id: str = "default") -> DreamSessionResult:
         async with self._tracer.span("dream_session", {"tenant_id": tenant_id}):
-            result = DreamSessionResult(session_id=f"dream-{int(datetime.utcnow().timestamp())}")
+            result = DreamSessionResult(session_id=f"dream-{int(utc_now().timestamp())}")
 
             await self._event_bus.publish(
                 Event(topic=EventTopic.DREAM_TRIGGERED, payload={"session_id": result.session_id})
@@ -117,7 +119,7 @@ class DreamSessionUseCase:
             # --- Phase 5: re-measure recall (did dreaming make memory more retrievable?) ---
             result.recall_hit_rate_after = await self._measure_recall(probes, tenant_id=tenant_id)
 
-            result.completed_at = datetime.utcnow()
+            result.completed_at = utc_now()
 
             self._metrics.counter("dream_sessions_total", labels={"tenant_id": tenant_id})
             if result.recall_hit_rate_before is not None:
@@ -184,7 +186,7 @@ class DreamSessionUseCase:
     @staticmethod
     def next_dream_time(now: datetime | None = None) -> datetime:
         """Next 3 AM UTC boundary - drives the cron scheduling."""
-        now = now or datetime.utcnow()
+        now = now or utc_now()
         nxt = now.replace(hour=3, minute=0, second=0, microsecond=0)
         if nxt <= now:
             nxt += timedelta(days=1)

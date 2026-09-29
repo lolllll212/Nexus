@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
+from nexus.domain.value_objects.clock import utc_now
 from nexus.domain.value_objects.schema import JSONSchema
 
 
@@ -34,7 +35,7 @@ class Tool:
     code: str | None = None  # Python source (None for built-ins)
     status: ToolStatus = ToolStatus.READY
     version: str = "1.0.0"
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utc_now)
     last_used_at: datetime | None = None
     use_count: int = 0
     success_rate: float = 1.0
@@ -43,7 +44,7 @@ class Tool:
     deployment: dict[str, Any] = field(default_factory=dict)
 
     def record_use(self, succeeded: bool) -> None:
-        self.last_used_at = datetime.utcnow()
+        self.last_used_at = utc_now()
         self.use_count += 1
         alpha = 0.1
         self.success_rate = (1 - alpha) * self.success_rate + alpha * (1.0 if succeeded else 0.0)

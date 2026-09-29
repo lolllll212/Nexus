@@ -7,6 +7,8 @@ from datetime import datetime
 from enum import Enum
 from uuid import uuid4
 
+from nexus.domain.value_objects.clock import utc_now
+
 
 class ThoughtType(Enum):
     """Kinds of thoughts the brain produces."""
@@ -30,7 +32,7 @@ class Thought:
     parent_id: str | None = None  # Chain of thought
     concepts: list[str] = field(default_factory=list)
     confidence: float = 0.0
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utc_now)
     metadata: dict[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:

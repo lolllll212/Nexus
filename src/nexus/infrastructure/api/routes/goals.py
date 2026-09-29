@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from nexus.domain.entities.goal import GoalPriority, GoalStatus
 from nexus.domain.exceptions import GoalNotFoundError, GoalStatusError
 from nexus.domain.value_objects.identity import Identity
-from nexus.infrastructure.api.dependencies import get_container, require_identity
+from nexus.infrastructure.api.dependencies import get_container, require_admin, require_identity
 from nexus.infrastructure.di.container import Container
 
 router = APIRouter(
@@ -16,6 +16,17 @@ router = APIRouter(
     tags=["goals"],
     dependencies=[Depends(require_identity)],
 )
+
+autonomy_router = APIRouter(
+    prefix="/api/autonomy",
+    tags=["autonomy"],
+    dependencies=[Depends(require_identity)],
+)
+
+
+class GrantApprovalRequest(BaseModel):
+    action: str
+    tenant_id: str | None = None
 
 
 class CreateGoalRequest(BaseModel):
@@ -146,7 +157,7 @@ async def get_goal(
 async def approve_goal(
     goal_id: str,
     req: ApproveGoalRequest,
-    identity: Identity = Depends(require_identity),
+    identity: Identity = Depends(require_admin),
     container: Container = Depends(get_container),
 ) -> GoalOut:
     try:
@@ -159,6 +170,21 @@ async def approve_goal(
         raise HTTPException(status_code=409, detail=str(exc))
     await container.autonomy_policy.grant_approval(req.action, identity.user_id, identity.tenant_id)
     return _to_out(goal)
+
+
+@router.post("/approvals/grant")
+@autonomy_router.post("/approvals/grant")
+async def grant_action_approval(
+    req: GrantApprovalRequest,
+    identity: Identity = Depends(require_admin),
+    container: Container = Depends(get_container),
+) -> dict:
+    """Grant approval for a sensitive autonomous action (Admin only)."""
+    target_tenant = req.tenant_id or identity.tenant_id
+    policy = container.autonomy_policy
+    if policy:
+        await policy.grant_approval(req.action, approver=identity.user_id, tenant_id=target_tenant)
+    return {"status": "approved", "action": req.action, "approver": identity.user_id}
 
 
 @router.post("/{goal_id}/cancel", response_model=GoalOut)

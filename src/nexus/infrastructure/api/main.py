@@ -93,10 +93,13 @@ def create_app(config: Config | None = None) -> FastAPI:
     )
 
     cfg = config or Config()
+    cors_origins = list(cfg.cors_origins) if cfg.cors_origins else ["*"]
+    # Per CORS standard and security best practices: reject wildcard CORS when credentials are enabled
+    allow_credentials = "*" not in cors_origins
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=cfg.cors_origins,
-        allow_credentials=True,
+        allow_origins=cors_origins,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -140,6 +143,7 @@ def create_app(config: Config | None = None) -> FastAPI:
 
     app.include_router(chat.router)
     app.include_router(goals.router)
+    app.include_router(goals.autonomy_router)
     app.include_router(memory.router)
     app.include_router(swarm.router)
     app.include_router(tools.router)

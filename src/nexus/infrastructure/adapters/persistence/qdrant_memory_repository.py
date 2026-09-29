@@ -121,7 +121,9 @@ class QdrantMemoryRepository(MemoryRepository):
     ) -> list[Memory]:
         from qdrant_client import models
 
-        cutoff = (datetime.datetime.utcnow() - datetime.timedelta(days=threshold_days)).isoformat()
+        cutoff = (
+            datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=threshold_days)
+        ).isoformat()
         filter_ = models.Filter(
             must=[
                 models.FieldCondition(key="last_accessed_at", range=models.Range(lt=cutoff)),
@@ -162,7 +164,7 @@ class QdrantMemoryRepository(MemoryRepository):
             return
         payload = points[0].payload
         payload["access_count"] = payload.get("access_count", 0) + 1
-        payload["last_accessed_at"] = datetime.datetime.utcnow().isoformat()
+        payload["last_accessed_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         await self._client.set_payload(
             collection_name=self._collection(tenant_id), payload=payload, points=[memory_id]
         )

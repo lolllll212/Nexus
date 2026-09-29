@@ -67,6 +67,19 @@ async def require_identity(conn: HTTPConnection) -> Identity:
     return identity
 
 
+async def require_admin(conn: HTTPConnection) -> Identity:
+    """Enforce that the caller has ADMIN role."""
+    from fastapi import Depends
+    from nexus.domain.value_objects.identity import Role
+
+    identity = await require_identity(conn)
+    role_val = getattr(identity.role, "value", identity.role)
+    is_admin = identity.role == Role.ADMIN or str(role_val).lower() == "admin"
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Forbidden: Admin privileges required")
+    return identity
+
+
 def require_rate_limit(kind: str) -> Callable[[Request], None]:
     """Enforce a per-identity sliding-window rate limit.
 

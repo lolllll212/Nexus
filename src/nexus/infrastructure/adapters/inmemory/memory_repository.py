@@ -50,14 +50,16 @@ class InMemoryMemoryRepository(MemoryRepository):
     async def find_stale(
         self, threshold_days: int, limit: int = 100, min_accesses: int = 1, tenant_id: str = "default"
     ) -> list[Memory]:
-        cutoff = _utcnow() - datetime.timedelta(days=threshold_days)
-        stale = [
-            m
-            for m in self.memories.values()
-            if self._tenant.get(m.id) == tenant_id
-            and m.last_accessed_at < cutoff
-            and m.access_count < min_accesses
-        ]
+        cutoff = _now() - datetime.timedelta(days=threshold_days)
+        stale = []
+        for m in self.memories.values():
+            if self._tenant.get(m.id) != tenant_id:
+                continue
+            last = m.last_accessed_at
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=datetime.timezone.utc)
+            if last < cutoff and m.access_count < min_accesses:
+                stale.append(m)
         return stale[:limit]
 
     async def delete(self, memory_id: str, tenant_id: str = "default") -> None:
@@ -98,5 +100,5 @@ def _score(memory: Memory, query: str) -> float:
     return sum(1 for t in terms if t in text) / len(terms)
 
 
-def _utcnow() -> datetime.datetime:
-    return datetime.datetime.utcnow()
+def _now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)

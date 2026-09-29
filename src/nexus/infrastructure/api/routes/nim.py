@@ -20,7 +20,7 @@ from nexus.infrastructure.adapters.llm.nvidia_nim_provider import (
     SUPPORTED_NIM_MODELS,
     NvidiaNimProvider,
 )
-from nexus.infrastructure.api.dependencies import get_container, require_identity
+from nexus.infrastructure.api.dependencies import get_container, require_admin, require_identity
 from nexus.infrastructure.di.container import Container
 
 logger = logging.getLogger("nexus.nim.api")
@@ -203,8 +203,9 @@ async def chat_nim_stream(
 async def configure_nim(
     req: NimConfigRequest,
     container: Container = Depends(get_container),
+    admin: Any = Depends(require_admin),
 ) -> dict[str, Any]:
-    """Dynamically update NVIDIA NIM credentials or model configuration."""
+    """Dynamically update NVIDIA NIM credentials or model configuration (Admin only)."""
     provider = _get_nim_provider(container)
 
     if req.api_key is not None:

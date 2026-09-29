@@ -14,6 +14,8 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 
+from nexus.domain.value_objects.clock import utc_now
+
 from nexus.application.subcortex.amygdala import AmygdalaUseCase
 from nexus.application.subcortex.basal_ganglia import BasalGangliaUseCase
 from nexus.application.subcortex.dreaming.dream_session import DreamSessionUseCase
@@ -132,7 +134,7 @@ class SubconsciousCoordinator:
     async def _dream_loop(self) -> None:
         """Sleep until the dream hour, then run the full dreaming cycle."""
         while self._running:
-            now = datetime.utcnow()
+            now = utc_now()
             next_dream = DreamSessionUseCase.next_dream_time(now)
             wait = (next_dream - now).total_seconds()
             try:
@@ -140,7 +142,7 @@ class SubconsciousCoordinator:
             except TimeoutError:
                 pass
 
-            now = datetime.utcnow()
+            now = utc_now()
             if now.hour == self._dream_hour and now.minute == 0:
                 try:
                     await self._dream.run()

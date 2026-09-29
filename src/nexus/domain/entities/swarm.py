@@ -7,6 +7,8 @@ from datetime import datetime
 from enum import Enum
 from uuid import uuid4
 
+from nexus.domain.value_objects.clock import utc_now
+
 
 class SwarmStatus(Enum):
     READY = "ready"
@@ -26,7 +28,7 @@ class Swarm:
     id: str = field(default_factory=lambda: str(uuid4()))
     worker_ids: list[str] = field(default_factory=list)
     status: SwarmStatus = SwarmStatus.READY
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utc_now)
     metadata: dict[str, object] = field(default_factory=dict)
 
 

@@ -151,7 +151,7 @@ class SimulationUseCase:
                         for s in result.solutions_verified
                     ],
                     "deployables": {s.problem: s.scaffold for s in result.solutions_verified if s.scaffold},
-                    "generated_at": __import__("datetime").datetime.utcnow().isoformat(),
+                    "generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
                 },
                 ttl_seconds=86400,
             )

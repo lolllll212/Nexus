@@ -5,7 +5,7 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from nexus.infrastructure.api.main import create_app
-from tests.fakes.container import TEST_API_KEY_1, FakeContainer
+from tests.fakes.container import TEST_API_KEY_1, TEST_API_KEY_2, FakeContainer
 
 EXEMPT_PUBLIC_ROUTES = {
     "/healthz",
@@ -103,3 +103,29 @@ def test_every_sensitive_route_returns_401_without_key(auth_test_client):
 
     # Ensure a significant number of endpoints were verified
     assert tested_count >= 50, f"Expected to verify at least 50 endpoints, verified {tested_count}"
+
+
+def test_admin_routes_reject_non_admin_role_with_403(auth_test_client):
+    """Assert admin-only routes reject standard user identities with 403 Forbidden."""
+    client, _ = auth_test_client
+
+    admin_endpoints = [
+        ("POST", "/v1/system/dream", {}),
+        ("POST", "/v1/system/self-heal", {}),
+        ("POST", "/api/nim/configure", {"model": "test-model"}),
+        ("POST", "/v1/goals/approvals/grant", {"action": "test_action"}),
+        ("POST", "/api/autonomy/approvals/grant", {"action": "test_action"}),
+    ]
+
+    for method, path, body in admin_endpoints:
+        fn = getattr(client, method.lower())
+        res = fn(
+            path,
+            json=body,
+            headers={"Authorization": f"Bearer {TEST_API_KEY_2}"},  # Role: user
+        )
+        assert res.status_code == 403, (
+            f"Expected {method} {path} to return 403 Forbidden for non-admin, "
+            f"got {res.status_code}: {res.text}"
+        )
+

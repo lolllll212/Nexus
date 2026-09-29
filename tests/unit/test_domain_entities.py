@@ -55,7 +55,7 @@ class TestMemoryConsolidation:
         import datetime
 
         m = Memory(content="x", memory_type=MemoryType.EPISODIC)
-        m.last_accessed_at = datetime.datetime.utcnow() - datetime.timedelta(days=200)
+        m.last_accessed_at = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=200)
         assert m.is_stale(threshold_days=90)
 
     def test_emotional_weight_validation(self):

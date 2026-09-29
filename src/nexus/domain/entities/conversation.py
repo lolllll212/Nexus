@@ -7,6 +7,7 @@ from datetime import datetime
 from enum import Enum
 from uuid import uuid4
 
+from nexus.domain.value_objects.clock import utc_now
 from nexus.domain.value_objects.emotion import EmotionalState, infer_emotional_state
 
 
@@ -24,7 +25,7 @@ class Message:
     role: MessageRole
     content: str
     id: str = field(default_factory=lambda: str(uuid4()))
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=utc_now)
     metadata: dict[str, object] = field(default_factory=dict)
 
 
@@ -35,7 +36,7 @@ class Session:
     session_id: str = field(default_factory=lambda: str(uuid4()))
     user_id: str = "anonymous"
     tenant_id: str = "default"
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=utc_now)
     ended_at: datetime | None = None
     metadata: dict[str, object] = field(default_factory=dict)
 
@@ -51,13 +52,13 @@ class Conversation:
     active_concepts: list[str] = field(default_factory=list)
     emotional_state: EmotionalState = field(default_factory=EmotionalState)
     current_task: str | None = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utc_now)
+    updated_at: datetime = field(default_factory=utc_now)
 
     def add_message(self, role: MessageRole, content: str, metadata: dict | None = None) -> Message:
         msg = Message(role=role, content=content, metadata=metadata or {})
         self.messages.append(msg)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = utc_now()
         return msg
 
     def observe_message(self, role: MessageRole, content: str) -> None:

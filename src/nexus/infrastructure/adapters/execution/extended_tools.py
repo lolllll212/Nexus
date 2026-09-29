@@ -12,6 +12,7 @@ import json
 import os
 import platform
 import re
+import contextvars
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
@@ -24,6 +25,46 @@ from nexus.infrastructure.adapters.security.ssrf import safe_http_fetch
 
 _AUTONOMY_POLICY: Any = None
 _DEFAULT_SANDBOX: Any = None
+_CURRENT_EXECUTION_CONTEXT: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
+    "nexus_execution_context", default=None
+)
+
+
+def set_execution_context(ctx: dict[str, Any] | None) -> None:
+    _CURRENT_EXECUTION_CONTEXT.set(ctx)
+
+
+def get_execution_context() -> dict[str, Any]:
+    ctx = _CURRENT_EXECUTION_CONTEXT.get()
+    if ctx is not None:
+        return ctx
+    return {"tenant_id": "default", "actor": "system", "role": "user"}
+
+
+DENYLISTED_FILES = {
+    ".env", ".env.local", ".env.production", ".env.development", ".env.staging", ".env.test",
+    "credentials", "secrets.json", ".git-credentials", ".netrc"
+}
+DENYLISTED_EXTENSIONS = {
+    ".pem", ".key", ".pkcs12", ".p12", ".pfx", ".cert", ".crt"
+}
+DENYLISTED_SUBSTRINGS = {
+    "id_rsa", "id_ed25519", "id_ecdsa", "id_dsa",
+    ".git/config", ".git/credentials", ".git\\config", ".git\\credentials",
+}
+
+
+def is_denylisted_path(path: Path) -> bool:
+    name = path.name.lower()
+    if name in DENYLISTED_FILES or name.startswith(".env"):
+        return True
+    if any(name.endswith(ext) for ext in DENYLISTED_EXTENSIONS):
+        return True
+    path_str = str(path).replace("\\", "/").lower()
+    for sub in DENYLISTED_SUBSTRINGS:
+        if sub in path_str:
+            return True
+    return False
 
 
 def set_autonomy_policy(policy: Any) -> None:
@@ -87,6 +128,12 @@ def resolve_confined_path(rel_or_abs_path: str | Path, must_exist: bool = False)
             return (
                 None,
                 f"Access denied: path '{rel_or_abs_path}' escapes workspace root '{get_workspace_root()}'",
+            )
+
+        if is_denylisted_path(candidate):
+            return (
+                None,
+                f"Access denied: access to sensitive configuration, secrets, or keys is forbidden: '{candidate.name}'",
             )
 
         if must_exist and not candidate.exists():
@@ -392,26 +439,54 @@ async def _run_python(params: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _run_shell(params: dict[str, Any]) -> dict[str, Any]:
+    command = params.get("command", "").strip()
+    if not command:
+        return {"stdout": "", "stderr": "No command provided", "returncode": -1}
+
+    cmd_hash = hashlib.sha256(command.encode("utf-8")).hexdigest()[:16]
+    action = f"tool:run_shell:{cmd_hash}"
+    base_action = "tool:run_shell"
+
+    # Context-derived tenant and actor - ignore model params
+    ctx = get_execution_context()
+    tenant_id = ctx.get("tenant_id", "default")
+    actor = ctx.get("actor", "user")
+
     policy = get_autonomy_policy()
-    tenant_id = params.get("tenant_id", "default")
-    if policy:
-        action = "tool:run_shell"
-        actor = params.get("actor", "user")
-        approved = await policy.require_approval(action, actor=actor, tenant_id=tenant_id)
-        if not approved:
-            return {
-                "stdout": "",
-                "stderr": f"Approval required for '{action}'. Action has not been approved.",
-                "returncode": -1,
-                "approval_required": True,
-            }
-    command = params["command"]
+    if policy is None:
+        return {
+            "stdout": "",
+            "stderr": f"Approval required for '{action}'. No autonomy policy active (fail-closed).",
+            "returncode": -1,
+            "approval_required": True,
+        }
+
+    is_approved = (
+        await policy.require_approval(action, actor=actor, tenant_id=tenant_id)
+        or await policy.require_approval(base_action, actor=actor, tenant_id=tenant_id)
+    )
+    if not is_approved:
+        return {
+            "stdout": "",
+            "stderr": f"Approval required for '{action}'. Action has not been approved.",
+            "returncode": -1,
+            "approval_required": True,
+        }
+
     timeout = params.get("timeout", 30)
     root = get_workspace_root()
+    scrubbed_env = {
+        "PATH": "/usr/local/bin:/usr/bin:/bin",
+        "LANG": "en_US.UTF-8",
+        "LC_ALL": "en_US.UTF-8",
+        "HOME": str(root),
+        "TMPDIR": "/tmp",
+    }
     try:
         proc = await asyncio.create_subprocess_shell(
             command,
             cwd=str(root),
+            env=scrubbed_env,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -436,21 +511,36 @@ async def _read_file(params: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _write_file(params: dict[str, Any]) -> dict[str, Any]:
-    resolved, err = resolve_confined_path(params["path"], must_exist=False)
+    resolved, err = resolve_confined_path(params.get("path", ""), must_exist=False)
     if not resolved:
         return {"error": err}
+
+    path_hash = hashlib.sha256(str(resolved).encode("utf-8")).hexdigest()[:16]
+    action = f"tool:write_file:{path_hash}"
+    base_action = "tool:write_file"
+
+    ctx = get_execution_context()
+    tenant_id = ctx.get("tenant_id", "default")
+    actor = ctx.get("actor", "user")
+
     policy = get_autonomy_policy()
-    tenant_id = params.get("tenant_id", "default")
-    if policy:
-        action = "tool:write_file"
-        actor = params.get("actor", "user")
-        approved = await policy.require_approval(action, actor=actor, tenant_id=tenant_id)
-        if not approved:
-            return {
-                "error": f"Approval required for '{action}'. Action has not been approved.",
-                "approval_required": True,
-            }
-    content = params["content"]
+    if policy is None:
+        return {
+            "error": f"Approval required for '{action}'. No autonomy policy active (fail-closed).",
+            "approval_required": True,
+        }
+
+    is_approved = (
+        await policy.require_approval(action, actor=actor, tenant_id=tenant_id)
+        or await policy.require_approval(base_action, actor=actor, tenant_id=tenant_id)
+    )
+    if not is_approved:
+        return {
+            "error": f"Approval required for '{action}'. Action has not been approved.",
+            "approval_required": True,
+        }
+
+    content = params.get("content", "")
     resolved.parent.mkdir(parents=True, exist_ok=True)
     resolved.write_text(content, encoding="utf-8")
     return {"bytes_written": len(content.encode("utf-8")), "path": str(resolved)}
@@ -606,11 +696,16 @@ async def _git_info(params: dict[str, Any]) -> dict[str, Any]:
 async def _http_request(params: dict[str, Any]) -> dict[str, Any]:
     url = params["url"]
     method = params.get("method", "GET").upper()
-    headers = params.get("headers", {})
+    headers = dict(params.get("headers", {}))
     body = params.get("body")
+
+    # Sanitize request headers to prevent credential leakage
+    disallowed_headers = {"authorization", "cookie", "proxy-authorization", "x-api-key", "x-vault-token"}
+    clean_headers = {k: v for k, v in headers.items() if k.lower() not in disallowed_headers}
+
     try:
         data = body.encode("utf-8") if body else None
-        status, resp_body, _ = safe_http_fetch(url, method=method, headers=headers, body=data, timeout=15.0)
+        status, resp_body, _ = safe_http_fetch(url, method=method, headers=clean_headers, body=data, timeout=15.0)
         return {"status": status, "body": resp_body}
     except Exception as e:
         return {"status": 0, "body": str(e)}
@@ -629,6 +724,8 @@ async def _grep(params: dict[str, Any]) -> dict[str, Any]:
     for f in resolved.rglob("*" if not include else include):
         if not f.is_file() or len(matches) >= 50:
             break
+        if is_denylisted_path(f):
+            continue
         if not any(f == r or r in f.parents for r in allowed):
             continue
         try:
@@ -708,10 +805,9 @@ async def _find_databases(params: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _query_database(params: dict[str, Any]) -> dict[str, Any]:
-    """Connect to a database autonomously and list tables or run a query."""
+    """Connect to a database autonomously and list tables or run a read-only query."""
     engine = str(params.get("type", "sqlite")).lower()
     mode = params.get("mode", "query")
-    read_only = bool(params.get("read_only", True))
 
     if engine == "sqlite":
         import sqlite3
@@ -722,10 +818,12 @@ async def _query_database(params: dict[str, Any]) -> dict[str, Any]:
                 "error": "missing 'database' (path to .sqlite/.db file)",
                 "hint": "run find_databases first",
             }
-        resolved = Path(db_path).resolve()
-        if not resolved.exists():
-            return {"error": f"SQLite file not found: {resolved}", "hint": "run find_databases to locate it"}
-        uri = f"file:{resolved}?mode={'ro' if read_only else 'rw'}"
+        resolved, err = resolve_confined_path(db_path, must_exist=True)
+        if not resolved:
+            return {"error": f"SQLite access denied: {err}", "hint": "run find_databases to locate it"}
+
+        # Enforce read-only mode strictly: model cannot set read_only=False
+        uri = f"file:{resolved}?mode=ro"
         try:
             conn = sqlite3.connect(uri, uri=True)
         except sqlite3.OperationalError as e:
@@ -743,8 +841,13 @@ async def _query_database(params: dict[str, Any]) -> dict[str, Any]:
             if not sql:
                 return {"error": "missing 'sql' for query mode", "tables": "use mode='list_tables' instead"}
             stripped = sql.lstrip().lower()
-            if read_only and not stripped.startswith(("select", "pragma", "with", "explain")):
-                return {"error": "sqlite opened read-only; pass read_only=false to allow writes", "sql": sql}
+            if not stripped.startswith(("select", "pragma", "with", "explain")):
+                return {"error": "Write operations are forbidden. query_database is strictly read-only.", "sql": sql}
+            forbidden_keywords = (
+                "insert ", "update ", "delete ", "drop ", "alter ", "create ", "attach ", "detach ", "replace ", "truncate "
+            )
+            if any(kw in stripped for kw in forbidden_keywords):
+                return {"error": "Write statements are forbidden in query_database.", "sql": sql}
             cur.execute(sql)
             rows = [dict(r) for r in cur.fetchall()] if cur.description else []
             for row in rows:
@@ -759,9 +862,24 @@ async def _query_database(params: dict[str, Any]) -> dict[str, Any]:
 
     if engine in ("postgres", "mysql"):
         host = params.get("host", "127.0.0.1")
+        allowed_hosts = {
+            h.strip().lower()
+            for h in os.getenv("NEXUS_ALLOWED_DB_HOSTS", "127.0.0.1,localhost,postgres,mysql,db").split(",")
+            if h.strip()
+        }
+        if host.lower() not in allowed_hosts:
+            return {
+                "error": f"Access denied: database host '{host}' is not in the allowed hosts whitelist. Contact administrator.",
+                "hint": "Only allowlisted hosts may be queried autonomously.",
+            }
+
+        if host in ("169.254.169.254", "100.100.100.200", "metadata.google.internal"):
+            return {"error": f"Access denied: host '{host}' is blocked by security policy."}
+
         port = params.get("port", 5432 if engine == "postgres" else 3306)
         user = params.get("user", "")
-        password = params.get("password", str(None))
+        # Resolve password from secure environment / secrets store instead of prompt
+        password = os.getenv("POSTGRES_PASSWORD") or os.getenv("MYSQL_PASSWORD") or os.getenv("DB_PASSWORD") or ""
         db = params.get("database", "postgres" if engine == "postgres" else "")
         driver = "psycopg2" if engine == "postgres" else "pymysql"
         import importlib
@@ -793,6 +911,14 @@ async def _query_database(params: dict[str, Any]) -> dict[str, Any]:
             sql = params.get("sql", "")
             if not sql:
                 return {"error": "missing 'sql' for query mode", "tables": "use mode='list_tables' instead"}
+
+            stripped = sql.strip().lower()
+            if not stripped.startswith(("select", "show", "explain", "with")):
+                return {"error": "Write operations are forbidden. query_database is strictly read-only.", "sql": sql}
+            forbidden_keywords = ("insert ", "update ", "delete ", "drop ", "alter ", "create ", "replace ", "truncate ")
+            if any(kw in stripped for kw in forbidden_keywords):
+                return {"error": "Write statements are forbidden in query_database.", "sql": sql}
+
             cur.execute(sql)
             cols = [d[0] for d in cur.description] if cur.description else []
             rows = []
@@ -818,8 +944,15 @@ async def _query_database(params: dict[str, Any]) -> dict[str, Any]:
 
     if engine == "redis":
         host = params.get("host", "127.0.0.1")
+        allowed_hosts = {
+            h.strip().lower()
+            for h in os.getenv("NEXUS_ALLOWED_DB_HOSTS", "127.0.0.1,localhost,redis,db").split(",")
+            if h.strip()
+        }
+        if host.lower() not in allowed_hosts:
+            return {"error": f"Access denied: redis host '{host}' is not in the allowed hosts whitelist."}
         port = params.get("port", 6379)
-        password = params.get("password", "")
+        password = os.getenv("REDIS_PASSWORD") or ""
         import importlib
 
         try:

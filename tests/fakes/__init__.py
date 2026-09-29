@@ -71,14 +71,17 @@ class FakeMemoryRepository(MemoryRepository):
     ) -> list[Memory]:
         import datetime
 
-        cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=threshold_days)
-        stale = [
-            m
-            for m in self.memories.values()
-            if self._tenant.get(m.id) == tenant_id
-            and m.last_accessed_at < cutoff
-            and m.access_count < min_accesses
-        ]
+        now = datetime.datetime.now(datetime.timezone.utc)
+        cutoff = now - datetime.timedelta(days=threshold_days)
+        stale = []
+        for m in self.memories.values():
+            if self._tenant.get(m.id) != tenant_id:
+                continue
+            last = m.last_accessed_at
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=datetime.timezone.utc)
+            if last < cutoff and m.access_count < min_accesses:
+                stale.append(m)
         return stale[:limit]
 
     async def delete(self, memory_id: str, tenant_id: str = "default") -> None:

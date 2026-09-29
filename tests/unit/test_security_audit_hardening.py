@@ -206,3 +206,54 @@ async def test_api_key_authenticator_constant_time_comparison():
     # Empty key
     with pytest.raises(UnauthorizedError):
         await authenticator.authenticate("")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. Sensitive Files Denylist & Fail-Closed Database / Shell Hardening
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_resolve_confined_path_blocks_secrets_denylist():
+    """Verify that credentials, private keys, and environment files are denied."""
+    denied = [
+        ".env",
+        ".env.local",
+        ".env.production",
+        "id_rsa",
+        "id_rsa.pub",
+        "cert.pem",
+        "private.key",
+        "secrets.json",
+        ".git/config",
+    ]
+    for d in denied:
+        resolved, err = resolve_confined_path(d)
+        assert resolved is None, f"Expected {d} to be rejected"
+        assert "access denied" in err.lower() or "forbidden" in err.lower()
+
+
+@pytest.mark.asyncio
+async def test_run_shell_fails_closed_without_policy():
+    """Verify run_shell fails closed when no autonomy policy is set."""
+    set_autonomy_policy(None)
+    res = await EXTENDED_HANDLERS["run_shell"]({"command": "echo test"})
+    assert res.get("approval_required") is True
+    assert "approval required" in res.get("stderr", "").lower()
+
+
+@pytest.mark.asyncio
+async def test_query_database_blocks_writes_and_disallowed_hosts():
+    """Verify SQLite write operations and non-allowlisted network DB hosts are blocked."""
+    # Write attempt in SQLite
+    write_sql = await EXTENDED_HANDLERS["query_database"](
+        {"type": "sqlite", "database": "test.db", "sql": "DROP TABLE users"}
+    )
+    assert "error" in write_sql
+
+    # Disallowed host in Postgres
+    bad_host_res = await EXTENDED_HANDLERS["query_database"](
+        {"type": "postgres", "host": "198.51.100.5", "sql": "SELECT 1"}
+    )
+    assert "error" in bad_host_res
+    assert "not in the allowed" in bad_host_res["error"].lower()
+
