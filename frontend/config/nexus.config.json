@@ -1,0 +1,108 @@
+{
+  "system": "N.E.X.U.S",
+  "fullName": "Neural EXpansion Unified System",
+  "version": "0.1.0",
+  "tagline": "a new kind of brain — cosmos joint",
+  "backend": {
+    "apiBase": "http://127.0.0.1:8000",
+    "endpoints": {
+      "chat": "/v1/chat",
+      "chatStream": "/v1/chat/stream",
+      "graph": "/api/graph",
+      "graphLegacy": "/v1/memory/graph",
+      "memorySearch": "/v1/memory/search",
+      "concepts": "/v1/memory/concepts",
+      "dream": "/v1/system/dream",
+      "swarms": "/v1/swarms",
+      "health": "/v1/system/health",
+      "metrics": "/metrics"
+    },
+    "auth": {
+      "type": "bearer",
+      "header": "Authorization: Bearer <NEXUS_API_KEY>",
+      "env": "NEXUS_API_KEYS"
+    }
+  },
+  "integrations": {
+    "gmail": {
+      "enabled": false,
+      "provider": "google",
+      "oauth": {
+        "clientIdEnv": "GMAIL_CLIENT_ID",
+        "clientSecretEnv": "GMAIL_CLIENT_SECRET",
+        "redirectUri": "http://127.0.0.1:8000/oauth/gmail/callback",
+        "scopes": ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.send"]
+      },
+      "pollIntervalMs": 60000,
+      "cosmosNode": "gmail"
+    },
+    "drive": {
+      "enabled": false,
+      "provider": "google",
+      "oauth": {
+        "clientIdEnv": "DRIVE_CLIENT_ID",
+        "clientSecretEnv": "DRIVE_CLIENT_SECRET",
+        "redirectUri": "http://127.0.0.1:8000/oauth/drive/callback",
+        "scopes": ["https://www.googleapis.com/auth/drive.readonly"]
+      },
+      "syncFolder": "NEXUS/cosmos",
+      "cosmosNode": "drive"
+    },
+    "github": {
+      "enabled": false,
+      "provider": "github",
+      "oauth": {
+        "clientIdEnv": "GITHUB_CLIENT_ID",
+        "clientSecretEnv": "GITHUB_CLIENT_SECRET",
+        "redirectUri": "http://127.0.0.1:8000/oauth/github/callback",
+        "scopes": ["repo", "read:user"]
+      },
+      "webhookSecretEnv": "GITHUB_WEBHOOK_SECRET",
+      "cosmosNode": "github"
+    }
+  },
+  "cosmos": {
+    "description": "Cosmos-like joint structure — every subsystem is a node, every integration is an edge. Rendered as 3D force graph in #3d-graph.",
+    "joints": "fully-meshed: nexus_core is the gravity well; all satellites orbit and link to each other (mesh), not just hub-spoke",
+    "nodes": [
+      { "id": "N.E.X.U.S", "group": "core", "val": 18, "color": "#ffcf7d", "desc": "Neural EXpansion Unified System — conscious + subconscious loops" },
+      { "id": "H.O.L.O", "group": "ui", "val": 12, "color": "#7dffd9", "desc": "Hand-gesture deck / 3D stage" },
+      { "id": "Dinosaur", "group": "Dinosaur", "val": 10, "color": "#8ecae6", "glb": "/props/triceratops.glb", "desc": "Paleo concept — triceratops" },
+      { "id": "Space", "group": "Space", "val": 10, "color": "#ffd166", "glb": "/props/apollo-11-module.glb", "desc": "Apollo 11 module" },
+      { "id": "memory", "group": "memory", "val": 8, "color": "#a9ffe6", "desc": "Qdrant + Neo4j + Redis" },
+      { "id": "concept", "group": "concept", "val": 8, "color": "#c9ffe6", "desc": "Synaptic graph (Neo4j)" },
+      { "id": "swarm", "group": "swarm", "val": 7, "color": "#d9fff2", "desc": "Multi-agent orchestration" },
+      { "id": "dream", "group": "subconscious", "val": 7, "color": "#ffe9c4", "desc": "Dreaming pipeline" },
+      { "id": "gmail", "group": "integration", "val": 6, "color": "#ea4335", "desc": "Gmail bridge — ingest threads as memories" },
+      { "id": "drive", "group": "integration", "val": 6, "color": "#34a853", "desc": "Drive bridge — markdown / docs as knowledge" },
+      { "id": "github", "group": "integration", "val": 6, "color": "#24292e", "desc": "GitHub bridge — repos/issues as concepts" },
+      { "id": "tools", "group": "self-evolution", "val": 7, "color": "#9dffe4", "desc": "Generated tools" }
+    ],
+    "links": [
+      { "source": "N.E.X.U.S", "target": "H.O.L.O", "weight": 1.0 },
+      { "source": "N.E.X.U.S", "target": "memory", "weight": 0.9 },
+      { "source": "N.E.X.U.S", "target": "concept", "weight": 0.9 },
+      { "source": "N.E.X.U.S", "target": "swarm", "weight": 0.8 },
+      { "source": "N.E.X.U.S", "target": "dream", "weight": 0.8 },
+      { "source": "N.E.X.U.S", "target": "Dinosaur", "weight": 0.6 },
+      { "source": "N.E.X.U.S", "target": "Space", "weight": 0.6 },
+      { "source": "N.E.X.U.S", "target": "tools", "weight": 0.7 },
+      { "source": "N.E.X.U.S", "target": "gmail", "weight": 0.7 },
+      { "source": "N.E.X.U.S", "target": "drive", "weight": 0.7 },
+      { "source": "N.E.X.U.S", "target": "github", "weight": 0.7 },
+      { "source": "gmail", "target": "memory", "weight": 0.6 },
+      { "source": "drive", "target": "memory", "weight": 0.6 },
+      { "source": "github", "target": "concept", "weight": 0.6 },
+      { "source": "gmail", "target": "drive", "weight": 0.5 },
+      { "source": "drive", "target": "github", "weight": 0.5 },
+      { "source": "gmail", "target": "github", "weight": 0.5 },
+      { "source": "memory", "target": "concept", "weight": 0.9 },
+      { "source": "memory", "target": "dream", "weight": 0.7 },
+      { "source": "concept", "target": "Dinosaur", "weight": 0.5 },
+      { "source": "concept", "target": "Space", "weight": 0.5 },
+      { "source": "H.O.L.O", "target": "Dinosaur", "weight": 0.4 },
+      { "source": "H.O.L.O", "target": "Space", "weight": 0.4 },
+      { "source": "tools", "target": "swarm", "weight": 0.6 }
+    ]
+  }
+}

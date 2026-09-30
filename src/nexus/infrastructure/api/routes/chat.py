@@ -1,0 +1,217 @@
+"""
+Chat API - the conscious loop's entry point.
+
+This layer is a THIN adapter. It parses HTTP, calls the ProcessMessage
+use case, and serializes the result. Zero business logic lives here.
+
+Identity comes from the verified bearer token (dependencies.require_identity);
+the body no longer accepts a client-supplied user_id.
+
+Multimodal (P3):
+  - `image_urls`: attached to the user turn as vision content blocks.
+  - `audio`: a base64 data URI (`data:audio/<mime>;base64,...`) transcribed via
+    the SpeechToText adapter and used as (or prefixed to) the message text.
+  - `voice`: when set, the response is synthesized to speech via TextToSpeech
+    and returned as an audio data URI.
+"""
+
+from __future__ import annotations
+
+import base64
+import json
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+
+from nexus.domain.value_objects.identity import Identity
+from nexus.infrastructure.api.dependencies import (
+    get_container,
+    require_identity,
+    require_quota,
+    require_rate_limit,
+)
+from nexus.infrastructure.di.container import Container
+
+router = APIRouter(
+    prefix="/v1/chat",
+    tags=["chat"],
+    dependencies=[
+        Depends(require_identity),
+        Depends(require_rate_limit("chat")),
+        Depends(require_quota("chat")),
+    ],
+)
+
+
+class ChatRequest(BaseModel):
+    message: str = Field("", min_length=0)
+    session_id: str | None = None
+    stream: bool = False
+    image_urls: list[str] | None = None
+    audio: str | None = None  # data URI: data:audio/<mime>;base64,...
+    voice: str | None = None
+    mode: str = "general"  # "general" or "coding"
+
+
+class ChatResponse(BaseModel):
+    response: str
+    session_id: str
+    tools_used: list
+    memories_recalled: int
+    thought_count: int
+    audio: str | None = None  # data URI of synthesized speech (P3)
+
+
+def _parse_data_uri(data_uri: str) -> tuple[str, bytes]:
+    """Split `data:<mime>;base64,<payload>` into (mime, bytes)."""
+    head, _, payload = data_uri.partition(",")
+    mime = head.removeprefix("data:").split(";")[0] or "audio/mpeg"
+    return mime, base64.b64decode(payload, validate=True)
+
+
+def _to_data_uri(payload: bytes, mime: str) -> str:
+    return f"data:{mime};base64,{base64.b64encode(payload).decode('ascii')}"
+
+
+@router.post("", response_model=ChatResponse)
+async def chat(
+    req: ChatRequest,
+    identity: Identity = Depends(require_identity),
+    container: Container = Depends(get_container),
+) -> ChatResponse:
+    message = req.message
+
+    if req.audio:
+        try:
+            mime, audio_bytes = _parse_data_uri(req.audio)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid audio data URI")
+        transcription = await container.speech_to_text.transcribe(audio_bytes, mime)
+        message = f"{transcription}\n{message}" if message else transcription
+
+    if not message:
+        raise HTTPException(status_code=422, detail="Provide a message, audio, or image")
+
+    # Build system prompt based on mode
+    system_prompt = None
+    if req.mode == "coding":
+        from nexus.application.training.coding_prompt import CodingRAG
+        from nexus.application.training.coding_store import CodingStore
+
+        store = CodingStore("data/coding_examples.json")
+        rag = CodingRAG(store, max_examples=3)
+        system_prompt = rag.build_coding_prompt(message)
+
+    result = await container.process_message.execute(
+        user_id=identity.user_id,
+        message=message,
+        session_id=req.session_id,
+        stream=req.stream,
+        tenant_id=identity.tenant_id,
+        image_urls=req.image_urls,
+        system_prompt=system_prompt,
+    )
+
+    audio = None
+    if req.voice:
+        audio_bytes = await container.text_to_speech.synthesize(result.response, req.voice)
+        audio = _to_data_uri(audio_bytes, "audio/mpeg")
+
+    return ChatResponse(
+        response=result.response,
+        session_id=result.session_id,
+        tools_used=result.tools_used,
+        memories_recalled=result.memories_recalled,
+        thought_count=len(result.thoughts),
+        audio=audio,
+    )
+
+
+@router.post("/stream")
+async def chat_stream(
+    req: ChatRequest,
+    identity: Identity = Depends(require_identity),
+    container: Container = Depends(get_container),
+):
+    """True SSE streaming — runs the full cognitive ReAct loop and emits events
+    per thought, tool call, and observation as they happen, then the answer.
+
+    Frame types: `start`, `thought`, `tool_call`, `observation`, `answer`,
+    `done`, `error`. Consume with `fetch`/SSE and render each reasoning step.
+    """
+    message = req.message
+
+    if req.audio:
+        try:
+            mime, audio_bytes = _parse_data_uri(req.audio)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid audio data URI")
+        transcription = await container.speech_to_text.transcribe(audio_bytes, mime)
+        message = f"{transcription}\n{message}" if message else transcription
+
+    if not message:
+        raise HTTPException(status_code=422, detail="Provide a message, audio, or image")
+
+    system_prompt = None
+    if req.mode == "coding":
+        from nexus.application.training.coding_prompt import CodingRAG
+        from nexus.application.training.coding_store import CodingStore
+
+        store = CodingStore("data/coding_examples.json")
+        rag = CodingRAG(store, max_examples=3)
+        system_prompt = rag.build_coding_prompt(message)
+
+    async def event_generator():
+        yield f"data: {json.dumps({'type': 'start', 'session_id': req.session_id})}\n\n"
+
+        try:
+            # The ReAct loop pushes events into a queue; we yield each frame as
+            # it is produced so users watch the brain think in real time.
+            import asyncio
+
+            queue: asyncio.Queue = asyncio.Queue()
+
+            async def sink(ev: dict) -> None:
+                await queue.put(ev)
+
+            loop = asyncio.get_running_loop()
+            task = loop.create_task(
+                container.process_message.execute(
+                    user_id=identity.user_id,
+                    message=message,
+                    session_id=req.session_id,
+                    stream=True,
+                    tenant_id=identity.tenant_id,
+                    image_urls=req.image_urls,
+                    system_prompt=system_prompt,
+                    on_event=sink,
+                )
+            )
+
+            while True:
+                try:
+                    ev = await asyncio.wait_for(queue.get(), timeout=30.0)
+                except TimeoutError:
+                    break
+                yield f"data: {json.dumps(ev)}\n\n"
+                if ev.get("type") == "answer":
+                    break
+
+            await task
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

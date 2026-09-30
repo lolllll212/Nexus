@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install ruff black mypy
+      - run: ruff check src/ tests/
+      - run: black --check src/ tests/
+      - run: mypy src/nexus/domain/ src/nexus/application/ --ignore-missing-imports
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev]"
+      - run: pytest tests/ -q --tb=short
+
+  architecture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install import-linter
+      - name: Check dependency rule (domain must not import infrastructure)
+        run: |
+          cat > /tmp/pyproject-lint.toml << 'EOF'
+          [tool.importlinter]
+          root_package = "nexus"
+
+          [[tool.importlinter.contracts]]
+          name = "domain-is-independent"
+          type = "forbidden"
+          source_modules = ["nexus.domain"]
+          forbidden_modules = ["nexus.infrastructure"]
+          EOF
+          cd src && python -m importlinter -c /tmp/pyproject-lint.toml

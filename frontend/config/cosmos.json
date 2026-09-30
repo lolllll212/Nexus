@@ -1,0 +1,24 @@
+{
+  "$schema": "nexus-cosmos-v1",
+  "note": "Standalone cosmos mesh — imported by holo.html #3d-graph if /api/graph is empty",
+  "nodes": [
+    { "id": "N.E.X.U.S", "group": "core", "val": 18 },
+    { "id": "H.O.L.O", "group": "ui", "val": 12 },
+    { "id": "Dinosaur", "group": "Dinosaur", "val": 10 },
+    { "id": "Space", "group": "Space", "val": 10 },
+    { "id": "gmail", "group": "integration", "val": 6 },
+    { "id": "drive", "group": "integration", "val": 6 },
+    { "id": "github", "group": "integration", "val": 6 }
+  ],
+  "links": [
+    { "source": "N.E.X.U.S", "target": "H.O.L.O" },
+    { "source": "N.E.X.U.S", "target": "gmail" },
+    { "source": "N.E.X.U.S", "target": "drive" },
+    { "source": "N.E.X.U.S", "target": "github" },
+    { "source": "gmail", "target": "drive" },
+    { "source": "drive", "target": "github" },
+    { "source": "gmail", "target": "github" },
+    { "source": "N.E.X.U.S", "target": "Dinosaur" },
+    { "source": "N.E.X.U.S", "target": "Space" }
+  ]
+}
