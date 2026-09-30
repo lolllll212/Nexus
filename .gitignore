@@ -37,6 +37,12 @@ htmlcov/
 # Ruff
 .ruff_cache/
 
+# Node / Frontend
+node_modules/
+*/node_modules/
+web/node_modules/
+web/dist/
+
 # Logs
 logs/
 *.log
@@ -48,3 +54,5 @@ Thumbs.db
 # Temp files
 _test_*.py
 *.tmp
+data/coding_examples_*.json
+py_deps/
