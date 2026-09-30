@@ -37,8 +37,7 @@ from nexus.infrastructure.adapters.swarm.repositories import (
     InMemorySwarmRepository,
 )
 from nexus.infrastructure.api.main import create_app
-
-from tests.fakes.container import FakeContainer, TEST_API_KEY_1, TEST_API_KEY_2
+from tests.fakes.container import TEST_API_KEY_1, TEST_API_KEY_2, FakeContainer
 
 AUTH = {"Authorization": f"Bearer {TEST_API_KEY_1}"}
 
@@ -97,7 +96,9 @@ def _system_messages(call):
     return [m["content"] for m in call if m.get("role") == "system"]
 
 
-async def _register(fake, name="agent-a", tenant="t1", owner="u1", prompt="You are A.", role="worker", tools=None):
+async def _register(
+    fake, name="agent-a", tenant="t1", owner="u1", prompt="You are A.", role="worker", tools=None
+):
     return await RegisterAgentUseCase(fake.agent_repo).execute(
         name=name,
         tenant_id=tenant,
@@ -268,7 +269,9 @@ async def test_coordinator_respects_max_workers():
     fake.process_message._llm = llm
     swarm, leader, workers = await _make_swarm(fake, n_workers=5)
 
-    coord = SwarmCoordinatorUseCase(fake.swarm_repo, fake.agent_repo, fake.swarm_agent_executor, max_workers=2)
+    coord = SwarmCoordinatorUseCase(
+        fake.swarm_repo, fake.agent_repo, fake.swarm_agent_executor, max_workers=2
+    )
     result = await coord.run(swarm, "task", "t1")
 
     assert len(result.worker_responses) == 2

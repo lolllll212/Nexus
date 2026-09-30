@@ -10,7 +10,7 @@ optional `base_url` - a pure config change, no new adapter required.
 from __future__ import annotations
 
 import json
-from typing import AsyncGenerator, Dict, List, Optional
+from collections.abc import AsyncGenerator
 
 from nexus.domain.exceptions import LLMUnavailableError
 from nexus.domain.ports.llm_provider import StreamingLLMProvider
@@ -25,7 +25,7 @@ class OpenAIProvider(StreamingLLMProvider):
         api_key: str,
         model: str = "gpt-4o",
         temperature: float = 0.7,
-        base_url: Optional[str] = None,
+        base_url: str | None = None,
         default_max_tokens: int = 8192,
     ) -> None:
         # Local servers (Ollama / LM Studio) don't check the key; accept any value.
@@ -44,14 +44,19 @@ class OpenAIProvider(StreamingLLMProvider):
 
     async def complete(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int | None = None,
-        tools: Optional[List[Dict]] = None,
+        tools: list[dict] | None = None,
     ) -> str:
         try:
             client = self._client()
-            kwargs: dict = {"model": self._model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens or self._default_max_tokens}
+            kwargs: dict = {
+                "model": self._model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens or self._default_max_tokens,
+            }
             if tools:
                 kwargs["tools"] = tools
             resp = await client.chat.completions.create(**kwargs)
@@ -61,11 +66,11 @@ class OpenAIProvider(StreamingLLMProvider):
 
     async def complete_with_tools(
         self,
-        messages: List[Dict[str, str]],
-        tools: List[Dict],
+        messages: list[dict[str, str]],
+        tools: list[dict],
         temperature: float = 0.7,
         max_tokens: int | None = None,
-    ) -> Dict:
+    ) -> dict:
         """Native OpenAI function-calling. Returns structured tool call or text."""
         try:
             client = self._client()
@@ -93,7 +98,7 @@ class OpenAIProvider(StreamingLLMProvider):
         except Exception as exc:
             raise LLMUnavailableError(str(exc)) from exc
 
-    async def extract_structured(self, content: str, schema: JSONSchema, instructions: str = "") -> Dict:
+    async def extract_structured(self, content: str, schema: JSONSchema, instructions: str = "") -> dict:
         """Force JSON output matching the schema via the structured-output path."""
         # NOTE: `response_format={"type": "json_object"}` is not reliably
         # supported by every local model (Ollama / LM Studio). This is a known
@@ -114,11 +119,17 @@ class OpenAIProvider(StreamingLLMProvider):
         except Exception as exc:
             raise LLMUnavailableError(str(exc)) from exc
 
-    async def stream(self, messages: List[Dict[str, str]], temperature: float = 0.7, max_tokens: int | None = None) -> AsyncGenerator[str, None]:
+    async def stream(
+        self, messages: list[dict[str, str]], temperature: float = 0.7, max_tokens: int | None = None
+    ) -> AsyncGenerator[str, None]:
         try:
             client = self._client()
             stream = await client.chat.completions.create(
-                model=self._model, messages=messages, temperature=temperature, max_tokens=max_tokens or self._default_max_tokens, stream=True
+                model=self._model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens or self._default_max_tokens,
+                stream=True,
             )
             async for chunk in stream:
                 if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:

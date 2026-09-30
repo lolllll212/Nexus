@@ -154,3 +154,6 @@ wcwidth==0.8.4
     # via prompt-toolkit
 websockets==17.1
     # via uvicorn
+simpleeval==1.0.8
+jmespath>=1.0.0
+pillow>=10.0.0

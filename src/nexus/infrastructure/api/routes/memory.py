@@ -5,14 +5,12 @@ Tenant-scoped: every query runs against the caller's tenant via Identity.
 
 from __future__ import annotations
 
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from nexus.domain.value_objects.identity import Identity
 from nexus.infrastructure.api.dependencies import get_container, require_identity
 from nexus.infrastructure.di.container import Container
-from nexus.domain.value_objects.identity import Identity
 
 router = APIRouter(prefix="/v1/memory", tags=["memory"], dependencies=[Depends(require_identity)])
 
@@ -32,13 +30,13 @@ class MemoryOut(BaseModel):
     access_count: int
 
 
-@router.get("/concepts", response_model=List[ConceptOut])
+@router.get("/concepts", response_model=list[ConceptOut])
 async def list_concepts(
     query: str = "",
     limit: int = 20,
     identity: Identity = Depends(require_identity),
     container: Container = Depends(get_container),
-) -> List[ConceptOut]:
+) -> list[ConceptOut]:
     concepts = await container.concept_repo.find_by_label(query, limit, tenant_id=identity.tenant_id)
     return [
         ConceptOut(
@@ -70,7 +68,7 @@ async def get_concept(
     )
 
 
-@router.get("/search", response_model=List[MemoryOut])
+@router.get("/search", response_model=list[MemoryOut])
 async def search_memory(
     query: str,
     limit: int = 10,
@@ -99,8 +97,8 @@ class GraphEdgeOut(BaseModel):
 
 
 class GraphOut(BaseModel):
-    nodes: List[GraphNodeOut]
-    edges: List[GraphEdgeOut]
+    nodes: list[GraphNodeOut]
+    edges: list[GraphEdgeOut]
 
 
 @router.get("/graph", response_model=GraphOut)
@@ -117,8 +115,8 @@ async def concept_graph(
     """
     repo = container.concept_repo
     seed = await repo.find_by_label("", limit=limit, tenant_id=identity.tenant_id)
-    nodes: List[GraphNodeOut] = []
-    edges: List[GraphEdgeOut] = []
+    nodes: list[GraphNodeOut] = []
+    edges: list[GraphEdgeOut] = []
     seen: set = set()
     node_by_id = {}
 

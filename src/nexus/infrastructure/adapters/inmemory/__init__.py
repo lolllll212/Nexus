@@ -12,8 +12,8 @@ from nexus.infrastructure.adapters.inmemory.memory_repository import InMemoryMem
 from nexus.infrastructure.adapters.inmemory.short_term_memory import InMemoryShortTermMemory
 
 __all__ = [
-    "InMemoryMemoryRepository",
     "InMemoryConceptRepository",
-    "InMemoryShortTermMemory",
     "InMemoryEmbedder",
+    "InMemoryMemoryRepository",
+    "InMemoryShortTermMemory",
 ]

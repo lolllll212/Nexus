@@ -89,22 +89,37 @@ class H(BaseHTTPRequestHandler):
         pass
 
     def _send(self, code, body, ctype="application/json"):
-        b = body if isinstance(body, bytes) else json.dumps(body).encode()
-        self.send_response(code)
-        self.send_header("Content-Type", ctype)
-        if ctype.startswith("text/html"):
-            self.send_header("Cache-Control", "no-store")   # a stale cached page hid real fixes once
-        self.send_header("Content-Length", str(len(b)))
-        self.end_headers()
-        self.wfile.write(b)
+        try:
+            b = body if isinstance(body, bytes) else json.dumps(body).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            if ctype.startswith("text/html"):
+                self.send_header("Cache-Control", "no-store")   # a stale cached page hid real fixes once
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            if getattr(self, "command", "") != "HEAD":
+                self.wfile.write(b)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
-    MIME = {".mjs": "text/javascript", ".js": "text/javascript",
-            ".wasm": "application/wasm", ".task": "application/octet-stream",
-            ".glb": "model/gltf-binary"}
+    MIME = {
+        ".mjs": "text/javascript",
+        ".js": "text/javascript",
+        ".css": "text/css",
+        ".wasm": "application/wasm",
+        ".task": "application/octet-stream",
+        ".glb": "model/gltf-binary",
+        ".svg": "image/svg+xml",
+        ".json": "application/json",
+    }
+
+    def do_HEAD(self):
+        self.do_GET()
 
     def do_GET(self):
         p = self.path.split("?")[0]
-        if p in ("/", "/holo.html"):
+        # Primary HOLO Hand-Gesture Control Deck (User UI)
+        if p in ("/", "/holo", "/holo.html"):
             try:
                 body = open(os.path.join(ROOT, "holo.html"), "rb").read()
                 PAGE_CACHE[0] = body
@@ -113,6 +128,12 @@ class H(BaseHTTPRequestHandler):
             if body is None:
                 return self._send(500, {"error": "holo.html missing"})
             return self._send(200, body, "text/html; charset=utf-8")
+
+        # Secondary Studio & Workshop OS view
+        if p in ("/studio", "/react", "/workshop", "/index.html"):
+            idx = os.path.join(ROOT, "index.html")
+            if os.path.isfile(idx):
+                return self._send(200, open(idx, "rb").read(), "text/html; charset=utf-8")
         if p == "/api/props":
             # PROPS: any .glb dropped into props/ becomes a grabbable 3D object
             try:
@@ -121,11 +142,10 @@ class H(BaseHTTPRequestHandler):
             except OSError:
                 names = []
             return self._send(200, names)
-        if p.startswith(("/vendor/", "/props/")):
-            # self-hosted tracking libs: no CDN in the path, so ad-block extensions
-            # and offline machines can't kill the hand tracking
+        if p.startswith(("/vendor/", "/props/", "/assets/")):
+            # self-hosted tracking libs and built frontend assets
             safe = os.path.normpath(p.lstrip("/"))
-            if safe.startswith(("vendor", "props")) and ".." not in safe:
+            if safe.startswith(("vendor", "props", "assets")) and ".." not in safe:
                 full = os.path.join(ROOT, safe)
                 if os.path.isfile(full):
                     ext = os.path.splitext(full)[1]
@@ -176,5 +196,5 @@ class H(BaseHTTPRequestHandler):
         return self._send(200, {"ok": True})
 
 if __name__ == "__main__":
-    print(f"HOLO deck on http://localhost:{PORT}  ·  notes: {notes_dir()}")
-    ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
+    print(f"HOLO deck on http://0.0.0.0:{PORT}  ·  notes: {notes_dir()}")
+    ThreadingHTTPServer(("0.0.0.0", PORT), H).serve_forever()

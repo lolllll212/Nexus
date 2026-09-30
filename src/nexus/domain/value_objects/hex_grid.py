@@ -11,12 +11,17 @@ Dependency Rule: pure domain value objects - no I/O, no frameworks.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Dict, Iterator, List, Optional, Set, Tuple
 
 # The six neighbor directions in axial coordinates.
-HEX_DIRECTIONS: Tuple[Tuple[int, int], ...] = (
-    (1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1),
+HEX_DIRECTIONS: tuple[tuple[int, int], ...] = (
+    (1, 0),
+    (1, -1),
+    (0, -1),
+    (-1, 0),
+    (-1, 1),
+    (0, 1),
 )
 
 
@@ -31,35 +36,35 @@ class HexCoord:
     def s(self) -> int:
         return -self.q - self.r
 
-    def cube(self) -> Tuple[int, int, int]:
+    def cube(self) -> tuple[int, int, int]:
         return (self.q, self.r, self.s)
 
-    def distance_to(self, other: "HexCoord") -> int:
+    def distance_to(self, other: HexCoord) -> int:
         return (abs(self.q - other.q) + abs(self.r - other.r) + abs(self.s - other.s)) // 2
 
-    def neighbor(self, direction: int) -> "HexCoord":
+    def neighbor(self, direction: int) -> HexCoord:
         dq, dr = HEX_DIRECTIONS[direction % 6]
         return HexCoord(self.q + dq, self.r + dr)
 
-    def neighbors(self) -> Iterator["HexCoord"]:
+    def neighbors(self) -> Iterator[HexCoord]:
         for direction in range(6):
             yield self.neighbor(direction)
 
-    def ring(self, radius: int) -> List["HexCoord"]:
+    def ring(self, radius: int) -> list[HexCoord]:
         """The cells forming a ring around this cell at the given radius."""
         if radius <= 0:
             return [self]
         # Start at the corner in direction 4, then walk the ring steps in
         # cyclic order so every visited cell stays exactly `radius` away.
         start = HexCoord(self.q - radius, self.r + radius)
-        ring: List[HexCoord] = []
+        ring: list[HexCoord] = []
         for i in range(6):
             for _ in range(radius):
                 ring.append(start)
                 start = start.neighbor(i)
         return ring
 
-    def move_toward(self, other: "HexCoord", amount: int = 1) -> "HexCoord":
+    def move_toward(self, other: HexCoord, amount: int = 1) -> HexCoord:
         """Step `amount` hexes toward `other` along the shortest path."""
         if self == other or amount <= 0:
             return self
@@ -67,7 +72,7 @@ class HexCoord:
         for _ in range(amount):
             if target == other:
                 break
-            best: Optional["HexCoord"] = None
+            best: HexCoord | None = None
             best_dist = target.distance_to(other)
             for neighbor in target.neighbors():
                 distance = neighbor.distance_to(other)
@@ -110,10 +115,10 @@ def _linear_interpolate(a: HexCoord, b: HexCoord, t: float) -> HexCoord:
     return HexCoord(x, y)
 
 
-def hex_line(a: HexCoord, b: HexCoord) -> List[HexCoord]:
+def hex_line(a: HexCoord, b: HexCoord) -> list[HexCoord]:
     """All cells along the straight line between two hexes (Bresenham-style)."""
     dist = a.distance_to(b)
-    results: List[HexCoord] = []
+    results: list[HexCoord] = []
     for i in range(dist + 1):
         results.append(_linear_interpolate(a, b, i / max(1, dist)))
     return results
@@ -124,8 +129,8 @@ class HexGrid:
 
     def __init__(self, radius: int = 10) -> None:
         self._radius = radius
-        self._blocked: Set[HexCoord] = set()
-        self._features: Dict[HexCoord, str] = {}
+        self._blocked: set[HexCoord] = set()
+        self._features: dict[HexCoord, str] = {}
 
     @property
     def radius(self) -> int:
@@ -148,23 +153,23 @@ class HexGrid:
         if self.contains(coord):
             self._features[coord] = label
 
-    def feature_at(self, coord: HexCoord) -> Optional[str]:
+    def feature_at(self, coord: HexCoord) -> str | None:
         return self._features.get(coord)
 
     def passable(self, coord: HexCoord) -> bool:
         return self.contains(coord) and not self.is_blocked(coord)
 
-    def reachable_neighbors(self, coord: HexCoord) -> List[HexCoord]:
+    def reachable_neighbors(self, coord: HexCoord) -> list[HexCoord]:
         return [n for n in coord.neighbors() if self.passable(n)]
 
-    def pathfind(self, start: HexCoord, goal: HexCoord, max_iterations: int = 1000) -> Optional[List[HexCoord]]:
+    def pathfind(self, start: HexCoord, goal: HexCoord, max_iterations: int = 1000) -> list[HexCoord] | None:
         """A* shortest path. Returns the cell sequence or None if unreachable."""
         if not self.passable(start) or not self.passable(goal):
             return None
 
-        open_set: Set[HexCoord] = {start}
-        came_from: Dict[HexCoord, HexCoord] = {}
-        g_score: Dict[HexCoord, int] = {start: 0}
+        open_set: set[HexCoord] = {start}
+        came_from: dict[HexCoord, HexCoord] = {}
+        g_score: dict[HexCoord, int] = {start: 0}
 
         def heuristic(c: HexCoord) -> int:
             return c.distance_to(goal)
@@ -184,7 +189,7 @@ class HexGrid:
         return None
 
 
-def _reconstruct_path(came_from: Dict[HexCoord, HexCoord], current: HexCoord) -> List[HexCoord]:
+def _reconstruct_path(came_from: dict[HexCoord, HexCoord], current: HexCoord) -> list[HexCoord]:
     path = [current]
     while current in came_from:
         current = came_from[current]

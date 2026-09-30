@@ -15,7 +15,6 @@ import argparse
 import asyncio
 import json
 import sys
-from typing import List, Optional
 
 
 def _cmd_serve(args: argparse.Namespace) -> None:
@@ -97,7 +96,7 @@ def _cmd_eval(args: argparse.Namespace) -> None:
 def _cmd_train(args: argparse.Namespace) -> None:
     from nexus.training import cli as training_cli
 
-    rest: List[str] = getattr(args, "command", [])
+    rest: list[str] = getattr(args, "command", [])
     if rest:
         training_cli.main(rest)
     else:
@@ -190,7 +189,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[List[str]] = None) -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
     if not hasattr(args, "func"):

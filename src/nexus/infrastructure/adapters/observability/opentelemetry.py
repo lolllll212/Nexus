@@ -8,8 +8,7 @@ Set NEXUS_OTEL_ENABLED=true and NEXUS_OTEL_ENDPOINT=http://localhost:4317 to act
 from __future__ import annotations
 
 import logging
-import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from nexus.domain.ports.observability import Metrics, Span, Tracer
 
@@ -36,7 +35,7 @@ class OTELTracer(Tracer):
         except Exception as exc:
             _logger.warning("OpenTelemetry unavailable, falling back to logging: %s", exc)
 
-    def span(self, name: str, attributes: Optional[Dict[str, Any]] = None) -> Span:
+    def span(self, name: str, attributes: dict[str, Any] | None = None) -> Span:
         if self._tracer is None:
             return _FallbackSpan(name, attributes)
         return _OTELSpan(self._tracer, name, attributes)
@@ -52,13 +51,13 @@ class OTELTracer(Tracer):
 
 
 class _OTELSpan(Span):
-    def __init__(self, tracer, name: str, attributes: Optional[Dict[str, Any]]) -> None:
+    def __init__(self, tracer, name: str, attributes: dict[str, Any] | None) -> None:
         super().__init__(name)
         self._otel_tracer = tracer
         self._otel_span = None
         self._init_attrs = dict(attributes or {})
 
-    async def __aenter__(self) -> "Span":
+    async def __aenter__(self) -> Span:
         self._otel_span = self._otel_tracer.start_span(self._name)
         for k, v in self._init_attrs.items():
             self._otel_span.set_attribute(k, str(v))
@@ -75,7 +74,7 @@ class _OTELSpan(Span):
 class _FallbackSpan(Span):
     """Logging fallback when OTEL is unavailable."""
 
-    async def __aenter__(self) -> "Span":
+    async def __aenter__(self) -> Span:
         _logger.info("span_start", {"name": self.name, **self.attributes})
         return self
 
@@ -118,19 +117,19 @@ class OTELMetrics(Metrics):
                 _logger.warning("metrics shutdown error: %s", exc)
             self._provider = None
 
-    def counter(self, name: str, value: float = 1.0, labels: Optional[Dict[str, str]] = None) -> None:
+    def counter(self, name: str, value: float = 1.0, labels: dict[str, str] | None = None) -> None:
         if self._meter and name not in self._counters:
             self._counters[name] = self._meter.create_counter(name)
         if name in self._counters:
             self._counters[name].add(value, labels or {})
 
-    def histogram(self, name: str, value: float, labels: Optional[Dict[str, str]] = None) -> None:
+    def histogram(self, name: str, value: float, labels: dict[str, str] | None = None) -> None:
         if self._meter and name not in self._histograms:
             self._histograms[name] = self._meter.create_histogram(name)
         if name in self._histograms:
             self._histograms[name].record(value, labels or {})
 
-    def gauge(self, name: str, value: float, labels: Optional[Dict[str, str]] = None) -> None:
+    def gauge(self, name: str, value: float, labels: dict[str, str] | None = None) -> None:
         # OTel gauge requires observable gauge — fall back to counter for now
         pass
 
@@ -140,10 +139,13 @@ class OTELMetrics(Metrics):
 
 def _create_exporter():
     try:
-        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
         import os
+
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
         endpoint = os.getenv("NEXUS_OTEL_ENDPOINT", "http://localhost:4317")
         return OTLPSpanExporter(endpoint=endpoint)
     except Exception:
         from opentelemetry.sdk.trace.export import ConsoleSpanExporter
+
         return ConsoleSpanExporter()

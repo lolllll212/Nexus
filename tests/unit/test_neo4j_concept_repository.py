@@ -8,8 +8,6 @@ synchronization calls). A real Neo4j server is not required.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
-
 import pytest
 
 from nexus.domain.entities.concept import Concept
@@ -29,7 +27,7 @@ class FakeNode(dict):
 
 
 class FakeRecord:
-    def __init__(self, mapping: Optional[Dict[str, object]] = None) -> None:
+    def __init__(self, mapping: dict[str, object] | None = None) -> None:
         self._mapping = mapping or {}
 
     def __getitem__(self, key: str) -> object:
@@ -42,23 +40,23 @@ class FakeRecord:
 class FakeAsyncResult:
     """Simulates neo4j AsyncResult: single()/data() are awaitables."""
 
-    def __init__(self, records: List[FakeRecord]) -> None:
+    def __init__(self, records: list[FakeRecord]) -> None:
         self._records = records
 
-    async def single(self) -> Optional[FakeRecord]:
+    async def single(self) -> FakeRecord | None:
         return self._records[0] if self._records else None
 
-    async def data(self) -> List[FakeRecord]:
+    async def data(self) -> list[FakeRecord]:
         return list(self._records)
 
 
 class FakeAsyncSession:
     """Simulates an async neo4j session: run() is async; context-managed."""
 
-    def __init__(self, driver: "FakeAsyncDriver") -> None:
+    def __init__(self, driver: FakeAsyncDriver) -> None:
         self._driver = driver
 
-    async def __aenter__(self) -> "FakeAsyncSession":
+    async def __aenter__(self) -> FakeAsyncSession:
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> bool:
@@ -76,7 +74,7 @@ class FakeAsyncDriver:
         self._result_fn = result_fn
         self.sessions_created = 0
         self.closed = False
-        self.runs: List[Dict] = []
+        self.runs: list[dict] = []
 
     def session(self, database: str = None) -> FakeAsyncSession:
         self.sessions_created += 1

@@ -14,11 +14,10 @@ This runs in the subcortex. It never blocks the cortex.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
 
 from nexus.domain.entities.concept import Concept
 from nexus.domain.entities.memory import Memory, MemoryType
-from nexus.domain.ports.event_bus import Event, EventBus, EventTopic, EventPriority
+from nexus.domain.ports.event_bus import Event, EventBus, EventPriority, EventTopic
 from nexus.domain.ports.llm_provider import LLMProvider
 from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository
 from nexus.domain.value_objects.synapse import ConnectionType
@@ -48,17 +47,17 @@ class EntitySynthesisUseCase:
         self._memory_repo = memory_repo
         self._event_bus = event_bus
 
-    async def synthesize(self, payload: dict) -> List[Concept]:
+    async def synthesize(self, payload: dict) -> list[Concept]:
         """Process a user-message event in the background."""
         content: str = payload.get("message", "")
         session_id = payload.get("session_id")
-        context_concepts: List[str] = payload.get("active_concepts", [])
+        context_concepts: list[str] = payload.get("active_concepts", [])
 
         if not content.strip():
             return []
 
         entities = await self._extract_entities(content)
-        concepts: List[Concept] = []
+        concepts: list[Concept] = []
 
         for entity in entities:
             concept = await self._concept_repo.get_or_create(
@@ -71,9 +70,7 @@ class EntitySynthesisUseCase:
             # Tie the new concept into the current context (temporal co-occurrence)
             for ctx_id in context_concepts:
                 if ctx_id != concept.id:
-                    await self._concept_repo.connect(
-                        concept.id, ctx_id, ConnectionType.TEMPORAL
-                    )
+                    await self._concept_repo.connect(concept.id, ctx_id, ConnectionType.TEMPORAL)
 
             # Persist a compact semantic memory
             await self._memory_repo.store(
@@ -90,7 +87,7 @@ class EntitySynthesisUseCase:
 
         return concepts
 
-    async def _extract_entities(self, content: str) -> List[ExtractedEntity]:
+    async def _extract_entities(self, content: str) -> list[ExtractedEntity]:
         """Ask the LLM to pull out salient entities from raw content."""
         try:
             result = await self._llm.extract_structured(
@@ -105,11 +102,13 @@ class EntitySynthesisUseCase:
         except Exception:
             return []
         return [
-            ExtractedEntity(label=e["label"], concept_type=e.get("type", "topic"), description=e.get("description", ""))
+            ExtractedEntity(
+                label=e["label"], concept_type=e.get("type", "topic"), description=e.get("description", "")
+            )
             for e in result.get("entities", [])
         ]
 
-    async def _cross_reference(self, concepts: List[Concept], session_id: Optional[str]) -> None:
+    async def _cross_reference(self, concepts: list[Concept], session_id: str | None) -> None:
         """Look for strong, non-obvious connections and inject insights."""
         for concept in concepts:
             for conn in await self._concept_repo.get_connections(concept.id, min_weight=0.7):

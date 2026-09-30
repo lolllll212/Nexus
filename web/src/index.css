@@ -1,0 +1,238 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  font-family: 'JetBrains Mono', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+  background-color: #020408;
+  background-image: 
+    radial-gradient(circle at 50% 50%, rgba(0, 240, 255, 0.03) 0%, transparent 60%),
+    radial-gradient(circle at 80% 20%, rgba(14, 165, 233, 0.04) 0%, transparent 40%),
+    linear-gradient(rgba(2, 6, 17, 0.94), rgba(2, 6, 17, 0.94));
+  overflow: hidden;
+}
+
+/* Custom Cyan/Teal Sliders */
+input[type="range"].cyan-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: rgba(0, 240, 255, 0.15);
+  border-radius: 9999px;
+  outline: none;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(0, 240, 255, 0.25);
+}
+
+input[type="range"].cyan-slider:hover {
+  background: rgba(0, 240, 255, 0.25);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+}
+
+input[type="range"].cyan-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #00f0ff;
+  border: 2px solid #ffffff;
+  cursor: pointer;
+  box-shadow: 0 0 12px #00f0ff, 0 0 20px rgba(0, 240, 255, 0.6);
+  transition: all 0.15s ease;
+}
+
+input[type="range"].cyan-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  background: #00e5bc;
+  box-shadow: 0 0 16px #00e5bc, 0 0 24px rgba(0, 229, 188, 0.8);
+}
+
+input[type="range"].cyan-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #00f0ff;
+  border: 2px solid #ffffff;
+  cursor: pointer;
+  box-shadow: 0 0 12px #00f0ff, 0 0 20px rgba(0, 240, 255, 0.6);
+  transition: all 0.15s ease;
+}
+
+input[type="range"].cyan-slider::-moz-range-track {
+  background: rgba(0, 240, 255, 0.2);
+  height: 6px;
+  border-radius: 9999px;
+}
+
+/* Glassmorphism panel styles */
+.glass-panel {
+  background: rgba(10, 15, 29, 0.78);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 240, 255, 0.22);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), inset 0 0 25px rgba(0, 240, 255, 0.04);
+}
+
+.glass-obsidian {
+  background: rgba(10, 15, 29, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  box-shadow: 0 0 35px rgba(0, 240, 255, 0.1), inset 0 0 20px rgba(0, 240, 255, 0.03);
+}
+
+.glass-panel-subtle {
+  background: rgba(8, 16, 28, 0.65);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 240, 255, 0.14);
+}
+
+.glow-border-cyan {
+  border-color: rgba(0, 240, 255, 0.5) !important;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.35), inset 0 0 15px rgba(0, 240, 255, 0.1) !important;
+}
+
+.glow-border-green {
+  border-color: rgba(0, 255, 136, 0.6) !important;
+  box-shadow: 0 0 15px rgba(0, 255, 136, 0.35), inset 0 0 15px rgba(0, 255, 136, 0.1) !important;
+}
+
+.glow-border-amber {
+  border-color: rgba(255, 170, 0, 0.6) !important;
+  box-shadow: 0 0 15px rgba(255, 170, 0, 0.35), inset 0 0 15px rgba(255, 170, 0, 0.1) !important;
+}
+
+/* Animations for Cybernetic Orb & Arc Reactor */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes spin-reverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes spin-fast {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-core {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.85;
+    filter: drop-shadow(0 0 20px rgba(0, 240, 255, 0.6));
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+    filter: drop-shadow(0 0 35px rgba(0, 240, 255, 0.95));
+  }
+}
+
+@keyframes pulse-listening {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 25px rgba(0, 255, 136, 0.7));
+  }
+  50% {
+    transform: scale(1.12);
+    filter: drop-shadow(0 0 45px rgba(0, 255, 136, 1));
+  }
+}
+
+@keyframes pulse-thinking {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 25px rgba(255, 170, 0, 0.7));
+  }
+  50% {
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 45px rgba(255, 170, 0, 1));
+  }
+}
+
+@keyframes ripple-wave {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 24s linear infinite;
+}
+
+.animate-spin-reverse {
+  animation: spin-reverse 18s linear infinite;
+}
+
+.animate-spin-fast {
+  animation: spin-fast 6s linear infinite;
+}
+
+.animate-pulse-core {
+  animation: pulse-core 3s ease-in-out infinite;
+}
+
+.animate-pulse-listening {
+  animation: pulse-listening 1.5s ease-in-out infinite;
+}
+
+.animate-pulse-thinking {
+  animation: pulse-thinking 1s ease-in-out infinite;
+}
+
+.animate-ripple-wave {
+  animation: ripple-wave 2.2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 240, 255, 0.3);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 240, 255, 0.6);
+}
+
+/* Sci-fi Scanline Effect */
+.scanline {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 240, 255, 0.02) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Tick marks for HUD */
+.hud-tick {
+  position: absolute;
+  width: 2px;
+  height: 8px;
+  background: rgba(0, 240, 255, 0.6);
+  transform-origin: 50% 100px;
+}

@@ -14,11 +14,11 @@ from __future__ import annotations
 import pytest
 
 from nexus.application.tools.generate_tool import (
+    ToolGenerationError,
+    ToolSpecRequest,
+    _build_prompt_safe,
     _validate_code,
     _validate_request,
-    _build_prompt_safe,
-    ToolSpecRequest,
-    ToolGenerationError,
 )
 
 

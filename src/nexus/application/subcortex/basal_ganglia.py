@@ -10,10 +10,9 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import Dict
 
 from nexus.domain.ports.cognition import ActionPolicyStore, CorticalColumnRegistry
-from nexus.domain.ports.event_bus import Event, EventBus, EventTopic, EventPriority
+from nexus.domain.ports.event_bus import Event, EventBus, EventPriority, EventTopic
 
 
 @dataclass
@@ -27,7 +26,7 @@ class ActionSelection:
 @dataclass
 class BiddingResult:
     selected: ActionSelection
-    all_bids: Dict[str, float] = field(default_factory=dict)
+    all_bids: dict[str, float] = field(default_factory=dict)
 
 
 class BasalGangliaUseCase:
@@ -47,7 +46,7 @@ class BasalGangliaUseCase:
         self._policy = policy_store
         self._event_bus = event_bus
 
-    async def select(self, state_key: str, actions: Dict[str, str], urgency: float = 0.0) -> BiddingResult:
+    async def select(self, state_key: str, actions: dict[str, str], urgency: float = 0.0) -> BiddingResult:
         """
         Each candidate column bids: bid = gated_weight * (1 + urgency) + Q-value.
         The highest bidder wins, with occasional epsilon-greedy exploration.
@@ -57,14 +56,14 @@ class BasalGangliaUseCase:
         if not candidates:
             candidates = columns
 
-        bids: Dict[str, float] = {}
+        bids: dict[str, float] = {}
         q_values = await self._policy.get_state(state_key)
         for column in candidates:
             action_id = actions.get(column.name, column.id)
             q = q_values.get(action_id, 0.0)
             bids[column.name] = column.bid(urgency) + q
 
-        winner_name = max(bids, key=bids.get)
+        winner_name = max(bids, key=lambda k: bids[k])
         if random.random() < self.EXPLORATION_RATE:
             winner_name = random.choice(list(bids.keys()))
 
@@ -75,7 +74,12 @@ class BasalGangliaUseCase:
         await self._event_bus.publish(
             Event(
                 topic=EventTopic.ACTION_SELECTED,
-                payload={"state": state_key, "action": action_id, "column": winner.name, "bid": bids[winner.name]},
+                payload={
+                    "state": state_key,
+                    "action": action_id,
+                    "column": winner.name,
+                    "bid": bids[winner.name],
+                },
                 priority=EventPriority.NORMAL,
             )
         )

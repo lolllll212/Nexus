@@ -5,6 +5,6 @@
 rubric against fakes inside pytest.
 """
 
-from nexus.eval.harness import EvalCase, EvalResult, EvalRunner, GOLDEN_SET
+from nexus.eval.harness import GOLDEN_SET, EvalCase, EvalResult, EvalRunner
 
-__all__ = ["EvalCase", "EvalResult", "EvalRunner", "GOLDEN_SET"]
+__all__ = ["GOLDEN_SET", "EvalCase", "EvalResult", "EvalRunner"]

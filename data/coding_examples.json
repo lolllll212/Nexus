@@ -14,8 +14,13 @@
     "test_cases": "assert binary_search([1, 2, 3, 4, 5], 3) == 2\nassert binary_search([1, 2, 3, 4, 5], 6) == -1\nassert binary_search([], 1) == -1\nassert binary_search([1], 1) == 0",
     "difficulty": "easy",
     "created_at": "2026-09-20T08:07:44.756902+00:00",
+    "updated_at": "2026-09-29T03:12:49.125319+00:00",
+    "version": 1,
     "use_count": 0,
-    "success_rate": 1.0
+    "success_count": 0,
+    "fail_count": 0,
+    "avg_rating": 0.0,
+    "source": "manual"
   },
   {
     "id": "9e098b75",
@@ -32,8 +37,13 @@
     "test_cases": "assert merge_sort([3, 1, 4, 1, 5, 9]) == [1, 1, 3, 4, 5, 9]\nassert merge_sort([]) == []\nassert merge_sort([1]) == [1]",
     "difficulty": "medium",
     "created_at": "2026-09-20T08:07:44.756926+00:00",
+    "updated_at": "2026-09-29T03:12:49.125343+00:00",
+    "version": 1,
     "use_count": 0,
-    "success_rate": 1.0
+    "success_count": 0,
+    "fail_count": 0,
+    "avg_rating": 0.0,
+    "source": "manual"
   },
   {
     "id": "722ad65f",
@@ -50,8 +60,13 @@
     "test_cases": "hm = HashMap()\nhm.put(\"a\", 1)\nhm.put(\"b\", 2)\nassert hm.get(\"a\") == 1\nassert hm.get(\"b\") == 2\nassert hm.get(\"c\") is None",
     "difficulty": "hard",
     "created_at": "2026-09-20T08:07:44.756933+00:00",
+    "updated_at": "2026-09-29T03:12:49.125364+00:00",
+    "version": 1,
     "use_count": 0,
-    "success_rate": 1.0
+    "success_count": 0,
+    "fail_count": 0,
+    "avg_rating": 0.0,
+    "source": "manual"
   },
   {
     "id": "b559f5b4",
@@ -68,8 +83,13 @@
     "test_cases": "s = MinStack()\ns.push(3); s.push(1); s.push(4)\nassert s.get_min() == 1\ns.pop()\nassert s.get_min() == 1\ns.pop()\nassert s.get_min() == 3",
     "difficulty": "medium",
     "created_at": "2026-09-20T08:07:44.756939+00:00",
+    "updated_at": "2026-09-29T03:12:49.125370+00:00",
+    "version": 1,
     "use_count": 0,
-    "success_rate": 1.0
+    "success_count": 0,
+    "fail_count": 0,
+    "avg_rating": 0.0,
+    "source": "manual"
   },
   {
     "id": "066fa230",
@@ -86,8 +106,13 @@
     "test_cases": "c = LRUCache(2)\nc.put(1, 1); c.put(2, 2)\nassert c.get(1) == 1\nc.put(3, 3)  # evicts key 2\nassert c.get(2) == -1",
     "difficulty": "medium",
     "created_at": "2026-09-20T08:07:44.756944+00:00",
+    "updated_at": "2026-09-29T03:12:49.125375+00:00",
+    "version": 1,
     "use_count": 0,
-    "success_rate": 1.0
+    "success_count": 0,
+    "fail_count": 0,
+    "avg_rating": 0.0,
+    "source": "manual"
   },
   {
     "id": "1f7d5a4f",
@@ -104,8 +129,13 @@
     "test_cases": "assert is_palindrome(\"A man, a plan, a canal: Panama\") == True\nassert is_palindrome(\"race a car\") == False\nassert is_palindrome(\"\") == True",
     "difficulty": "easy",
     "created_at": "2026-09-20T08:07:44.756949+00:00",
+    "updated_at": "2026-09-29T03:12:49.125393+00:00",
+    "version": 1,
     "use_count": 0,
-    "success_rate": 1.0
+    "success_count": 0,
+    "fail_count": 0,
+    "avg_rating": 0.0,
+    "source": "manual"
   },
   {
     "id": "decf7cc7",
@@ -122,8 +152,13 @@
     "test_cases": "assert longest_common_substring(\"abcdef\", \"zbcdf\") == \"bcd\"\nassert longest_common_substring(\"abc\", \"def\") == \"\"\nassert longest_common_substring(\"abc\", \"abc\") == \"abc",
     "difficulty": "medium",
     "created_at": "2026-09-20T08:07:44.756954+00:00",
+    "updated_at": "2026-09-29T03:12:49.125401+00:00",
+    "version": 1,
     "use_count": 0,
-    "success_rate": 1.0
+    "success_count": 0,
+    "fail_count": 0,
+    "avg_rating": 0.0,
+    "source": "manual"
   },
   {
     "id": "380c7933",
@@ -140,8 +175,13 @@
     "test_cases": "bst = BST()\nfor v in [5, 3, 7, 1, 4]:\n    bst.insert(v)\nassert bst.inorder() == [1, 3, 4, 5, 7]\nassert bst.search(4).val == 4\nassert bst.search(8) is None",
     "difficulty": "medium",
     "created_at": "2026-09-20T08:07:44.756959+00:00",
+    "updated_at": "2026-09-29T03:12:49.125406+00:00",
+    "version": 1,
     "use_count": 0,
-    "success_rate": 1.0
+    "success_count": 0,
+    "fail_count": 0,
+    "avg_rating": 0.0,
+    "source": "manual"
   },
   {
     "id": "9eff928b",
@@ -159,8 +199,13 @@
     "test_cases": "g = Graph()\nfor u, v in [(0,1),(0,2),(1,3),(2,3)]:\n    g.add_edge(u, v)\nassert 0 in g.bfs(0)\nassert 0 in g.dfs(0)",
     "difficulty": "medium",
     "created_at": "2026-09-20T08:07:44.756963+00:00",
+    "updated_at": "2026-09-29T03:12:49.125410+00:00",
+    "version": 1,
     "use_count": 0,
-    "success_rate": 1.0
+    "success_count": 0,
+    "fail_count": 0,
+    "avg_rating": 0.0,
+    "source": "manual"
   },
   {
     "id": "52b951c6",
@@ -177,8 +222,13 @@
     "test_cases": "assert coin_change([1, 5, 10, 25], 30) == 2\nassert coin_change([2], 3) == -1\nassert coin_change([1], 0) == 0",
     "difficulty": "medium",
     "created_at": "2026-09-20T08:07:44.756968+00:00",
+    "updated_at": "2026-09-29T03:12:49.125416+00:00",
+    "version": 1,
     "use_count": 0,
-    "success_rate": 1.0
+    "success_count": 0,
+    "fail_count": 0,
+    "avg_rating": 0.0,
+    "source": "manual"
   },
   {
     "id": "3954270b",
@@ -196,8 +246,13 @@
     "test_cases": "assert longest_increasing_subsequence([10, 9, 2, 5, 3, 7, 101, 18]) == 4\nassert longest_increasing_subsequence([0, 1, 0, 3, 2, 3]) == 4\nassert longest_increasing_subsequence([7, 7, 7, 7]) == 1",
     "difficulty": "hard",
     "created_at": "2026-09-20T08:07:44.756972+00:00",
+    "updated_at": "2026-09-29T03:12:49.125437+00:00",
+    "version": 1,
     "use_count": 0,
-    "success_rate": 1.0
+    "success_count": 0,
+    "fail_count": 0,
+    "avg_rating": 0.0,
+    "source": "manual"
   },
   {
     "id": "b8bb0e6d",
@@ -214,8 +269,13 @@
     "test_cases": "b = TokenBucket(5, 10)\nassert b.allow() == True\nfor _ in range(4):\n    b.allow()\nassert b.allow() == False  # bucket empty",
     "difficulty": "medium",
     "created_at": "2026-09-20T08:07:44.756977+00:00",
+    "updated_at": "2026-09-29T03:12:49.125445+00:00",
+    "version": 1,
     "use_count": 0,
-    "success_rate": 1.0
+    "success_count": 0,
+    "fail_count": 0,
+    "avg_rating": 0.0,
+    "source": "manual"
   },
   {
     "id": "9f8273f1",
@@ -232,8 +292,13 @@
     "test_cases": "from pathlib import Path\nPath(\"_test_big.txt\").write_text(\"x\" * 10 * 1024 * 1024)\nresults = find_large_files(\".\", min_size_mb=5)\nassert len(results) >= 1\nPath(\"_test_big.txt\").unlink()",
     "difficulty": "easy",
     "created_at": "2026-09-20T08:07:44.756981+00:00",
+    "updated_at": "2026-09-29T03:12:49.125464+00:00",
+    "version": 1,
     "use_count": 0,
-    "success_rate": 1.0
+    "success_count": 0,
+    "fail_count": 0,
+    "avg_rating": 0.0,
+    "source": "manual"
   },
   {
     "id": "0c1f4c7c",
@@ -250,8 +315,13 @@
     "test_cases": "# Run with: pytest test_add.py -v\n# All tests should pass",
     "difficulty": "easy",
     "created_at": "2026-09-20T08:07:44.756985+00:00",
+    "updated_at": "2026-09-29T03:12:49.125474+00:00",
+    "version": 1,
     "use_count": 0,
-    "success_rate": 1.0
+    "success_count": 0,
+    "fail_count": 0,
+    "avg_rating": 0.0,
+    "source": "manual"
   },
   {
     "id": "56d32e00",
@@ -269,8 +339,13 @@
     "test_cases": "from fastapi.testclient import TestClient\nclient = TestClient(app)\nr = client.post(\"/items\", json={\"name\": \"Test\", \"price\": 9.99})\nassert r.status_code == 200\nitem_id = r.json()[\"id\"]\nr = client.get(f\"/items/{item_id}\")\nassert r.json()[\"name\"] == \"Test\"\n",
     "difficulty": "medium",
     "created_at": "2026-09-20T08:07:44.756990+00:00",
+    "updated_at": "2026-09-29T03:12:49.125480+00:00",
+    "version": 1,
     "use_count": 0,
-    "success_rate": 1.0
+    "success_count": 0,
+    "fail_count": 0,
+    "avg_rating": 0.0,
+    "source": "manual"
   },
   {
     "id": "15a168e1",
@@ -287,7 +362,12 @@
     "test_cases": "import tempfile, os\npath = tempfile.mktemp(suffix='.csv')\nwith open(path, 'w') as f:\n    f.write(\"name,score\\nAlice,95\\nBob,87\\nCarol,92\\n\")\nstats = analyze_csv(path)\nassert stats[\"rows\"] == 3\nassert stats[\"numeric_stats\"][\"score\"][\"mean\"] == 91.0\nos.unlink(path)",
     "difficulty": "medium",
     "created_at": "2026-09-20T08:07:44.756994+00:00",
+    "updated_at": "2026-09-29T03:12:49.125499+00:00",
+    "version": 1,
     "use_count": 0,
-    "success_rate": 1.0
+    "success_count": 0,
+    "fail_count": 0,
+    "avg_rating": 0.0,
+    "source": "manual"
   }
 ]
