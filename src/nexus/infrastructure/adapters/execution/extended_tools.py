@@ -659,6 +659,18 @@ async def _json_transform(params: dict[str, Any]) -> dict[str, Any]:
             pass
         return {"error": f"Transform error: {e}"}
 
+    # Support JMESPath syntax directly if indicated
+    if expr.startswith("jmespath:"):
+        try:
+            import jmespath
+
+            return {"result": jmespath.search(expr[9:].strip(), data)}
+        except Exception as e:
+            return {"error": f"JMESPath error: {e}"}
+
+    # Evaluate safely using simpleeval AST parser (strictly disallows dunder, globals, builtins)
+    try:
+        from simpleeval import EvalWithCompoundTypes
 
 async def _current_datetime(params: dict[str, Any]) -> dict[str, Any]:
     fmt = params.get("format", "%Y-%m-%d %H:%M:%S UTC")
