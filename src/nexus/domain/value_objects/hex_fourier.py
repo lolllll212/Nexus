@@ -14,21 +14,20 @@ from __future__ import annotations
 import cmath
 import math
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
 
 from nexus.domain.value_objects.hex_grid import HexCoord
 
 # The three axial basis vectors, 120 degrees apart.
 # In axial (q, r): the three lattice axes are (1,0), (0,1), (1,-1).
-HEX_AXES: Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]] = (
+HEX_AXES: tuple[tuple[int, int], tuple[int, int], tuple[int, int]] = (
     (1, 0),
     (0, 1),
     (1, -1),
 )
-AXIS_NAMES: Tuple[str, str, str] = ("q", "r", "s")
+AXIS_NAMES: tuple[str, str, str] = ("q", "r", "s")
 
 
-def _project(coord: HexCoord, axis: Tuple[int, int]) -> int:
+def _project(coord: HexCoord, axis: tuple[int, int]) -> int:
     """Project a hex onto an axis line, giving its scalar position along it."""
     aq, ar = axis
     return coord.q * aq + coord.r * ar
@@ -39,7 +38,7 @@ class AxisSpectrum:
     """The frequency content of a signal along a single hex axis."""
 
     axis: str
-    magnitudes: List[float] = field(default_factory=list)
+    magnitudes: list[float] = field(default_factory=list)
     dominant_frequency: int = 0
 
     @property
@@ -53,7 +52,7 @@ class AxisSpectrum:
 class HexSpectrum:
     """Full decomposition of a hex-grid signal across the three axes."""
 
-    axes: Dict[str, AxisSpectrum] = field(default_factory=dict)
+    axes: dict[str, AxisSpectrum] = field(default_factory=dict)
 
     @property
     def dominant_axis(self) -> str:
@@ -62,7 +61,7 @@ class HexSpectrum:
         return best.axis
 
 
-def hex_fourier_transform(signal: Dict[HexCoord, float]) -> HexSpectrum:
+def hex_fourier_transform(signal: dict[HexCoord, float]) -> HexSpectrum:
     """
     Decompose a signal on the hex grid along the three 120-degree axes.
 
@@ -72,7 +71,7 @@ def hex_fourier_transform(signal: Dict[HexCoord, float]) -> HexSpectrum:
     """
     spectrum = HexSpectrum()
     for name, axis in zip(AXIS_NAMES, HEX_AXES):
-        bins: Dict[int, float] = {}
+        bins: dict[int, float] = {}
         for coord, value in signal.items():
             position = _project(coord, axis)
             bins[position] = bins.get(position, 0.0) + value
@@ -86,14 +85,14 @@ def hex_fourier_transform(signal: Dict[HexCoord, float]) -> HexSpectrum:
     return spectrum
 
 
-def _transform_1d(bins: Dict[int, float]) -> List[float]:
+def _transform_1d(bins: dict[int, float]) -> list[float]:
     """Compute frequency magnitudes along a 1-D signal (bins keyed by position)."""
     if not bins:
         return []
     positions = sorted(bins.keys())
     samples = [bins[p] for p in positions]
     n = len(samples)
-    magnitudes: List[float] = []
+    magnitudes: list[float] = []
     for freq in range(n):
         total = complex(0.0, 0.0)
         for k, sample in enumerate(samples):
@@ -103,7 +102,7 @@ def _transform_1d(bins: Dict[int, float]) -> List[float]:
     return magnitudes
 
 
-def _dominant_frequency(magnitudes: List[float]) -> int:
+def _dominant_frequency(magnitudes: list[float]) -> int:
     """The frequency bin (>=1) with the most energy; 0 if all flat."""
     if len(magnitudes) < 2:
         return 0

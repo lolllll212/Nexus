@@ -37,7 +37,7 @@ class BackupManager:
         self._dump_dir = pathlib.Path(dump_dir)
 
     async def run(self, tenant_id: str = "default") -> BackupResult:
-        ts = datetime.datetime.utcnow().isoformat()
+        ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
         result = BackupResult(timestamp=ts)
         # Qdrant per-collection snapshots
         if self._qdrant is not None:

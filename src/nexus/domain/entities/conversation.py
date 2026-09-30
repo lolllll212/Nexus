@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
 from uuid import uuid4
 
+from nexus.domain.value_objects.clock import utc_now
 from nexus.domain.value_objects.emotion import EmotionalState, infer_emotional_state
 
 
@@ -25,8 +25,8 @@ class Message:
     role: MessageRole
     content: str
     id: str = field(default_factory=lambda: str(uuid4()))
-    timestamp: datetime = field(default_factory=datetime.utcnow)
-    metadata: Dict[str, object] = field(default_factory=dict)
+    timestamp: datetime = field(default_factory=utc_now)
+    metadata: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass
@@ -36,9 +36,9 @@ class Session:
     session_id: str = field(default_factory=lambda: str(uuid4()))
     user_id: str = "anonymous"
     tenant_id: str = "default"
-    started_at: datetime = field(default_factory=datetime.utcnow)
-    ended_at: Optional[datetime] = None
-    metadata: Dict[str, object] = field(default_factory=dict)
+    started_at: datetime = field(default_factory=utc_now)
+    ended_at: datetime | None = None
+    metadata: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass
@@ -48,17 +48,17 @@ class Conversation:
     session_id: str
     user_id: str
     tenant_id: str = "default"
-    messages: List[Message] = field(default_factory=list)
-    active_concepts: List[str] = field(default_factory=list)
+    messages: list[Message] = field(default_factory=list)
+    active_concepts: list[str] = field(default_factory=list)
     emotional_state: EmotionalState = field(default_factory=EmotionalState)
-    current_task: Optional[str] = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    current_task: str | None = None
+    created_at: datetime = field(default_factory=utc_now)
+    updated_at: datetime = field(default_factory=utc_now)
 
-    def add_message(self, role: MessageRole, content: str, metadata: Dict = None) -> Message:
+    def add_message(self, role: MessageRole, content: str, metadata: dict | None = None) -> Message:
         msg = Message(role=role, content=content, metadata=metadata or {})
         self.messages.append(msg)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = utc_now()
         return msg
 
     def observe_message(self, role: MessageRole, content: str) -> None:
@@ -66,12 +66,9 @@ class Conversation:
         if role == MessageRole.USER:
             self.emotional_state = self.emotional_state.blend(infer_emotional_state(content))
 
-    def recent(self, n: int = 10) -> List[Message]:
+    def recent(self, n: int = 10) -> list[Message]:
         return self.messages[-n:]
 
-    def to_llm_context(self, n: int = 10) -> List[Dict[str, str]]:
+    def to_llm_context(self, n: int = 10) -> list[dict[str, str]]:
         """Serialize recent messages for LLM consumption."""
-        return [
-            {"role": m.role.value, "content": m.content}
-            for m in self.recent(n)
-        ]
+        return [{"role": m.role.value, "content": m.content} for m in self.recent(n)]

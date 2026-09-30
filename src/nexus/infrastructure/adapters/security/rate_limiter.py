@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import deque
-from typing import Deque, Dict
 
 from nexus.domain.exceptions import RateLimitExceededError
 from nexus.domain.ports.rate_limiter import RateLimiter
@@ -20,7 +19,7 @@ class SlidingWindowRateLimiter(RateLimiter):
     last `window_seconds`."""
 
     def __init__(self) -> None:
-        self._attempts: Dict[str, Deque[float]] = {}
+        self._attempts: dict[str, deque[float]] = {}
         self._lock = asyncio.Lock()
 
     async def check(self, key: str, limit: int, window_seconds: int) -> None:

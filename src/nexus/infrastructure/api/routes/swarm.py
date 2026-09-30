@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -23,7 +21,7 @@ class AgentIn(BaseModel):
     name: str = Field(..., min_length=1)
     role: str = "worker"
     system_prompt: str = Field(..., min_length=1)
-    tools: Optional[List[str]] = None
+    tools: list[str] | None = None
 
 
 class AgentOut(BaseModel):
@@ -38,7 +36,7 @@ class AgentOut(BaseModel):
 class SwarmIn(BaseModel):
     name: str = Field(..., min_length=1)
     leader_id: str
-    worker_ids: List[str] = Field(default_factory=list)
+    worker_ids: list[str] = Field(default_factory=list)
 
 
 class SwarmOut(BaseModel):
@@ -101,12 +99,12 @@ async def register_agent(
     return _agent_out(agent)
 
 
-@router.get("/agents", response_model=List[AgentOut])
+@router.get("/agents", response_model=list[AgentOut])
 async def list_agents(
-    role: Optional[str] = None,
+    role: str | None = None,
     identity: Identity = Depends(require_identity),
     container: Container = Depends(get_container),
-) -> List[AgentOut]:
+) -> list[AgentOut]:
     agents = await container.list_agents.execute(tenant_id=identity.tenant_id, role=role)
     return [_agent_out(a) for a in agents]
 
@@ -143,22 +141,22 @@ async def create_swarm(
     return _swarm_out(swarm)
 
 
-@router.get("/swarms", response_model=List[SwarmOut])
+@router.get("/swarms", response_model=list[SwarmOut])
 async def list_swarms(
     identity: Identity = Depends(require_identity),
     container: Container = Depends(get_container),
-) -> List[SwarmOut]:
+) -> list[SwarmOut]:
     swarms = await container.list_swarms.execute(tenant_id=identity.tenant_id)
     return [_swarm_out(s) for s in swarms]
 
 
-@router.get("/swarms/{swarm_id}/run-history", response_model=List[SwarmRunHistoryOut])
+@router.get("/swarms/{swarm_id}/run-history", response_model=list[SwarmRunHistoryOut])
 async def swarm_run_history(
     swarm_id: str,
     limit: int = 20,
     identity: Identity = Depends(require_identity),
     container: Container = Depends(get_container),
-) -> List[SwarmRunHistoryOut]:
+) -> list[SwarmRunHistoryOut]:
     """Recent runs of a specific swarm (from the activity feed)."""
     runs = container.activity_feed.recent("swarm_run", limit=limit)
     return [
@@ -168,12 +166,12 @@ async def swarm_run_history(
     ]
 
 
-@router.get("/swarms/runs", response_model=List[SwarmRunHistoryOut])
+@router.get("/swarms/runs", response_model=list[SwarmRunHistoryOut])
 async def recent_swarm_runs(
     limit: int = 20,
     identity: Identity = Depends(require_identity),
     container: Container = Depends(get_container),
-) -> List[SwarmRunHistoryOut]:
+) -> list[SwarmRunHistoryOut]:
     """Recent swarm runs across all swarms (from the activity feed)."""
     runs = container.activity_feed.recent("swarm_run", limit=limit)
     return [SwarmRunHistoryOut(**r) for r in runs if r.get("tenant_id", "default") == identity.tenant_id]

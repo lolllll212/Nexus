@@ -9,24 +9,36 @@ columns, so resources flow to the columns that matter for the current task.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List
 
 from nexus.domain.ports.cognition import CorticalColumnRegistry
-from nexus.domain.ports.event_bus import Event, EventBus, EventTopic, EventPriority
+from nexus.domain.ports.event_bus import Event, EventBus, EventPriority, EventTopic
 
 
 @dataclass
 class GatingResult:
     urgency: float
     columns_gated: int = 0
-    top_columns: List[str] = field(default_factory=list)
+    top_columns: list[str] = field(default_factory=list)
 
 
 # Lexical cues that signal a high-urgency task.
 _URGENT_TOKENS = {
-    "urgent", "asap", "emergency", "critical", "crash", "down", "broken",
-    "fail", "failing", "security", "vulnerability", "now", "incident",
-    "production", "deadline", "blocked",
+    "urgent",
+    "asap",
+    "emergency",
+    "critical",
+    "crash",
+    "down",
+    "broken",
+    "fail",
+    "failing",
+    "security",
+    "vulnerability",
+    "now",
+    "incident",
+    "production",
+    "deadline",
+    "blocked",
 }
 
 

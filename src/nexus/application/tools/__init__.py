@@ -3,4 +3,4 @@
 from nexus.application.tools.generate_tool import GenerateToolUseCase, ToolSpecRequest
 from nexus.application.tools.self_heal import SelfHealUseCase
 
-__all__ = ["GenerateToolUseCase", "ToolSpecRequest", "SelfHealUseCase"]
+__all__ = ["GenerateToolUseCase", "SelfHealUseCase", "ToolSpecRequest"]

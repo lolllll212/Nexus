@@ -5,20 +5,22 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import uuid4
 
+from nexus.domain.value_objects.clock import utc_now
 from nexus.domain.value_objects.schema import JSONSchema
 
 
 class ToolStatus(Enum):
     """Lifecycle states of a tool."""
-    GENERATING = "generating"   # Code being written
-    TESTING = "testing"         # Running validation suite
-    READY = "ready"             # Available for use
-    DEPLOYED = "deployed"       # Active on an endpoint
-    DEPRECATED = "deprecated"   # Superseded, being phased out
-    FAILED = "failed"           # Failed generation or tests
+
+    GENERATING = "generating"  # Code being written
+    TESTING = "testing"  # Running validation suite
+    READY = "ready"  # Available for use
+    DEPLOYED = "deployed"  # Active on an endpoint
+    DEPRECATED = "deprecated"  # Superseded, being phased out
+    FAILED = "failed"  # Failed generation or tests
 
 
 @dataclass
@@ -30,19 +32,19 @@ class Tool:
     input_schema: JSONSchema
     output_schema: JSONSchema
     id: str = field(default_factory=lambda: str(uuid4()))
-    code: Optional[str] = None              # Python source (None for built-ins)
+    code: str | None = None  # Python source (None for built-ins)
     status: ToolStatus = ToolStatus.READY
     version: str = "1.0.0"
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    last_used_at: Optional[datetime] = None
+    created_at: datetime = field(default_factory=utc_now)
+    last_used_at: datetime | None = None
     use_count: int = 0
     success_rate: float = 1.0
     is_self_generated: bool = False
-    endpoint: Optional[str] = None          # Deployed FastAPI URL
-    deployment: Dict[str, Any] = field(default_factory=dict)
+    endpoint: str | None = None  # Deployed FastAPI URL
+    deployment: dict[str, Any] = field(default_factory=dict)
 
     def record_use(self, succeeded: bool) -> None:
-        self.last_used_at = datetime.utcnow()
+        self.last_used_at = utc_now()
         self.use_count += 1
         alpha = 0.1
         self.success_rate = (1 - alpha) * self.success_rate + alpha * (1.0 if succeeded else 0.0)

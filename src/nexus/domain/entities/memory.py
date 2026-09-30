@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, List, Optional
 from uuid import uuid4
+
+from nexus.domain.value_objects.clock import utc_now
 
 
 class MemoryType(Enum):
     """Taxonomy of memory, mirroring human memory systems."""
-    EPISODIC = "episodic"      # Raw experiences: exact conversations, events
-    SEMANTIC = "semantic"      # Compressed facts, rules, extracted knowledge
+
+    EPISODIC = "episodic"  # Raw experiences: exact conversations, events
+    SEMANTIC = "semantic"  # Compressed facts, rules, extracted knowledge
     PROCEDURAL = "procedural"  # Skills, learned tool usage, capabilities
-    EMOTIONAL = "emotional"    # Weighted emotional associations
+    EMOTIONAL = "emotional"  # Weighted emotional associations
 
     @property
     def is_consolidatable(self) -> bool:
@@ -25,6 +27,7 @@ class MemoryType(Enum):
 @dataclass(frozen=True)
 class EmotionalWeight:
     """Immutable emotional valence attached to a memory."""
+
     valence: float  # -1.0 (negative) to 1.0 (positive)
     arousal: float  # 0.0 (calm) to 1.0 (intense)
     context: str = ""
@@ -51,20 +54,20 @@ class Memory:
     content: str
     memory_type: MemoryType
     id: str = field(default_factory=lambda: str(uuid4()))
-    concepts: List[str] = field(default_factory=list)   # Concept IDs
-    embedding: Optional[List[float]] = None
-    metadata: Dict[str, object] = field(default_factory=dict)
-    emotional_weight: Optional[EmotionalWeight] = None
-    context_state: Dict[str, object] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    last_accessed_at: datetime = field(default_factory=datetime.utcnow)
+    concepts: list[str] = field(default_factory=list)  # Concept IDs
+    embedding: list[float] | None = None
+    metadata: dict[str, object] = field(default_factory=dict)
+    emotional_weight: EmotionalWeight | None = None
+    context_state: dict[str, object] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=utc_now)
+    last_accessed_at: datetime = field(default_factory=utc_now)
     access_count: int = 0
     consolidated: bool = False  # True when compressed by dreaming
 
     def accessed(self) -> None:
         """Record that this memory was recalled. Drives decay/pruning."""
         self.access_count += 1
-        self.last_accessed_at = datetime.utcnow()
+        self.last_accessed_at = utc_now()
 
     def consolidate(self, new_content: str) -> Memory:
         """
@@ -81,5 +84,9 @@ class Memory:
 
     def is_stale(self, threshold_days: int, min_accesses: int = 1) -> bool:
         """Whether this memory should be pruned (dreaming phase 2)."""
-        age_days = (datetime.utcnow() - self.last_accessed_at).days
+        last = self.last_accessed_at
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        now = utc_now()
+        age_days = (now - last).days
         return age_days > threshold_days and self.access_count < min_accesses

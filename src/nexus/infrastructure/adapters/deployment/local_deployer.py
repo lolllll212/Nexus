@@ -12,7 +12,6 @@ import socket
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Dict
 
 from nexus.domain.ports.deployment import DeploymentInfo, DeploymentProvider, DeploymentRequest
 
@@ -41,22 +40,25 @@ class LocalDeployer(DeploymentProvider):
 
     def __init__(self, base_port: int = 9100) -> None:
         self._base_port = base_port
-        self._deployments: Dict[str, DeploymentInfo] = {}
-        self._processes: Dict[str, asyncio.subprocess.Process] = {}
-        self._workdirs: Dict[str, str] = {}
+        self._deployments: dict[str, DeploymentInfo] = {}
+        self._processes: dict[str, asyncio.subprocess.Process] = {}
+        self._workdirs: dict[str, str] = {}
 
     async def deploy(self, request: DeploymentRequest) -> DeploymentInfo:
         workdir = tempfile.mkdtemp(prefix="nexus-tool-")
         logic_file = Path(workdir) / "logic.py"
         logic_file.write_text(request.code)
         app_file = Path(workdir) / "main.py"
-        app_file.write_text(
-            _TEMPLATE.format(tool_name=request.name, logic_module="logic")
-        )
+        app_file.write_text(_TEMPLATE.format(tool_name=request.name, logic_module="logic"))
 
         port = self._next_free_port()
         proc = await asyncio.create_subprocess_exec(
-            "uvicorn", "main:app", "--host", "127.0.0.1", "--port", str(port),
+            "uvicorn",
+            "main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
             cwd=workdir,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
@@ -84,7 +86,7 @@ class LocalDeployer(DeploymentProvider):
             proc.terminate()
             try:
                 await asyncio.wait_for(proc.wait(), timeout=5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
         self._deployments.pop(deployment_id, None)
 

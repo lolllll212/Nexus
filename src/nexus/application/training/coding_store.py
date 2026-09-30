@@ -11,26 +11,27 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 
 @dataclass
 class CodingExample:
     """A single coding example with quality metadata."""
+
     id: str = field(default_factory=lambda: str(uuid4())[:12])
     task: str = ""
     solution: str = ""
     language: str = "python"
     category: str = "general"
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     explanation: str = ""
     test_cases: str = ""
     difficulty: str = "medium"
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     version: int = 1
     # Quality metrics
     use_count: int = 0
@@ -39,7 +40,7 @@ class CodingExample:
     avg_rating: float = 0.0
     source: str = "manual"  # manual | auto-learned | imported | git
     # Vector search support
-    embedding: List[float] = field(default_factory=list)
+    embedding: list[float] = field(default_factory=list)
 
     @property
     def success_rate(self) -> float:
@@ -55,15 +56,15 @@ class CodingExample:
         if rating > 0:
             alpha = 0.2
             self.avg_rating = (1 - alpha) * self.avg_rating + alpha * rating
-        self.updated_at = datetime.now(timezone.utc).isoformat()
+        self.updated_at = datetime.now(UTC).isoformat()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d.pop("embedding", None)
         return d
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> CodingExample:
+    def from_dict(cls, d: dict[str, Any]) -> CodingExample:
         return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
 
     def to_prompt(self) -> str:
@@ -93,14 +94,15 @@ class CodingStore:
         self._path = Path(store_path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._dim = embedding_dim
-        self._examples: List[CodingExample] = []
+        self._examples: list[CodingExample] = []
         self._qdrant = None
         self._collection = "coding_examples"
 
         # Try to connect to Qdrant (optional — JSON-only mode if unavailable)
         try:
             from qdrant_client import QdrantClient
-            from qdrant_client.models import VectorParams, Distance
+            from qdrant_client.models import Distance, VectorParams
+
             self._qdrant = QdrantClient(host=qdrant_host, port=qdrant_port)
             collections = [c.name for c in self._qdrant.get_collections().collections]
             if self._collection not in collections:
@@ -131,6 +133,7 @@ class CodingStore:
             return
         try:
             from qdrant_client.models import PointStruct
+
             self._qdrant.upsert(
                 collection_name=self._collection,
                 points=[PointStruct(id=example.id, vector=example.embedding, payload=example.to_dict())],
@@ -138,29 +141,32 @@ class CodingStore:
         except Exception:
             pass
 
-    def _search_vectors(self, query_vector: List[float], limit: int = 5) -> List[str]:
+    def _search_vectors(self, query_vector: list[float], limit: int = 5) -> list[str]:
         if not self._qdrant:
             return []
         try:
-            results = self._qdrant.search(
-                collection_name=self._collection,
-                query_vector=query_vector,
-                limit=limit,
-            )
-            return [r.id for r in results]
+            search_fn = getattr(self._qdrant, "search", None)
+            if callable(search_fn):
+                results = search_fn(
+                    collection_name=self._collection,
+                    query_vector=query_vector,
+                    limit=limit,
+                )
+                return [r.id for r in results]
+            return []
         except Exception:
             return []
 
     def add(self, example: CodingExample) -> CodingExample:
-        example.updated_at = datetime.now(timezone.utc).isoformat()
+        example.updated_at = datetime.now(UTC).isoformat()
         self._examples.append(example)
         self._save()
         self._upsert_vector(example)
         return example
 
-    def add_batch(self, examples: List[CodingExample]) -> int:
+    def add_batch(self, examples: list[CodingExample]) -> int:
         for e in examples:
-            e.updated_at = datetime.now(timezone.utc).isoformat()
+            e.updated_at = datetime.now(UTC).isoformat()
             self._examples.extend(examples)
             self._save()
             for ex in examples:
@@ -172,38 +178,38 @@ class CodingStore:
         for i, e in enumerate(self._examples):
             if e.id == example.id:
                 example.version += 1
-                example.updated_at = datetime.now(timezone.utc).isoformat()
+                example.updated_at = datetime.now(UTC).isoformat()
                 self._examples[i] = example
                 self._save()
                 self._upsert_vector(example)
                 return True
         return False
 
-    def get(self, example_id: str) -> Optional[CodingExample]:
+    def get(self, example_id: str) -> CodingExample | None:
         for e in self._examples:
             if e.id == example_id:
                 return e
         return None
 
-    def list_all(self) -> List[CodingExample]:
+    def list_all(self) -> list[CodingExample]:
         return list(self._examples)
 
-    def search(self, query: str, category: Optional[str] = None, limit: int = 5) -> List[CodingExample]:
+    def search(self, query: str, category: str | None = None, limit: int = 5) -> list[CodingExample]:
         q = query.lower()
         results = []
         for e in self._examples:
             if category and e.category != category:
                 continue
-            score = 0
+            score: float = 0.0
             for word in q.split():
                 if word in e.task.lower():
-                    score += 3
+                    score += 3.0
                 if word in e.tags:
-                    score += 2
+                    score += 2.0
                 if word in e.category.lower():
-                    score += 1
+                    score += 1.0
                 if word in e.explanation.lower():
-                    score += 1
+                    score += 1.0
             # Quality boost: higher-rated examples rank higher
             score += e.avg_rating * 0.5
             score += min(e.use_count * 0.1, 2.0)
@@ -212,10 +218,15 @@ class CodingStore:
         results.sort(key=lambda x: (-x[0], -x[1].avg_rating))
         return [e for _, e in results[:limit]]
 
-    def search_semantic(self, query_vector: List[float], limit: int = 5) -> List[CodingExample]:
+    def search_semantic(self, query_vector: list[float], limit: int = 5) -> list[CodingExample]:
         """Vector similarity search via Qdrant."""
         ids = self._search_vectors(query_vector, limit)
-        return [self.get(id) for id in ids if self.get(id)]
+        matched: list[CodingExample] = []
+        for id_val in ids:
+            ex = self.get(id_val)
+            if ex is not None:
+                matched.append(ex)
+        return matched
 
     def record_outcome(self, example_id: str, succeeded: bool, rating: float = 0.0) -> bool:
         ex = self.get(example_id)
@@ -225,16 +236,20 @@ class CodingStore:
         self._save()
         return True
 
-    def get_top_rated(self, limit: int = 10) -> List[CodingExample]:
+    def get_top_rated(self, limit: int = 10) -> list[CodingExample]:
         scored = [(e.avg_rating * 2 + e.success_rate + min(e.use_count * 0.1, 3), e) for e in self._examples]
         scored.sort(key=lambda x: -x[0])
         return [e for _, e in scored[:limit]]
 
-    def get_underused(self, min_uses: int = 2) -> List[CodingExample]:
+    def get_underused(self, min_uses: int = 2) -> list[CodingExample]:
         return [e for e in self._examples if e.use_count < min_uses]
 
-    def get_low_quality(self, min_success_rate: float = 0.5) -> List[CodingExample]:
-        return [e for e in self._examples if (e.success_count + e.fail_count) > 3 and e.success_rate < min_success_rate]
+    def get_low_quality(self, min_success_rate: float = 0.5) -> list[CodingExample]:
+        return [
+            e
+            for e in self._examples
+            if (e.success_count + e.fail_count) > 3 and e.success_rate < min_success_rate
+        ]
 
     def deprecate(self, example_id: str) -> bool:
         ex = self.get(example_id)
@@ -251,7 +266,14 @@ class CodingStore:
                 self._save()
                 if self._qdrant:
                     try:
-                        self._qdrant.delete(collection_name=self._collection, points=[example_id])
+                        delete_fn = getattr(self._qdrant, "delete", None)
+                        if callable(delete_fn):
+                            from qdrant_client.http.models import PointIdsList
+
+                            delete_fn(
+                                collection_name=self._collection,
+                                points_selector=PointIdsList(points=[example_id]),
+                            )
                     except Exception:
                         pass
                 return True
@@ -266,15 +288,16 @@ class CodingStore:
         )
         return export_path
 
-    def import_from_git(self, repo_path: str, patterns: List[str] = None) -> int:
+    def import_from_git(self, repo_path: str, patterns: list[str] | None = None) -> int:
         """Auto-ingest coding examples from a git repository."""
         from nexus.application.training.git_ingester import GitIngester
+
         ingester = GitIngester(self)
         return ingester.ingest_repo(repo_path, patterns or ["*.py"])
 
-    def stats(self) -> Dict[str, Any]:
-        categories = {}
-        langs = {}
+    def stats(self) -> dict[str, Any]:
+        categories: dict[str, int] = {}
+        langs: dict[str, int] = {}
         total_uses = 0
         total_success = 0
         for e in self._examples:

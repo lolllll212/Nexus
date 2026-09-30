@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from nexus.application.training.coding_store import CodingExample
 
-
 SEED_EXAMPLES = [
     # ── Algorithms ──────────────────────────────────────────
     CodingExample(
@@ -23,7 +22,9 @@ SEED_EXAMPLES = [
         else:
             hi = mid - 1
     return -1""",
-        language="python", category="algorithms", difficulty="easy",
+        language="python",
+        category="algorithms",
+        difficulty="easy",
         tags=["search", "array", "divide-and-conquer"],
         explanation="Divide search space in half each step. O(log n) time, O(1) space.",
         test_cases="""assert binary_search([1, 2, 3, 4, 5], 3) == 2
@@ -55,7 +56,9 @@ def merge(left, right):
     result.extend(left[i:])
     result.extend(right[j:])
     return result""",
-        language="python", category="algorithms", difficulty="medium",
+        language="python",
+        category="algorithms",
+        difficulty="medium",
         tags=["sort", "divide-and-conquer", "recursive"],
         explanation="Recursively split array in half, merge sorted halves. Stable sort.",
         test_cases="""assert merge_sort([3, 1, 4, 1, 5, 9]) == [1, 1, 3, 4, 5, 9]
@@ -101,7 +104,9 @@ assert merge_sort([1]) == [1]""",
         for bucket in old:
             for k, v in bucket:
                 self.put(k, v)""",
-        language="python", category="data-structures", difficulty="hard",
+        language="python",
+        category="data-structures",
+        difficulty="hard",
         tags=["hashmap", "hash-table", "data-structure"],
         explanation="Array of buckets (linked lists). Hash key to bucket index. Resize at 75% load.",
         test_cases="""hm = HashMap()
@@ -111,7 +116,6 @@ assert hm.get("a") == 1
 assert hm.get("b") == 2
 assert hm.get("c") is None""",
     ),
-
     # ── Data Structures ─────────────────────────────────────
     CodingExample(
         task="Implement a stack with O(1) push, pop, and get_min",
@@ -144,7 +148,9 @@ assert hm.get("c") is None""",
 
     def is_empty(self):
         return len(self.stack) == 0""",
-        language="python", category="data-structures", difficulty="medium",
+        language="python",
+        category="data-structures",
+        difficulty="medium",
         tags=["stack", "min-stack", "data-structure"],
         explanation="Parallel min-stack mirrors the main stack. Push to min-stack only when value <= current min.",
         test_cases="""s = MinStack()
@@ -177,7 +183,9 @@ class LRUCache:
         self.cache[key] = value
         if len(self.cache) > self.capacity:
             self.cache.popitem(last=False)""",
-        language="python", category="data-structures", difficulty="medium",
+        language="python",
+        category="data-structures",
+        difficulty="medium",
         tags=["cache", "lru", "ordered-dict"],
         explanation="OrderedDict with move_to_end. Evict oldest when over capacity.",
         test_cases="""c = LRUCache(2)
@@ -186,7 +194,6 @@ assert c.get(1) == 1
 c.put(3, 3)  # evicts key 2
 assert c.get(2) == -1""",
     ),
-
     # ── String manipulation ─────────────────────────────────
     CodingExample(
         task="Check if a string is a valid palindrome",
@@ -194,7 +201,9 @@ assert c.get(2) == -1""",
     \"\"\"Check palindrome ignoring non-alphanumeric chars and case.\"\"\"
     cleaned = ''.join(c.lower() for c in s if c.isalnum())
     return cleaned == cleaned[::-1]""",
-        language="python", category="strings", difficulty="easy",
+        language="python",
+        category="strings",
+        difficulty="easy",
         tags=["palindrome", "string", "two-pointers"],
         explanation="Clean string, compare with reverse. Two-pointer approach is more efficient.",
         test_cases="""assert is_palindrome("A man, a plan, a canal: Panama") == True
@@ -217,14 +226,15 @@ assert is_palindrome("") == True""",
                     max_len = dp[i][j]
                     end_pos = i
     return s1[end_pos - max_len:end_pos]""",
-        language="python", category="strings", difficulty="medium",
+        language="python",
+        category="strings",
+        difficulty="medium",
         tags=["substring", "dynamic-programming", "dp"],
         explanation="2D DP table. dp[i][j] = length of common substring ending at s1[i-1], s2[j-1].",
         test_cases="""assert longest_common_substring("abcdef", "zbcdf") == "bcd"
 assert longest_common_substring("abc", "def") == ""
 assert longest_common_substring("abc", "abc") == "abc""",
     ),
-
     # ── Trees ───────────────────────────────────────────────
     CodingExample(
         task="Implement a binary search tree with insert, search, and in-order traversal",
@@ -270,7 +280,9 @@ class BST:
             self._inorder(node.left, result)
             result.append(node.val)
             self._inorder(node.right, result)""",
-        language="python", category="trees", difficulty="medium",
+        language="python",
+        category="trees",
+        difficulty="medium",
         tags=["bst", "binary-tree", "tree"],
         explanation="Recursive insert/search. In-order traversal gives sorted order.",
         test_cases="""bst = BST()
@@ -280,7 +292,6 @@ assert bst.inorder() == [1, 3, 4, 5, 7]
 assert bst.search(4).val == 4
 assert bst.search(8) is None""",
     ),
-
     # ── Graphs ──────────────────────────────────────────────
     CodingExample(
         task="Implement BFS and DFS for a graph",
@@ -318,7 +329,9 @@ class Graph:
                     _dfs(neighbor)
         _dfs(start)
         return order""",
-        language="python", category="graphs", difficulty="medium",
+        language="python",
+        category="graphs",
+        difficulty="medium",
         tags=["bfs", "dfs", "graph", "traversal"],
         explanation="BFS uses queue (level-order). DFS uses stack/recursion (depth-first).",
         test_cases="""g = Graph()
@@ -327,7 +340,6 @@ for u, v in [(0,1),(0,2),(1,3),(2,3)]:
 assert 0 in g.bfs(0)
 assert 0 in g.dfs(0)""",
     ),
-
     # ── Dynamic Programming ─────────────────────────────────
     CodingExample(
         task="Solve the coin change problem",
@@ -340,7 +352,9 @@ assert 0 in g.dfs(0)""",
             if coin <= i and dp[i - coin] + 1 < dp[i]:
                 dp[i] = dp[i - coin] + 1
     return dp[amount] if dp[amount] != float('inf') else -1""",
-        language="python", category="dynamic-programming", difficulty="medium",
+        language="python",
+        category="dynamic-programming",
+        difficulty="medium",
         tags=["dp", "coin-change", "optimization"],
         explanation="Bottom-up DP. dp[i] = min coins to make amount i. Try each coin.",
         test_cases="""assert coin_change([1, 5, 10, 25], 30) == 2
@@ -360,14 +374,15 @@ assert coin_change([1], 0) == 0""",
         else:
             tails[pos] = num
     return len(tails)""",
-        language="python", category="dynamic-programming", difficulty="hard",
+        language="python",
+        category="dynamic-programming",
+        difficulty="hard",
         tags=["dp", "lis", "binary-search", "patience-sorting"],
         explanation="Maintain tails array where tails[i] = smallest tail of all increasing subsequences of length i+1.",
         test_cases="""assert longest_increasing_subsequence([10, 9, 2, 5, 3, 7, 101, 18]) == 4
 assert longest_increasing_subsequence([0, 1, 0, 3, 2, 3]) == 4
 assert longest_increasing_subsequence([7, 7, 7, 7]) == 1""",
     ),
-
     # ── System Design ───────────────────────────────────────
     CodingExample(
         task="Implement a rate limiter using token bucket algorithm",
@@ -393,7 +408,9 @@ class TokenBucket:
             self.tokens -= 1
             return True
         return False""",
-        language="python", category="system-design", difficulty="medium",
+        language="python",
+        category="system-design",
+        difficulty="medium",
         tags=["rate-limiter", "token-bucket", "concurrency"],
         explanation="Tokens refill at constant rate. Each request consumes one token. Bucket has max capacity.",
         test_cases="""b = TokenBucket(5, 10)
@@ -402,7 +419,6 @@ for _ in range(4):
     b.allow()
 assert b.allow() == False  # bucket empty""",
     ),
-
     # ── DevOps / Shell ──────────────────────────────────────
     CodingExample(
         task="Write a Python script to find large files in a directory",
@@ -425,7 +441,9 @@ if __name__ == "__main__":
     directory = sys.argv[1] if len(sys.argv) > 1 else "."
     for path, size in find_large_files(directory):
         print(f"{size:8.1f} MB  {path}")""",
-        language="python", category="devops", difficulty="easy",
+        language="python",
+        category="devops",
+        difficulty="easy",
         tags=["file-system", "cli", "utilities"],
         explanation="Walk directory tree, check file sizes, sort by size descending.",
         test_cases="""from pathlib import Path
@@ -434,7 +452,6 @@ results = find_large_files(".", min_size_mb=5)
 assert len(results) >= 1
 Path("_test_big.txt").unlink()""",
     ),
-
     # ── Testing ─────────────────────────────────────────────
     CodingExample(
         task="Write comprehensive unit tests for a function",
@@ -469,13 +486,14 @@ class TestAdd:
     def test_type_error(self):
         with pytest.raises(TypeError):
             add("a", 1)""",
-        language="python", category="testing", difficulty="easy",
+        language="python",
+        category="testing",
+        difficulty="easy",
         tags=["pytest", "testing", "unit-tests"],
         explanation="Test edge cases: zeros, negatives, floats, different types. Use pytest.approx for floats.",
         test_cases="""# Run with: pytest test_add.py -v
 # All tests should pass""",
     ),
-
     # ── API / HTTP ──────────────────────────────────────────
     CodingExample(
         task="Build a simple REST API with FastAPI",
@@ -516,7 +534,9 @@ def delete_item(item_id: int):
         raise HTTPException(404, "Item not found")
     del items[item_id]
     return {"deleted": True}""",
-        language="python", category="api", difficulty="medium",
+        language="python",
+        category="api",
+        difficulty="medium",
         tags=["fastapi", "rest", "api", "web"],
         explanation="Pydantic models for validation. In-memory dict storage. CRUD endpoints.",
         test_cases="""from fastapi.testclient import TestClient
@@ -528,7 +548,6 @@ r = client.get(f"/items/{item_id}")
 assert r.json()["name"] == "Test"
 """,
     ),
-
     # ── Data Processing ─────────────────────────────────────
     CodingExample(
         task="Parse and analyze a CSV file with Python",
@@ -564,7 +583,9 @@ def analyze_csv(filepath):
             stats["numeric_stats"][col] = {"unique": len(freq), "top": freq.most_common(3)}
 
     return stats""",
-        language="python", category="data-processing", difficulty="medium",
+        language="python",
+        category="data-processing",
+        difficulty="medium",
         tags=["csv", "data-analysis", "file-io"],
         explanation="Use csv.DictReader for automatic header parsing. Try numeric conversion, fall back to frequency count.",
         test_cases="""import tempfile, os

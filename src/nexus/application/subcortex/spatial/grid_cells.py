@@ -10,14 +10,13 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from typing import List, Optional
 
 from nexus.domain.value_objects.hex_grid import HexCoord, HexGrid, hex_line
 
 
 @dataclass
 class NavigationResult:
-    path: List[HexCoord] = field(default_factory=list)
+    path: list[HexCoord] = field(default_factory=list)
     distance: int = 0
     found: bool = False
 
@@ -43,23 +42,23 @@ class GridCellNavigationUseCase:
         self._grid = HexGrid(radius=radius)
         self._placements: dict[str, HexCoord] = {}
 
-    def place_concept(self, label: str, coord: Optional[HexCoord] = None) -> HexCoord:
+    def place_concept(self, label: str, coord: HexCoord | None = None) -> HexCoord:
         coord = coord or concept_coord(label, self._grid.radius)
         if self._grid.contains(coord):
             self._grid.set_feature(coord, label)
             self._placements[label] = coord
         return coord
 
-    def block_region(self, labels: List[str]) -> None:
+    def block_region(self, labels: list[str]) -> None:
         for label in labels:
             coord = self._placements.get(label)
             if coord:
                 self._grid.block(coord)
 
-    def locate(self, label: str) -> Optional[HexCoord]:
+    def locate(self, label: str) -> HexCoord | None:
         return self._placements.get(label)
 
-    def straight_line(self, start: HexCoord, goal: HexCoord) -> List[HexCoord]:
+    def straight_line(self, start: HexCoord, goal: HexCoord) -> list[HexCoord]:
         return hex_line(start, goal)
 
     def navigate(self, start_label: str, goal_label: str) -> NavigationResult:
@@ -72,7 +71,7 @@ class GridCellNavigationUseCase:
             return NavigationResult(distance=start.distance_to(goal), found=False)
         return NavigationResult(path=path, distance=len(path) - 1, found=True)
 
-    def distance_between(self, label_a: str, label_b: str) -> Optional[int]:
+    def distance_between(self, label_a: str, label_b: str) -> int | None:
         a, b = self._placements.get(label_a), self._placements.get(label_b)
         if a is None or b is None:
             return None

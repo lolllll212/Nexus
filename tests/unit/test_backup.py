@@ -8,8 +8,6 @@ from __future__ import annotations
 import json
 import pathlib
 
-import pytest
-
 from nexus.infrastructure.backup import BackupManager
 from nexus.infrastructure.backup.neo4j_backup import Neo4jBackup
 from nexus.infrastructure.backup.qdrant_backup import QdrantBackup
@@ -151,7 +149,7 @@ async def test_neo4j_export_import_roundtrip(tmp_path: pathlib.Path):
     assert dest.exists()
     lines = dest.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 3
-    kinds = [json.loads(l)["_kind"] for l in lines]
+    kinds = [json.loads(line_str)["_kind"] for line_str in lines]
     assert kinds.count("node") == 2
     assert kinds.count("rel") == 1
 
@@ -184,7 +182,7 @@ async def test_backup_manager_orchestrates_both(tmp_path: pathlib.Path):
     mgr2 = BackupManager(
         qdrant=qb, neo4j=nb, qdrant_collections=["nexus_memory"], retain_snapshots=10, dump_dir=tmp_path
     )
-    result2 = await mgr2.run(tenant_id="acme")
+    await mgr2.run(tenant_id="acme")
     # qdrant collection for acme is nexus_memory_acme -> post URL contains it
     assert any("nexus_memory_acme" in u for u in q_client.created)
 

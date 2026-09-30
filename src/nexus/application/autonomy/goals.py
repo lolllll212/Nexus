@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Protocol
+from typing import Protocol
 
 from nexus.domain.entities.goal import Goal, GoalPriority, GoalStatus, GoalStep, StepStatus
 from nexus.domain.exceptions import GoalNotFoundError, GoalStatusError, QuotaExceededError
@@ -14,7 +14,7 @@ from nexus.domain.ports.goal_repository import GoalRepository
 class StepExecutor(Protocol):
     """Executes a single bounded unit of autonomous work."""
 
-    async def run_step(self, goal: Goal, step: GoalStep, tenant_id: str) -> "StepOutcome": ...
+    async def run_step(self, goal: Goal, step: GoalStep, tenant_id: str) -> StepOutcome: ...
 
 
 @dataclass
@@ -102,14 +102,12 @@ class ListGoalsUseCase:
     def __init__(self, repo: GoalRepository) -> None:
         self._repo = repo
 
-    async def execute(
-        self, tenant_id: str, status: Optional[GoalStatus] = None, limit: int = 50
-    ) -> List[Goal]:
+    async def execute(self, tenant_id: str, status: GoalStatus | None = None, limit: int = 50) -> list[Goal]:
         if status is not None:
             return await self._repo.list_by_status(status, tenant_id=tenant_id, limit=limit)
         return await self._repo.list_active(tenant_id=tenant_id, limit=limit)
 
-    async def list_all(self, tenant_id: str, limit: int = 200) -> List[Goal]:
+    async def list_all(self, tenant_id: str, limit: int = 200) -> list[Goal]:
         return await self._repo.list_all(tenant_id=tenant_id, limit=limit)
 
 
@@ -157,9 +155,9 @@ class AutonomyLoopUseCase:
         await self._repo.save(goal, tenant_id=tenant_id)
         return goal
 
-    async def run_all_active(self, tenant_id: str = "default", limit: int = 10) -> List[Goal]:
+    async def run_all_active(self, tenant_id: str = "default", limit: int = 10) -> list[Goal]:
         active = await self._repo.list_active(tenant_id=tenant_id, limit=limit)
-        results: List[Goal] = []
+        results: list[Goal] = []
         for goal in active:
             results.append(await self.run_goal(goal, tenant_id))
         return results
