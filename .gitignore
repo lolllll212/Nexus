@@ -56,3 +56,4 @@ _test_*.py
 *.tmp
 data/coding_examples_*.json
 py_deps/
+web_vendor/
