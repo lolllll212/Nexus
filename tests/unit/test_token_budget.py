@@ -43,7 +43,6 @@ async def test_large_observation_is_truncated():
     fake.llm = llm
     fake.process_message._llm = llm
 
-
     uc = fake.process_message
     uc.MAX_OBSERVATION_CHARS = 100  # force truncation hard
 
@@ -118,8 +117,8 @@ async def test_hard_budget_returns_synthesized_answer():
     fake = FakeContainer()
     fake.process_message._llm = fake.llm
 
-    from nexus.domain.entities.memory import Memory, MemoryType
     from nexus.domain.entities.conversation import Conversation
+    from nexus.domain.entities.memory import Memory, MemoryType
 
     uc = fake.process_message
     uc.SUMMARY_TRIGGER_TOKENS = 0  # always compact on first iteration

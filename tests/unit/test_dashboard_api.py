@@ -22,8 +22,7 @@ from fastapi.testclient import TestClient
 from nexus.domain.entities.tool import Tool
 from nexus.domain.value_objects.schema import JSONSchema
 from nexus.infrastructure.api.main import create_app
-
-from tests.fakes.container import FakeContainer, TEST_API_KEY_1, TEST_API_KEY_2
+from tests.fakes.container import TEST_API_KEY_1, TEST_API_KEY_2, FakeContainer
 
 AUTH = {"Authorization": f"Bearer {TEST_API_KEY_1}"}
 AUTH2 = {"Authorization": f"Bearer {TEST_API_KEY_2}"}

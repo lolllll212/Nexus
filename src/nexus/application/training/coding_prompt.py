@@ -7,10 +7,7 @@ from the training store to inject into the LLM context.
 
 from __future__ import annotations
 
-from typing import List, Optional
-
-from nexus.application.training.coding_store import CodingExample, CodingStore
-
+from nexus.application.training.coding_store import CodingStore
 
 CODING_SYSTEM_PROMPT = """You are NEXUS, an expert coding assistant. You write clean, efficient, well-tested code.
 
@@ -56,7 +53,7 @@ class CodingRAG:
         self._store = store
         self._max_examples = max_examples
 
-    def build_coding_prompt(self, task: str, category: Optional[str] = None) -> str:
+    def build_coding_prompt(self, task: str, category: str | None = None) -> str:
         """Build a prompt with relevant few-shot examples appended."""
         examples = self._store.search(task, category=category, limit=self._max_examples)
 
@@ -73,7 +70,7 @@ class CodingRAG:
         prompt_parts.append(f"\n## Current task\n{task}")
         return "\n".join(prompt_parts)
 
-    def get_few_shot_context(self, task: str, category: Optional[str] = None) -> str:
+    def get_few_shot_context(self, task: str, category: str | None = None) -> str:
         """Get just the few-shot examples text (without the system prompt)."""
         examples = self._store.search(task, category=category, limit=self._max_examples)
         if not examples:

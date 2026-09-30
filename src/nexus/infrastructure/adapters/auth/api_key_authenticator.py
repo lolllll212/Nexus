@@ -6,7 +6,7 @@ database. Swap for a JWT or OAuth adapter by implementing the same port.
 
 from __future__ import annotations
 
-from typing import Dict
+import secrets
 
 from nexus.domain.exceptions import UnauthorizedError
 from nexus.domain.ports.auth import Authenticator
@@ -21,9 +21,10 @@ class ApiKeyAuthenticator(Authenticator):
 
     Fail-closed: refuses to authenticate when the key table is empty,
     preventing accidental anonymous access in production.
+    Uses secrets.compare_digest to prevent timing side-channel attacks.
     """
 
-    def __init__(self, keys: Dict[str, Dict]) -> None:
+    def __init__(self, keys: dict[str, dict]) -> None:
         self._keys = keys or {}
         self._empty = len(self._keys) == 0
 
@@ -31,16 +32,19 @@ class ApiKeyAuthenticator(Authenticator):
         if not credential:
             raise UnauthorizedError("Missing credentials")
         if self._empty:
-            raise UnauthorizedError(
-                "No API keys configured. Set NEXUS_API_KEYS in .env to allow access."
-            )
-        record = self._keys.get(credential)
-        if record is None:
+            raise UnauthorizedError("No API keys configured. Set NEXUS_API_KEYS in .env to allow access.")
+        matched_record = None
+        for key, record in self._keys.items():
+            if secrets.compare_digest(key, credential):
+                matched_record = record
+
+        if matched_record is None:
             raise UnauthorizedError("Invalid credentials")
-        role = Role(record.get("role", Role.USER.value))
+
+        role = Role(matched_record.get("role", Role.USER.value))
         return Identity(
-            user_id=record.get("user_id", credential),
-            tenant_id=record.get("tenant_id", "default"),
+            user_id=matched_record.get("user_id", credential),
+            tenant_id=matched_record.get("tenant_id", "default"),
             role=role,
-            display_name=record.get("display_name", ""),
+            display_name=matched_record.get("display_name", ""),
         )

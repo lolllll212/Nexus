@@ -13,9 +13,8 @@ NEXUS literally builds its own new capabilities. On-the-fly engineering.
 
 import ast
 import re
-
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from nexus.domain.entities.tool import Tool, ToolStatus
 from nexus.domain.exceptions import ToolGenerationError
@@ -34,16 +33,16 @@ class ToolSpecRequest:
     name: str
     description: str
     problem_statement: str
-    requirements: List[str] = field(default_factory=list)
-    input_examples: List[Dict[str, Any]] = field(default_factory=list)
-    expected_outputs: List[Dict[str, Any]] = field(default_factory=list)
+    requirements: list[str] = field(default_factory=list)
+    input_examples: list[dict[str, Any]] = field(default_factory=list)
+    expected_outputs: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
 class GenerateToolResult:
     tool: Tool
     tests_passed: int
-    endpoint: Optional[str] = None
+    endpoint: str | None = None
 
 
 MAX_TOOL_NAME_LENGTH = 64
@@ -118,7 +117,7 @@ class GenerateToolUseCase:
         sandbox: Sandbox,
         registry: ToolRegistry,
         executor: ToolExecutor,
-        deployer: Optional[DeploymentProvider] = None,
+        deployer: DeploymentProvider | None = None,
     ) -> None:
         self._llm = llm
         self._sandbox = sandbox
@@ -199,7 +198,7 @@ class GenerateToolUseCase:
         _validate_code(code)
         return code
 
-    def _infer_schema(self, examples: List[Dict[str, Any]]) -> JSONSchema:
+    def _infer_schema(self, examples: list[dict[str, Any]]) -> JSONSchema:
         """Build a loose JSON schema from example payloads."""
         properties = {}
         for example in examples:

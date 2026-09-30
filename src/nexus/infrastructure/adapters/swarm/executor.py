@@ -7,8 +7,6 @@ ReAct loop during the run, then restored afterwards.
 
 from __future__ import annotations
 
-from typing import List, Optional, Set
-
 from nexus.application.cortex.process_message import ProcessMessageUseCase
 from nexus.domain.entities.agent import Agent
 from nexus.domain.entities.tool import Tool
@@ -18,7 +16,7 @@ from nexus.domain.ports.tool_registry import ToolRegistry
 class _FilteredToolRegistry(ToolRegistry):
     """View over a registry exposing only allowlisted tool names."""
 
-    def __init__(self, inner: ToolRegistry, allowlist: Set[str]) -> None:
+    def __init__(self, inner: ToolRegistry, allowlist: set[str]) -> None:
         self._inner = inner
         self._allowlist = allowlist
 
@@ -28,16 +26,16 @@ class _FilteredToolRegistry(ToolRegistry):
     async def register(self, tool: Tool) -> None:
         await self._inner.register(tool)
 
-    async def get(self, tool_id: str) -> Optional[Tool]:
+    async def get(self, tool_id: str) -> Tool | None:
         tool = await self._inner.get(tool_id)
         if tool is not None and not self._allowed(tool):
             return None
         return tool
 
-    async def search(self, query: str, limit: int = 5) -> List[Tool]:
+    async def search(self, query: str, limit: int = 5) -> list[Tool]:
         return [t for t in await self._inner.search(query, limit * 4) if self._allowed(t)][:limit]
 
-    async def list_all(self) -> List[Tool]:
+    async def list_all(self) -> list[Tool]:
         return [t for t in await self._inner.list_all() if self._allowed(t)]
 
     async def update(self, tool: Tool) -> None:
@@ -54,9 +52,7 @@ class SwarmAgentExecutor:
     async def run_agent(self, agent: Agent, task: str, tenant_id: str) -> str:
         tools_registry = None
         if agent.tools:
-            tools_registry = _FilteredToolRegistry(
-                self._tool_registry, set(agent.tools)
-            )
+            tools_registry = _FilteredToolRegistry(self._tool_registry, set(agent.tools))
         result = await self._process_message.execute(
             user_id=agent.owner_id,
             message=task,

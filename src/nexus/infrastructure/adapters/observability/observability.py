@@ -13,7 +13,7 @@ import logging
 import time
 import uuid
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from nexus.domain.ports.observability import Metrics, Span, Tracer
 
@@ -58,14 +58,14 @@ def configure_logging(level: int = logging.INFO, json_format: bool = True) -> No
 
 
 class _LoggingSpan(Span):
-    def __init__(self, name: str, attributes: Optional[Dict[str, Any]], start_time: float, emitter) -> None:
+    def __init__(self, name: str, attributes: dict[str, Any] | None, start_time: float, emitter) -> None:
         super().__init__(name)
         self.attributes = dict(attributes or {})
         self._emitter = emitter
         self._start = start_time
-        self._tokens: Tuple = ()
+        self._tokens: tuple = ()
 
-    async def __aenter__(self) -> "Span":
+    async def __aenter__(self) -> Span:
         trace_id = _TRACE_ID.get() or str(uuid.uuid4())
         parent = _SPAN_ID.get()
         span_id = str(uuid.uuid4())
@@ -91,14 +91,14 @@ class LoggingTracer(Tracer):
     def __init__(self, logger: logging.Logger | None = None) -> None:
         self._log = logger or _logger
 
-    def span(self, name: str, attributes: Optional[Dict[str, Any]] = None) -> Span:
+    def span(self, name: str, attributes: dict[str, Any] | None = None) -> Span:
         return _LoggingSpan(name, attributes, time.perf_counter(), self._emit)
 
-    def _emit(self, event: str, attrs: Dict[str, Any]) -> None:
+    def _emit(self, event: str, attrs: dict[str, Any]) -> None:
         self._log.info(json.dumps({"event": event, **attrs}, default=str))
 
 
-def _fmt_labels(labels: Optional[Dict[str, str]]) -> str:
+def _fmt_labels(labels: dict[str, str] | None) -> str:
     if not labels:
         return ""
     return "{" + ",".join(f'{k}="{v}"' for k, v in sorted(labels.items())) + "}"
@@ -108,25 +108,25 @@ class InMemoryMetrics(Metrics):
     """Metrics in process memory - suitable for single-node deployments."""
 
     def __init__(self) -> None:
-        self._counters: Dict[Tuple, float] = defaultdict(float)
-        self._gauges: Dict[Tuple, float] = {}
-        self._histograms: Dict[Tuple, List[float]] = defaultdict(list)
+        self._counters: dict[tuple, float] = defaultdict(float)
+        self._gauges: dict[tuple, float] = {}
+        self._histograms: dict[tuple, list[float]] = defaultdict(list)
 
-    def _key(self, name: str, labels: Optional[Dict[str, str]]) -> Tuple:
+    def _key(self, name: str, labels: dict[str, str] | None) -> tuple:
         labels = labels or {}
         return (name, tuple(sorted(labels.items())))
 
-    def counter(self, name: str, value: float = 1.0, labels: Optional[Dict[str, str]] = None) -> None:
+    def counter(self, name: str, value: float = 1.0, labels: dict[str, str] | None = None) -> None:
         self._counters[self._key(name, labels)] += value
 
-    def histogram(self, name: str, value: float, labels: Optional[Dict[str, str]] = None) -> None:
+    def histogram(self, name: str, value: float, labels: dict[str, str] | None = None) -> None:
         self._histograms[self._key(name, labels)].append(float(value))
 
-    def gauge(self, name: str, value: float, labels: Optional[Dict[str, str]] = None) -> None:
+    def gauge(self, name: str, value: float, labels: dict[str, str] | None = None) -> None:
         self._gauges[self._key(name, labels)] = float(value)
 
     def render(self) -> str:
-        lines: List[str] = []
+        lines: list[str] = []
         for (name, labels), value in sorted(self._counters.items()):
             lines.append(f"# TYPE {name} counter")
             lines.append(f"{name}{_fmt_labels(dict(labels))} {value}")

@@ -12,7 +12,6 @@ requesting tenant. A Neo4j database can also be allocated per tenant via the
 from __future__ import annotations
 
 import json
-from typing import Dict, List, Optional
 
 from nexus.domain.entities.concept import Concept, SynapticConnection
 from nexus.domain.entities.memory import Memory, MemoryType
@@ -66,7 +65,7 @@ class Neo4jConceptRepository(ConceptRepository):
                 access_count=concept.access_count,
             )
 
-    async def get(self, concept_id: str, tenant_id: str = "default") -> Optional[Concept]:
+    async def get(self, concept_id: str, tenant_id: str = "default") -> Concept | None:
         cypher = "MATCH (c:Concept {id: $id, tenant: $tenant}) RETURN c"
         async with self._driver.session(database=self._database) as session:
             result = await session.run(cypher, id=concept_id, tenant=tenant_id)
@@ -84,7 +83,7 @@ class Neo4jConceptRepository(ConceptRepository):
             access_count=node.get("access_count", 0),
         )
 
-    async def get_memories(self, concept_id: str, tenant_id: str = "default") -> List[Memory]:
+    async def get_memories(self, concept_id: str, tenant_id: str = "default") -> list[Memory]:
         """Retrieve memories linked to a concept via its embeddings/properties."""
         cypher = """
         MATCH (c:Concept {id: $id, tenant: $tenant})-[:MENTIONS]->(m:Memory)
@@ -107,7 +106,7 @@ class Neo4jConceptRepository(ConceptRepository):
             )
         return memories
 
-    async def find_by_label(self, label: str, limit: int = 10, tenant_id: str = "default") -> List[Concept]:
+    async def find_by_label(self, label: str, limit: int = 10, tenant_id: str = "default") -> list[Concept]:
         cypher = """
         MATCH (c:Concept)
         WHERE c.tenant = $tenant AND c.label CONTAINS $label
@@ -145,7 +144,7 @@ class Neo4jConceptRepository(ConceptRepository):
 
     async def get_connections(
         self, concept_id: str, min_weight: float = 0.0, tenant_id: str = "default"
-    ) -> List[SynapticConnection]:
+    ) -> list[SynapticConnection]:
         cypher = """
         MATCH (a:Concept {id: $id, tenant: $tenant})-[r:CONNECTS]->(b:Concept {tenant: $tenant})
         WHERE r.weight >= $min_weight
@@ -167,7 +166,7 @@ class Neo4jConceptRepository(ConceptRepository):
         ]
 
     async def get_or_create(
-        self, label: str, concept_type: str, properties: Optional[Dict] = None, tenant_id: str = "default"
+        self, label: str, concept_type: str, properties: dict | None = None, tenant_id: str = "default"
     ) -> Concept:
         cypher = """
         MERGE (c:Concept {label: $label, type: $type, tenant: $tenant})
@@ -213,7 +212,7 @@ class Neo4jConceptRepository(ConceptRepository):
         await self.upsert_connection(conn, tenant_id=tenant_id)
         return conn
 
-    async def find_weakest(self, limit: int = 100, tenant_id: str = "default") -> List[SynapticConnection]:
+    async def find_weakest(self, limit: int = 100, tenant_id: str = "default") -> list[SynapticConnection]:
         cypher = """
         MATCH (a:Concept)-[r:CONNECTS]->(b:Concept)
         WHERE a.tenant = $tenant AND b.tenant = $tenant

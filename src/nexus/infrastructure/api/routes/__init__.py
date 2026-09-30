@@ -1,1 +1,43 @@
-"""Chat routes - the conscious loop's public interface."""
+"""API routes for NEXUS."""
+
+from nexus.infrastructure.api.routes import (
+    analyze,
+    audio,
+    chat,
+    coding,
+    coding_assistant,
+    goals,
+    graph,
+    integrations,
+    mcp,
+    memory,
+    multimodal,
+    nim,
+    research,
+    swarm,
+    system,
+    telemetry,
+    tools,
+    workflows,
+)
+
+__all__ = [
+    "analyze",
+    "audio",
+    "chat",
+    "coding",
+    "coding_assistant",
+    "goals",
+    "graph",
+    "integrations",
+    "mcp",
+    "memory",
+    "multimodal",
+    "nim",
+    "research",
+    "swarm",
+    "system",
+    "telemetry",
+    "tools",
+    "workflows",
+]

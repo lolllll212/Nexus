@@ -10,7 +10,6 @@ waiting in their working memory.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List
 
 from nexus.domain.entities.memory import Memory, MemoryType
 from nexus.domain.ports.execution import ToolExecutor
@@ -26,14 +25,14 @@ class SimulatedSolution:
     hypothesis: str
     verified: bool
     notes: str = ""
-    scaffold: Dict[str, str] = field(default_factory=dict)  # deployable microservice files
+    scaffold: dict[str, str] = field(default_factory=dict)  # deployable microservice files
 
 
 @dataclass
 class SimulationResult:
     problems_identified: int
     solutions_tested: int = 0
-    solutions_verified: List[SimulatedSolution] = field(default_factory=list)
+    solutions_verified: list[SimulatedSolution] = field(default_factory=list)
     deployments_ready: int = 0
 
 
@@ -119,7 +118,9 @@ class SimulationUseCase:
         self._memory_repo = memory_repo
         self._working_memory = working_memory
 
-    async def run(self, unresolved_memories: List[Memory], max_sandboxes: int = 5, tenant_id: str = "default") -> SimulationResult:
+    async def run(
+        self, unresolved_memories: list[Memory], max_sandboxes: int = 5, tenant_id: str = "default"
+    ) -> SimulationResult:
         result = SimulationResult(problems_identified=len(unresolved_memories))
 
         problems = await self._extract_problems(unresolved_memories)
@@ -149,17 +150,15 @@ class SimulationUseCase:
                         {"problem": s.problem, "solution": s.hypothesis, "notes": s.notes}
                         for s in result.solutions_verified
                     ],
-                    "deployables": {
-                        s.problem: s.scaffold for s in result.solutions_verified if s.scaffold
-                    },
-                    "generated_at": __import__("datetime").datetime.utcnow().isoformat(),
+                    "deployables": {s.problem: s.scaffold for s in result.solutions_verified if s.scaffold},
+                    "generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
                 },
                 ttl_seconds=86400,
             )
 
         return result
 
-    async def _extract_problems(self, memories: List[Memory]) -> List[str]:
+    async def _extract_problems(self, memories: list[Memory]) -> list[str]:
         if not memories:
             return []
         try:
@@ -179,7 +178,9 @@ class SimulationUseCase:
         """Generate a candidate microservice scaffold and verify it in the sandbox."""
         solve_code = await self._write_solve_function(problem)
         if not solve_code:
-            return SimulatedSolution(problem=problem, hypothesis="", verified=False, notes="LLM returned no code")
+            return SimulatedSolution(
+                problem=problem, hypothesis="", verified=False, notes="LLM returned no code"
+            )
 
         scaffold = self._build_scaffold(problem, solve_code)
         try:
@@ -211,7 +212,7 @@ class SimulationUseCase:
                         "role": "system",
                         "content": (
                             "Write a single self-contained Python function `solve(input_data: dict) -> dict` "
-                            "that solves this problem. Return ONLY code, no explanations.",
+                            "that solves this problem. Return ONLY code, no explanations."
                         ),
                     },
                     {"role": "user", "content": problem},
@@ -222,13 +223,15 @@ class SimulationUseCase:
 
         if "```" in code:
             code = code.split("```")[1]
-            if code.startswith("python"):
-                code = code[len("python"):]
+            code = code.removeprefix("python")
         return code.strip()
 
-    def _build_scaffold(self, problem: str, solve_code: str) -> Dict[str, str]:
+    def _build_scaffold(self, problem: str, solve_code: str) -> dict[str, str]:
         """Assemble a deployable FastAPI microservice around the solve() function."""
-        slug = "".join(ch for ch in problem.lower().replace(" ", "-") if ch.isalnum() or ch == "-")[:40] or "solve"
+        slug = (
+            "".join(ch for ch in problem.lower().replace(" ", "-") if ch.isalnum() or ch == "-")[:40]
+            or "solve"
+        )
         sample_input = {"query": problem[:120]}
         return {
             "requirements.txt": "fastapi\nuvicorn\npydantic\nhttpx\npytest",

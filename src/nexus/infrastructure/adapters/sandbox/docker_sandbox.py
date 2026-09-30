@@ -16,7 +16,7 @@ import json
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from nexus.domain.ports.sandbox import Sandbox
 
@@ -40,16 +40,16 @@ class DockerSandbox(Sandbox):
         self._pids_limit = pids_limit
         self._default_timeout = timeout
 
-    async def run(self, code: str, inputs: Dict[str, Any] = None, timeout: int | None = None) -> Dict[str, Any]:
+    async def run(
+        self, code: str, inputs: dict[str, Any] | None = None, timeout: int | None = None
+    ) -> dict[str, Any]:
         started = time.monotonic()
         timeout = timeout or self._default_timeout
         inputs = inputs or {}
 
         script = (
             "import json, sys, traceback\n"
-            "def solve(input_data):\n"
-            + _indent(code, 4)
-            + "\n"
+            "def solve(input_data):\n" + _indent(code, 4) + "\n"
             "try:\n"
             "    result = solve(json.loads(sys.argv[1]))\n"
             "    print(json.dumps({'ok': True, 'result': result}))\n"
@@ -62,19 +62,32 @@ class DockerSandbox(Sandbox):
             script_path.write_text(script, encoding="utf-8")
 
             cmd = [
-                "docker", "run", "--rm",
-                "--network", "none",
+                "docker",
+                "run",
+                "--rm",
+                "--network",
+                "none",
                 "--read-only",
-                "--tmpfs", "/tmp:size=64m",
-                "--user", "nobody",
-                "--memory", self._memory_limit,
-                "--cpus", str(self._cpu_quota / self._cpu_period),
-                "--pids-limit", str(self._pids_limit),
-                "--cap-drop", "ALL",
-                "--security-opt", "no-new-privileges",
-                "-v", f"{script_path}:/code/script.py:ro",
+                "--tmpfs",
+                "/tmp:size=64m",
+                "--user",
+                "nobody",
+                "--memory",
+                self._memory_limit,
+                "--cpus",
+                str(self._cpu_quota / self._cpu_period),
+                "--pids-limit",
+                str(self._pids_limit),
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges",
+                "-v",
+                f"{script_path}:/code/script.py:ro",
                 self._image,
-                "python", "/code/script.py", json.dumps(inputs),
+                "python",
+                "/code/script.py",
+                json.dumps(inputs),
             ]
 
             try:
@@ -84,11 +97,14 @@ class DockerSandbox(Sandbox):
                     stderr=asyncio.subprocess.PIPE,
                 )
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 return {"error": "sandbox timeout", "duration_ms": int((time.monotonic() - started) * 1000)}
             except FileNotFoundError:
-                return {"error": "docker not available", "duration_ms": int((time.monotonic() - started) * 1000)}
+                return {
+                    "error": "docker not available",
+                    "duration_ms": int((time.monotonic() - started) * 1000),
+                }
 
         if stderr:
             return {"error": stderr.decode()[:2000], "duration_ms": int((time.monotonic() - started) * 1000)}
@@ -101,9 +117,76 @@ class DockerSandbox(Sandbox):
         result["duration_ms"] = int((time.monotonic() - started) * 1000)
         return result
 
+    async def run_code(self, code: str, timeout: int = 30) -> dict[str, Any]:
+        """Execute raw python code in ephemeral Docker container with strict isolation."""
+        started = time.monotonic()
+        with tempfile.TemporaryDirectory(prefix="nexus-docker-run-") as tmp:
+            script_path = Path(tmp) / "script.py"
+            script_path.write_text(code, encoding="utf-8")
+
+            cmd = [
+                "docker",
+                "run",
+                "--rm",
+                "--network",
+                "none",
+                "--read-only",
+                "--tmpfs",
+                "/tmp:size=64m",
+                "--user",
+                "nobody",
+                "--memory",
+                self._memory_limit,
+                "--cpus",
+                str(self._cpu_quota / self._cpu_period),
+                "--pids-limit",
+                str(self._pids_limit),
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges",
+                "-v",
+                f"{script_path}:/code/script.py:ro",
+                self._image,
+                "python",
+                "/code/script.py",
+            ]
+
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            except TimeoutError:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                return {
+                    "output": "",
+                    "error": "sandbox timeout",
+                    "duration_ms": int((time.monotonic() - started) * 1000),
+                }
+            except FileNotFoundError:
+                return {
+                    "output": "",
+                    "error": "docker not available",
+                    "duration_ms": int((time.monotonic() - started) * 1000),
+                }
+
+            out_str = stdout.decode(errors="replace")
+            err_str = stderr.decode(errors="replace")
+            elapsed = int((time.monotonic() - started) * 1000)
+            ret = {"output": out_str, "duration_ms": elapsed}
+            if proc.returncode != 0 or err_str:
+                ret["error"] = err_str or f"Process exited with code {proc.returncode}"
+            return ret
+
     async def run_project(
-        self, files: Dict[str, str], test_command: str = "python -m pytest -q", timeout: int = 120
-    ) -> Dict[str, Any]:
+        self, files: dict[str, str], test_command: str = "python -m pytest -q", timeout: int = 120
+    ) -> dict[str, Any]:
         started = time.monotonic()
 
         with tempfile.TemporaryDirectory(prefix="nexus-docker-proj-") as tmp:
@@ -114,19 +197,32 @@ class DockerSandbox(Sandbox):
                 target.write_text(content, encoding="utf-8")
 
             cmd = [
-                "docker", "run", "--rm",
-                "--network", "none",
+                "docker",
+                "run",
+                "--rm",
+                "--network",
+                "none",
                 "--read-only",
-                "--tmpfs", "/tmp:size=128m",
-                "--user", "nobody",
-                "--memory", "512m",
-                "--cpus", "1.0",
-                "--pids-limit", "128",
-                "--cap-drop", "ALL",
-                "--security-opt", "no-new-privileges",
-                "-v", f"{workdir}:/code:ro",
+                "--tmpfs",
+                "/tmp:size=128m",
+                "--user",
+                "nobody",
+                "--memory",
+                "512m",
+                "--cpus",
+                "1.0",
+                "--pids-limit",
+                "128",
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges",
+                "-v",
+                f"{workdir}:/code:ro",
                 self._image,
-                "sh", "-c", f"cd /code && {test_command}",
+                "sh",
+                "-c",
+                f"cd /code && {test_command}",
             ]
 
             try:
@@ -136,11 +232,14 @@ class DockerSandbox(Sandbox):
                     stderr=asyncio.subprocess.PIPE,
                 )
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 return {"error": "sandbox timeout", "duration_ms": int((time.monotonic() - started) * 1000)}
             except FileNotFoundError:
-                return {"error": "docker not available", "duration_ms": int((time.monotonic() - started) * 1000)}
+                return {
+                    "error": "docker not available",
+                    "duration_ms": int((time.monotonic() - started) * 1000),
+                }
 
             return {
                 "output": stdout.decode()[-2000:],

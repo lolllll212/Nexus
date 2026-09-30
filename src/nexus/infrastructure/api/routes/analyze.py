@@ -13,10 +13,10 @@ import mimetypes
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from pydantic import BaseModel
 
-from nexus.infrastructure.api.dependencies import get_container
+from nexus.infrastructure.api.dependencies import get_container, require_identity
 from nexus.infrastructure.di.container import Container
 
-router = APIRouter(prefix="/api", tags=["analyze"])
+router = APIRouter(prefix="/api", tags=["analyze"], dependencies=[Depends(require_identity)])
 
 
 class AnalyzeOut(BaseModel):
@@ -70,21 +70,29 @@ If content is code, comment on architecture; if doc, on clarity; if unknown, inf
         ],
         "weaknesses": [
             "No LLM key — heuristic mode (set OPENAI_API_KEY or NEXUS_LLM_BASE_URL for full analysis)",
-            "Large file may exceed 12k prompt window — truncated" if len(data) > 12000 else "Small file — consider enriching with examples",
+            (
+                "Large file may exceed 12k prompt window — truncated"
+                if len(data) > 12000
+                else "Small file — consider enriching with examples"
+            ),
         ],
         "props": [
             "Ingested as joint mesh node — automatically links to N.E.X.U.S core + memory + concept",
             "Hand-gesture drop works offline; full N.E.X.U.S suggest/weakness when LLM online",
             f"File type {mimetypes.guess_type(file.filename or '')[0] or 'txt'} ready for swarm/dream pipeline",
         ],
-        "concepts": [file.filename.rsplit(".", 1)[-1] if "." in (file.filename or "") else "text", "N.E.X.U.S", "cosmos"],
+        "concepts": [
+            file.filename.rsplit(".", 1)[-1] if "." in (file.filename or "") else "text",
+            "N.E.X.U.S",
+            "cosmos",
+        ],
     }
     try:
         raw = await llm.complete(
             [{"role": "system", "content": prompt}, {"role": "user", "content": question}],
             temperature=0.3,
         )
-    except Exception as e:
+    except Exception:
         import json as _hj
 
         raw = _hj.dumps(heuristic)
@@ -103,7 +111,7 @@ If content is code, comment on architecture; if doc, on clarity; if unknown, inf
 
         m = _json.loads("{}")
         try:
-            match = re.search(r"\{.*\}", raw, re.S)
+            match = re.search(r"\{.*\}", raw, re.DOTALL)
             if match:
                 m = _json.loads(match.group(0))
             else:

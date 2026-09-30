@@ -7,8 +7,6 @@ scoped per tenant and decays/strengthening happen in place.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
-
 from nexus.domain.entities.concept import Concept, SynapticConnection
 from nexus.domain.entities.memory import Memory, MemoryType
 from nexus.domain.ports.memory_repository import ConceptRepository
@@ -17,10 +15,10 @@ from nexus.domain.value_objects.synapse import ConnectionType, SynapseConfig
 
 class InMemoryConceptRepository(ConceptRepository):
     def __init__(self, synapse: SynapseConfig | None = None) -> None:
-        self.concepts: Dict[str, Concept] = {}
-        self.connections: Dict[str, List[SynapticConnection]] = {}
-        self._tenant_concepts: Dict[str, str] = {}
-        self._tenant_connections: Dict[str, str] = {}
+        self.concepts: dict[str, Concept] = {}
+        self.connections: dict[str, list[SynapticConnection]] = {}
+        self._tenant_concepts: dict[str, str] = {}
+        self._tenant_connections: dict[str, str] = {}
         self._synapse = synapse or SynapseConfig()
 
     async def ensure_collection(self, tenant_id: str = "default") -> None:
@@ -33,13 +31,13 @@ class InMemoryConceptRepository(ConceptRepository):
         self.concepts[concept.id] = concept
         self._tenant_concepts[concept.id] = tenant_id
 
-    async def get(self, concept_id: str, tenant_id: str = "default") -> Optional[Concept]:
+    async def get(self, concept_id: str, tenant_id: str = "default") -> Concept | None:
         concept = self.concepts.get(concept_id)
         if concept is None or self._tenant_concepts.get(concept_id) != tenant_id:
             return None
         return concept
 
-    async def get_memories(self, concept_id: str, tenant_id: str = "default") -> List[Memory]:
+    async def get_memories(self, concept_id: str, tenant_id: str = "default") -> list[Memory]:
         concept = self.concepts.get(concept_id)
         if concept is None:
             return []
@@ -52,7 +50,7 @@ class InMemoryConceptRepository(ConceptRepository):
             )
         ]
 
-    async def find_by_label(self, label: str, limit: int = 10, tenant_id: str = "default") -> List[Concept]:
+    async def find_by_label(self, label: str, limit: int = 10, tenant_id: str = "default") -> list[Concept]:
         return [
             c
             for cid, c in self.concepts.items()
@@ -75,7 +73,7 @@ class InMemoryConceptRepository(ConceptRepository):
 
     async def get_connections(
         self, concept_id: str, min_weight: float = 0.0, tenant_id: str = "default"
-    ) -> List[SynapticConnection]:
+    ) -> list[SynapticConnection]:
         return [
             c
             for c in self.connections.get(concept_id, [])
@@ -83,7 +81,7 @@ class InMemoryConceptRepository(ConceptRepository):
         ]
 
     async def get_or_create(
-        self, label: str, concept_type: str, properties: Optional[Dict] = None, tenant_id: str = "default"
+        self, label: str, concept_type: str, properties: dict | None = None, tenant_id: str = "default"
     ) -> Concept:
         existing = [
             c
@@ -109,7 +107,7 @@ class InMemoryConceptRepository(ConceptRepository):
         await self.upsert_connection(conn, tenant_id=tenant_id)
         return conn
 
-    async def find_weakest(self, limit: int = 100, tenant_id: str = "default") -> List[SynapticConnection]:
+    async def find_weakest(self, limit: int = 100, tenant_id: str = "default") -> list[SynapticConnection]:
         all_conns = [
             c
             for conns in self.connections.values()

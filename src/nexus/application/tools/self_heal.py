@@ -13,7 +13,6 @@ attempt is written to the tenant audit log.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
 
 from nexus.application.tools.generate_tool import GenerateToolUseCase, ToolSpecRequest
 from nexus.domain.entities.goal import GoalEvent
@@ -26,9 +25,9 @@ SELF_HEAL_ACTION = "tool_selfheal"
 
 @dataclass
 class SelfHealResult:
-    regenerated: List[str]  # tool ids
-    healthy: List[str]
-    blocked: List[str]      # would regenerate but policy denied it
+    regenerated: list[str]  # tool ids
+    healthy: list[str]
+    blocked: list[str]  # would regenerate but policy denied it
     denied_reason: str = ""
 
 
@@ -41,7 +40,7 @@ class SelfHealUseCase:
         self,
         registry: ToolRegistry,
         generator: GenerateToolUseCase,
-        policy: Optional[AutonomyPolicy] = None,
+        policy: AutonomyPolicy | None = None,
         tenant_id: str = "default",
     ) -> None:
         self._registry = registry
@@ -51,7 +50,7 @@ class SelfHealUseCase:
 
     async def run(self) -> SelfHealResult:
         result = SelfHealResult(regenerated=[], healthy=[], blocked=[])
-        tools: List[Tool] = await self._registry.list_all()
+        tools: list[Tool] = await self._registry.list_all()
 
         for tool in tools:
             if not tool.is_self_generated or tool.use_count == 0:

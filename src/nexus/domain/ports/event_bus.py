@@ -8,15 +8,19 @@ without knowing or caring who consumes them.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Awaitable, Callable, Dict, Optional
+from typing import Any
 from uuid import uuid4
+
+from nexus.domain.value_objects.clock import utc_now
 
 
 class EventTopic(Enum):
     """Canonical event topics on the bus."""
+
     USER_MESSAGE = "cortex.user_message"
     CONTEXT_INJECTION = "subcortex.context_injection"
     MEMORY_STORED = "memory.stored"
@@ -50,11 +54,11 @@ class Event:
     """An event flowing through the nervous system."""
 
     topic: EventTopic
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     id: str = field(default_factory=lambda: str(uuid4()))
     priority: EventPriority = EventPriority.NORMAL
-    timestamp: datetime = field(default_factory=datetime.utcnow)
-    correlation_id: Optional[str] = None
+    timestamp: datetime = field(default_factory=utc_now)
+    correlation_id: str | None = None
 
 
 EventHandler = Callable[[Event], Awaitable[None]]
@@ -72,4 +76,3 @@ class EventSubscriber(ABC):
 
 class EventBus(EventPublisher, EventSubscriber):
     """Full bus: publish and subscribe."""
-    ...
