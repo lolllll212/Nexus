@@ -23,12 +23,73 @@
 
 The system features four dedicated spatial operating modes and interconnected frontend experiences:
 1. **LIVING KNOWLEDGE GRAPH (Tactical OS)**: A full-screen graphite/near-black operating canvas featuring a real-time D3 force-directed knowledge graph, 18 node categories, 5 major enterprise clusters, 3D isometric perspective projection, animated edge data streams, holographic tooltips, and an 11-action tactical context menu.
-2. **AUTONOMOUS DEEP RESEARCH MODE**: Multi-hop recursive research engine with directed claim trees, competing hypothesis branches, automated citation corroboration, and one-click graph ingestion.
-3. **AUTONOMOUS WORKFLOW CANVAS**: Visual DAG step orchestrator with live status telemetry, execution logs, agent handoffs, and instant knowledge conversion.
-4. **HEXAGONAL ARCHITECTURE VIEWER**: Interactive diagram of Ports & Adapters, showing strict domain isolation, adapter latencies, and communication protocols.
-5. **AUTONOMOUS AGENT ORCHESTRATION LAYER**: Live telemetry HUD for 10 autonomous enterprise agents (Researcher, Coder, Planner, Browser, Vision, Data Analyst, Writer, Executor, Memory, Fact Checker) with status, tasks, models, tools, latencies, tokens, and animated inter-agent message bus.
-6. **EXTERNAL INTEGRATION UNIVERSE**: Dedicated interface for 16 enterprise integrations (GitHub, Google Drive, Google Calendar, Slack, Discord, Notion, Jira, Linear, Gmail, Postgres, REST APIs, Webhooks, Ollama, OpenAI, Anthropic, Groq).
-7. **NEXUS Coding & Research Studio**: A dedicated Claude-style coding environment featuring chain-of-thought `<thinking>` accordions, real-time tool execution cards, an isolated Python execution sandbox, interactive split-view artifacts, and GitHub/web research integration.
+2. **WEB-BASED ANALYTICS DASHBOARD**: High-density widescreen command center with KPI telemetry matrix, synchronized compute/memory histograms, and autonomous agent swarm monitoring.
+3. **MOBILE COMPACT COCKPIT UI**: High-velocity thumb-accessible mobile interface with 48px touch targets, quick-switch mode dock, and ambient readability.
+4. **AUTONOMOUS DEEP RESEARCH MODE**: Multi-hop recursive research engine with directed claim trees, competing hypothesis branches, automated citation corroboration, and one-click graph ingestion.
+5. **AUTONOMOUS WORKFLOW CANVAS**: Visual DAG step orchestrator with live status telemetry, execution logs, agent handoffs, and instant knowledge conversion.
+6. **HEXAGONAL ARCHITECTURE VIEWER**: Interactive diagram of Ports & Adapters, showing strict domain isolation, adapter latencies, and communication protocols.
+7. **AUTONOMOUS AGENT ORCHESTRATION LAYER**: Live telemetry HUD for 10 autonomous enterprise agents (Researcher, Coder, Planner, Browser, Vision, Data Analyst, Writer, Executor, Memory, Fact Checker) with status, tasks, models, tools, latencies, tokens, and animated inter-agent message bus.
+8. **EXTERNAL INTEGRATION UNIVERSE**: Dedicated interface for 16 enterprise integrations (GitHub, Google Drive, Google Calendar, Slack, Discord, Notion, Jira, Linear, Gmail, Postgres, REST APIs, Webhooks, Ollama, OpenAI, Anthropic, Groq).
+9. **NEXUS Coding & Research Studio**: A dedicated Claude-style coding environment featuring chain-of-thought `<thinking>` accordions, real-time tool execution cards, an isolated Python execution sandbox, interactive split-view artifacts, and GitHub/web research integration.
+
+---
+
+## Design Philosophy: Four Visual Pillars & Three UI Varieties
+
+NEXUS OS is engineered around four core visual pillars ensuring visual hierarchy, ergonomic scanning, and cognitive clarity across diverse computing environments:
+
+### The Four Primary Visual Pillars
+1. **Visual Pillar 1: Visual Hierarchy & Flow**:
+   - Standardized priority pipeline directing the operator's eye to high-urgency system health data, active cognitive threads, and critical alerts.
+   - High-contrast glowing typography (`text-cyan-400`, `text-emerald-400`, `text-amber-400`), prominent sizing scales, and layered translucent card framing (`bg-[#0a0f1d]/80` with fine cyber borders).
+2. **Visual Pillar 2: Interface Consistency**:
+   - Monospace font standardization (`font-mono`) across all system telemetry, CPU load, timestamps, memory metrics, and conversational streams.
+   - Unified corner rounding geometry: `rounded-2xl` external containers, `rounded-xl` interior cards, and `rounded-lg` interactive control buttons.
+   - Standardized hover and active state transitions (`transition-all duration-200`) across all buttons, tabs, and canvas nodes.
+3. **Visual Pillar 3: Contrast & System States**:
+   - Explicit machine state indicators communicating active neural cognition:
+     - **IDLE**: Ambient cyan rhythmic pulsation.
+     - **LISTENING**: High-sensitivity emerald acoustic ripple.
+     - **THINKING**: High-frequency cyan and violet concentric spinning vortex.
+     - **SPEAKING**: Dynamic golden amber oscillation with audio wave synchronization.
+   - Dynamic task difficulty and severity color shifts (green &rarr; amber &rarr; crimson) for instant situational awareness.
+4. **Visual Pillar 4: Scannable Spacing**:
+   - Clean grid systems and strategic whitespace grouping related features to eliminate operational noise and prevent operator fatigue.
+   - Contextual drawer and modal architecture ensuring advanced tools only populate the viewport when summoned.
+
+### The Three UI Design Varieties
+NEXUS OS adapts fluidly across three specialized interface varieties:
+
+* **1. Tactical HUD (FUI - Future User Interface)**:
+  - Deep obsidian base canvas (`#020408`) anchored by the central Arc Reactor Cybernetic Orb.
+  - Three concentric telemetry rings (Inner Quantum Core, Synaptic Lattice, Outer Event Horizon) pulsing with real-time AI states.
+  - Flanking telemetry columns displaying live CPU compute load, memory saturation, network packets, and active UTC/local clocks.
+  - Monospace conversational terminal stream with direct microphone input and synchronized speech synthesis.
+* **2. Web-Based Analytics Dashboard**:
+  - High-density widescreen layout with modular sidebar paths and structured card boundaries.
+  - **4-Column KPI Matrix**: Total Inferences (42.8k), Qdrant Memory Synapses (12.4k), Active Swarm Agents (10/10), and Subcortex Coherence (99.4%).
+  - **Synchronized Telemetry Histograms**: Dual 24-step distribution bars tracking CPU load and memory pressure over time.
+  - **Autonomous Agent Swarm Table**: Live telemetry for all 10 specialized agents showing active status, assigned tasks, token velocity, and foundation model bindings.
+* **3. Mobile Application UI (Compact Thumb Cockpit)**:
+  - High-velocity thumb ergonomics optimized for narrow mobile viewports.
+  - 48px touch targets meeting strict mobile accessibility guidelines.
+  - Bottom-docked quick-action thumb cockpit: Voice Cortex, Vision Scanner, Code Studio, Canvas, and UI Variety Switcher.
+  - Crisp typography for ambient reading and single-tap mode transitions.
+
+---
+
+## Multimodal Fallback Perception Skill (Image & Video)
+
+When connected to foundation models that lack native vision or video capabilities (such as text-only LLMs or local lightweight models), NEXUS autonomously invokes its built-in **`multimodal_perception`** skill:
+
+* **Image Decomposition & OCR**:
+  - Automatically loads and analyzes images using Pillow-based edge detection, color histogram extraction, and OCR text distillation.
+  - Generates structured visual descriptions, reading text, signs, diagrams, and UI elements.
+* **Video Frame Sampling & Scene Detection**:
+  - Samples keyframes across video timestamps, performs scene transition detection, and summarizes visual progression over time.
+  - Transcribes accompanying audio tracks and aligns them with keyframe visual timestamps.
+* **Zero-Failure Context Injection**:
+  - Synthesizes findings into structured `<visual_observation>` blocks injected directly into the ReAct reasoning loop, allowing text-only models to reason over images and videos with zero upstream errors.
 
 ---
 
@@ -169,6 +230,7 @@ A cybernetic telemetry ticker monitoring conscious ReAct thoughts alongside unco
 | `http_request` | Network | Outgoing HTTP requests protected by SSRF guard |
 | `find_databases` | Database | Scans workspace for SQLite and database files |
 | `query_database` | Database | Executes read-only SQL queries against SQLite databases |
+| `multimodal_perception` | Perception | Fallback OCR, frame sampling, and scene transcription for non-vision models |
 
 ---
 
@@ -236,25 +298,37 @@ NEXUS_JSON_LOGS=true
 
 ### 3. Launch Services
 
-Start the conscious API engine:
+Start the conscious API engine (FastAPI / Cortex & Second Brain fallback):
 
 ```bash
 uvicorn nexus.infrastructure.api.main:app --host 0.0.0.0 --port 8000
 ```
 
-Start the Vite development frontend (with HMR):
+Start the Vite development frontend (Tactical HUD, Analytics Dashboard & Mobile Cockpit):
 
 ```bash
 npm run dev --prefix web -- --host 0.0.0.0 --port 3000
 ```
 
-### 4. Access Interfaces
+Start the HOLO Deck gesture control server:
 
-* **J.A.R.V.I.S. Second Brain OS**: `http://localhost:3000`
-* **Claude Coding & Research Studio**: `http://localhost:3000/?view=claude` (or press <kbd>C</kbd>)
-* **API Documentation (Swagger)**: `http://localhost:8000/docs`
-* **Prometheus Metrics**: `http://localhost:8000/metrics`
-* **Health & Readiness**: `http://localhost:8000/healthz` and `/readyz`
+```bash
+python3 frontend/server.py
+```
+
+### 4. Access Interfaces & Ports
+
+* **NEXUS OS Frontend (`Port 3000`)**: `http://localhost:3000`
+  * **Tactical HUD (FUI)**: Arc Reactor orb, telemetry flanks, and voice cortex
+  * **Analytics Dashboard**: `http://localhost:3000` (select `ANALYTICS` in top bar)
+  * **Claude Coding & Research Studio**: `http://localhost:3000/?view=claude` (or press <kbd>C</kbd>)
+  * **Mobile Cockpit**: Automatically active on mobile viewports (< 768px) with 48px touch targets
+* **Cortex REST API & Documentation (`Port 8000`)**: `http://localhost:8000/docs`
+  * **Built-in Static Second Brain OS**: `http://localhost:8000/`
+  * **Prometheus Metrics**: `http://localhost:8000/metrics`
+  * **Health & Readiness**: `http://localhost:8000/healthz` and `/readyz`
+* **HOLO Hand-Gesture Deck (`Port 4890`)**: `http://localhost:4890/`
+  * **MediaPipe 3D Spatial Canvas**: Real-time hand-tracking note card manipulation
 
 ---
 
