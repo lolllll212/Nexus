@@ -52,8 +52,9 @@ class QdrantBackup:
             resp.raise_for_status()
             data = resp.json()
             result = data.get("result") or {}
-            name = result.get("name") or f"snap-{datetime.datetime.utcnow().isoformat()}"
-            creation = result.get("creation_time") or datetime.datetime.utcnow().isoformat()
+            now_ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            name = result.get("name") or f"snap-{now_ts}"
+            creation = result.get("creation_time") or now_ts
             size = result.get("size")
             return SnapshotInfo(name=name, creation_time=creation, size=size)
         finally:

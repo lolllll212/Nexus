@@ -15,24 +15,24 @@ import importlib
 import importlib.util
 import sys
 import traceback
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from nexus.domain.entities.tool import Tool, ToolStatus
 from nexus.domain.ports.tool_registry import ToolRegistry
-from nexus.domain.value_objects.schema import JSONSchema
 
 
 class PluginInfo:
     """Metadata about a loaded plugin."""
 
-    def __init__(self, name: str, path: str, tools: List[str], error: Optional[str] = None) -> None:
+    def __init__(self, name: str, path: str, tools: list[str], error: str | None = None) -> None:
         self.name = name
         self.path = path
         self.tools = tools
         self.error = error
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {"name": self.name, "path": self.path, "tools": self.tools, "error": self.error}
 
 
@@ -42,14 +42,14 @@ class PluginLoader:
     def __init__(self, plugins_dir: str | Path, registry: ToolRegistry) -> None:
         self._plugins_dir = Path(plugins_dir)
         self._registry = registry
-        self._loaded: Dict[str, PluginInfo] = {}
-        self._handlers: Dict[str, Callable] = {}
+        self._loaded: dict[str, PluginInfo] = {}
+        self._handlers: dict[str, Callable] = {}
 
     @property
-    def handlers(self) -> Dict[str, Callable]:
+    def handlers(self) -> dict[str, Callable]:
         return dict(self._handlers)
 
-    def load_all(self) -> List[PluginInfo]:
+    def load_all(self) -> list[PluginInfo]:
         """Scan the plugins directory and load every valid plugin."""
         if not self._plugins_dir.exists():
             return []
@@ -64,7 +64,7 @@ class PluginLoader:
                 results.append(info)
         return results
 
-    def load_plugin(self, name: str) -> Optional[PluginInfo]:
+    def load_plugin(self, name: str) -> PluginInfo | None:
         """Load a single plugin by name (folder or .py file)."""
         dir_path = self._plugins_dir / name
         if dir_path.is_dir():
@@ -98,8 +98,8 @@ class PluginLoader:
             sys.modules[module_name] = module
             spec.loader.exec_module(module)
 
-            tools: List[Tool] = getattr(module, "TOOLS", [])
-            handlers: Dict[str, Callable] = getattr(module, "HANDLERS", {})
+            tools: list[Tool] = getattr(module, "TOOLS", [])
+            handlers: dict[str, Callable] = getattr(module, "HANDLERS", {})
 
             tool_ids = []
             for tool in tools:
@@ -117,13 +117,16 @@ class PluginLoader:
 
     def _make_sandbox_handler(self, tool: Tool) -> Callable:
         """Fallback handler that runs tool code in the sandbox."""
-        async def _handler(params: Dict[str, Any]) -> Dict[str, Any]:
+
+        async def _handler(params: dict[str, Any]) -> dict[str, Any]:
             if tool.code:
                 from nexus.infrastructure.adapters.sandbox.subprocess_sandbox import SubprocessSandbox
+
                 sandbox = SubprocessSandbox()
                 return await sandbox.run(tool.code, inputs=params)
             return {"error": f"No handler and no code for tool {tool.id}"}
+
         return _handler
 
-    def get_loaded(self) -> Dict[str, PluginInfo]:
+    def get_loaded(self) -> dict[str, PluginInfo]:
         return dict(self._loaded)

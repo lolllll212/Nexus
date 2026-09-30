@@ -7,9 +7,6 @@ the task + solution as a new training example for future reference.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import List, Optional
-
 from nexus.application.training.coding_store import CodingExample, CodingStore
 
 
@@ -43,10 +40,10 @@ class AutoLearner:
         category: str = "general",
         explanation: str = "",
         test_cases: str = "",
-        tools_used: list = None,
+        tools_used: list | None = None,
         succeeded: bool = True,
         rating: float = 0.0,
-    ) -> Optional[CodingExample]:
+    ) -> CodingExample | None:
         """Capture a successful coding session as a training example."""
         if not self.should_learn(task, solution, tools_used or []):
             return None
@@ -60,7 +57,7 @@ class AutoLearner:
             language=language,
             category=category,
             tags=tags,
-            explanation=explanation or f"Auto-learned from successful session",
+            explanation=explanation or "Auto-learned from successful session",
             test_cases=test_cases,
             difficulty=self._infer_difficulty(solution),
             source="auto-learned",
@@ -74,7 +71,7 @@ class AutoLearner:
         example_id: str,
         succeeded: bool,
         rating: float = 0.0,
-        improved_solution: Optional[str] = None,
+        improved_solution: str | None = None,
     ) -> bool:
         """Update an existing example based on feedback."""
         ex = self._store.get(example_id)
@@ -91,8 +88,7 @@ class AutoLearner:
         self._store.update(ex)
         return True
 
-    def _extract_tags(self, task: str) -> List[str]:
-        import re
+    def _extract_tags(self, task: str) -> list[str]:
         tags = []
         task_lower = task.lower()
         # Language detection

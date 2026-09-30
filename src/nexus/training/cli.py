@@ -160,8 +160,9 @@ def cmd_import_seed(args):
 def cmd_chat(args):
     """Interactive coding chat with NEXUS (uses local LM Studio)."""
     import asyncio
-    from nexus.infrastructure.adapters.llm.openai_provider import OpenAIProvider
+
     from nexus.application.training.coding_prompt import CodingRAG
+    from nexus.infrastructure.adapters.llm.openai_provider import OpenAIProvider
 
     store = CodingStore(STORE_PATH)
     rag = CodingRAG(store, max_examples=args.few_shot)

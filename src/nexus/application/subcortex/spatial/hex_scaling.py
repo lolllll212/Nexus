@@ -10,7 +10,6 @@ out to find its containing super-concept.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List
 
 from nexus.domain.value_objects.hex_index import HexIndex
 
@@ -19,7 +18,7 @@ from nexus.domain.value_objects.hex_index import HexIndex
 class ZoomResult:
     index: HexIndex
     resolution: int
-    children: List[HexIndex] = field(default_factory=list)
+    children: list[HexIndex] = field(default_factory=list)
     area: int = 1
 
 
@@ -29,16 +28,20 @@ class BoundlessScalingUseCase:
     def zoom_in(self, index: HexIndex, levels: int = 1) -> ZoomResult:
         """Descend into finer detail (macro -> micro)."""
         result = index.zoom_in(levels)
-        return ZoomResult(index=result, resolution=result.resolution, children=result.children(), area=result.relative_area)
+        return ZoomResult(
+            index=result, resolution=result.resolution, children=result.children(), area=result.relative_area
+        )
 
     def zoom_out(self, index: HexIndex, levels: int = 1) -> ZoomResult:
         """Ascend to coarser scope (micro -> macro)."""
         result = index.zoom_out(levels)
-        return ZoomResult(index=result, resolution=result.resolution, children=result.children(), area=result.relative_area)
+        return ZoomResult(
+            index=result, resolution=result.resolution, children=result.children(), area=result.relative_area
+        )
 
     def contains(self, macro: HexIndex, micro: HexIndex) -> bool:
         """True when `micro` lives inside `macro` (at any resolution below it)."""
         return macro.contains(micro)
 
-    def ancestors(self, index: HexIndex) -> List[HexIndex]:
+    def ancestors(self, index: HexIndex) -> list[HexIndex]:
         return list(index.ancestors())

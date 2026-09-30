@@ -10,9 +10,8 @@ fake container, so the unit test verifies grading without a live model.
 
 from __future__ import annotations
 
+from nexus.eval.harness import GOLDEN_SET, EvalRunner
 from tests.fakes.container import FakeContainer
-
-from nexus.eval.harness import EvalRunner, GOLDEN_SET
 
 
 class RecordingLLM:

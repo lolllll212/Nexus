@@ -3,19 +3,56 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict
 
 _NEGATIVE_WORDS = {
-    "angry", "anxious", "awful", "bad", "broken", "confused", "disappointed", "frustrated",
-    "hate", "hurt", "issue", "lost", "panic", "sad", "scared", "sorry", "stress", "stuck",
-    "terrible", "upset", "wrong",
+    "angry",
+    "anxious",
+    "awful",
+    "bad",
+    "broken",
+    "confused",
+    "disappointed",
+    "frustrated",
+    "hate",
+    "hurt",
+    "issue",
+    "lost",
+    "panic",
+    "sad",
+    "scared",
+    "sorry",
+    "stress",
+    "stuck",
+    "terrible",
+    "upset",
+    "wrong",
 }
 _POSITIVE_WORDS = {
-    "amazing", "awesome", "excellent", "glad", "good", "great", "happy", "helpful",
-    "love", "nice", "perfect", "pleased", "thanks", "thank", "wonderful",
+    "amazing",
+    "awesome",
+    "excellent",
+    "glad",
+    "good",
+    "great",
+    "happy",
+    "helpful",
+    "love",
+    "nice",
+    "perfect",
+    "pleased",
+    "thanks",
+    "thank",
+    "wonderful",
 }
 _HIGH_AROUSAL_WORDS = {
-    "asap", "crash", "critical", "emergency", "now", "panic", "urgent", "worried",
+    "asap",
+    "crash",
+    "critical",
+    "emergency",
+    "now",
+    "panic",
+    "urgent",
+    "worried",
 }
 
 
@@ -23,10 +60,10 @@ _HIGH_AROUSAL_WORDS = {
 class EmotionalState:
     """The emotional/contextual state of a conversation."""
 
-    valence: float = 0.0    # -1.0 (negative) to 1.0 (positive)
-    arousal: float = 0.0    # 0.0 (calm) to 1.0 (agitated)
+    valence: float = 0.0  # -1.0 (negative) to 1.0 (positive)
+    arousal: float = 0.0  # 0.0 (calm) to 1.0 (agitated)
     dominant_emotion: str = "neutral"
-    mood_weights: Dict[str, float] = field(default_factory=dict)
+    mood_weights: dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not -1.0 <= self.valence <= 1.0:
@@ -39,7 +76,7 @@ class EmotionalState:
         """Overall emotional magnitude, drives memory encoding strength."""
         return (abs(self.valence) + self.arousal) / 2.0
 
-    def blend(self, other: "EmotionalState", alpha: float = 0.3) -> "EmotionalState":
+    def blend(self, other: EmotionalState, alpha: float = 0.3) -> EmotionalState:
         """Combine this state with an incoming one (the room's running emotional weight)."""
         valence = round(self.valence * (1.0 - alpha) + other.valence * alpha, 3)
         arousal = round(self.arousal * (1.0 - alpha) + other.arousal * alpha, 3)
@@ -49,7 +86,9 @@ class EmotionalState:
         return EmotionalState(
             valence=valence,
             arousal=arousal,
-            dominant_emotion=other.dominant_emotion if other.dominant_emotion != "neutral" else self.dominant_emotion,
+            dominant_emotion=(
+                other.dominant_emotion if other.dominant_emotion != "neutral" else self.dominant_emotion
+            ),
             mood_weights=weights,
         )
 
@@ -86,5 +125,9 @@ def infer_emotional_state(text: str) -> EmotionalState:
         valence=valence,
         arousal=arousal,
         dominant_emotion=dominant,
-        mood_weights={"negative": float(negative), "positive": float(positive), "arousal": float(arousal_hits)},
+        mood_weights={
+            "negative": float(negative),
+            "positive": float(positive),
+            "arousal": float(arousal_hits),
+        },
     )

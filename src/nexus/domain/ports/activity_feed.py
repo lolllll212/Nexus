@@ -8,14 +8,14 @@ memory, a file, or a time-series database.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any
 
 
 class ActivityFeed(ABC):
     """Append-only, bounded log of recent system activity."""
 
     @abstractmethod
-    def record(self, kind: str, payload: Dict[str, Any]) -> None: ...
+    def record(self, kind: str, payload: dict[str, Any]) -> None: ...
 
     @abstractmethod
-    def recent(self, kind: str, limit: int = 50) -> List[Dict[str, Any]]: ...
+    def recent(self, kind: str, limit: int = 50) -> list[dict[str, Any]]: ...

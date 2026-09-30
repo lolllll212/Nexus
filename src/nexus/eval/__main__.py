@@ -18,10 +18,10 @@ import os
 import sys
 from pathlib import Path
 
-from nexus.eval.harness import EvalRunner, GOLDEN_SET, write_report_html
+from nexus.eval.harness import GOLDEN_SET, EvalRunner, write_report_html
 
 
-def _build_live_runner() -> "object":
+def _build_live_runner() -> object:
     """Container in memory mode + real LLM + real extended tools."""
     from nexus.infrastructure.di.container import Config, Container
 

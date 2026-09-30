@@ -39,9 +39,8 @@ from nexus.infrastructure.adapters.autonomy.goal_repository import InMemoryGoalR
 from nexus.infrastructure.adapters.autonomy.policy import DefaultAutonomyPolicy
 from nexus.infrastructure.adapters.security.rate_limiter import SlidingWindowRateLimiter
 from nexus.infrastructure.api.main import create_app
-
 from tests.fakes import FakeToolRegistry
-from tests.fakes.container import FakeContainer, TEST_API_KEY_1, TEST_API_KEY_2
+from tests.fakes.container import TEST_API_KEY_1, TEST_API_KEY_2, FakeContainer
 
 AUTH_T1 = {"Authorization": f"Bearer {TEST_API_KEY_1}"}
 AUTH_T2 = {"Authorization": f"Bearer {TEST_API_KEY_2}"}
@@ -216,7 +215,9 @@ def test_cancel_and_tenant_isolation():
 def test_loop_completes_goal_within_budget():
     repo = InMemoryGoalRepository()
     policy = DefaultAutonomyPolicy(rate_limiter=SlidingWindowRateLimiter(), hourly_budget=0)
-    goal = asyncio.run(CreateGoalUseCase(repo).execute("analyze logs", "t1", "u1", 5, requires_approval=False))
+    goal = asyncio.run(
+        CreateGoalUseCase(repo).execute("analyze logs", "t1", "u1", 5, requires_approval=False)
+    )
     goal.mark_active(approved_by="u1")
     executor = _CountingExecutor(complete_after=2)
     loop = AutonomyLoopUseCase(repo, policy, executor)
@@ -301,7 +302,10 @@ def test_self_heal_regenerates_when_allowlisted():
     assert len(result.regenerated) == 1
     assert generator.calls == 1
     assert tool.status.value == "deprecated"
-    assert any(e.kind == "regenerated_tool" and "regenerated" in e.detail for e in asyncio.run(policy.audit_log("t1")))
+    assert any(
+        e.kind == "regenerated_tool" and "regenerated" in e.detail
+        for e in asyncio.run(policy.audit_log("t1"))
+    )
 
 
 def test_self_heal_blocks_without_approval_and_audits():

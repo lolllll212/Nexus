@@ -2,23 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional
-
 from nexus.domain.ports.memory_repository import ShortTermMemory
 
 
 class InMemoryShortTermMemory(ShortTermMemory):
     def __init__(self) -> None:
-        self._store: Dict[str, Dict] = {}
+        self._store: dict[str, dict] = {}
 
-    async def set(self, key: str, value: Dict, ttl_seconds: int) -> None:
+    async def set(self, key: str, value: dict, ttl_seconds: int) -> None:
         self._store[key] = value
 
-    async def get(self, key: str) -> Optional[Dict]:
+    async def get(self, key: str) -> dict | None:
         return self._store.get(key)
 
     async def delete(self, key: str) -> None:
         self._store.pop(key, None)
 
-    async def publish(self, channel: str, payload: Dict) -> None:
+    async def publish(self, channel: str, payload: dict) -> None:
         return None

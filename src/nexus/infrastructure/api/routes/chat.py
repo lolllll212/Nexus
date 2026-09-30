@@ -19,12 +19,12 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from nexus.domain.value_objects.identity import Identity
 from nexus.infrastructure.api.dependencies import (
     get_container,
     require_identity,
@@ -32,7 +32,6 @@ from nexus.infrastructure.api.dependencies import (
     require_rate_limit,
 )
 from nexus.infrastructure.di.container import Container
-from nexus.domain.value_objects.identity import Identity
 
 router = APIRouter(
     prefix="/v1/chat",
@@ -47,11 +46,11 @@ router = APIRouter(
 
 class ChatRequest(BaseModel):
     message: str = Field("", min_length=0)
-    session_id: Optional[str] = None
+    session_id: str | None = None
     stream: bool = False
-    image_urls: Optional[List[str]] = None
-    audio: Optional[str] = None  # data URI: data:audio/<mime>;base64,...
-    voice: Optional[str] = None
+    image_urls: list[str] | None = None
+    audio: str | None = None  # data URI: data:audio/<mime>;base64,...
+    voice: str | None = None
     mode: str = "general"  # "general" or "coding"
 
 
@@ -61,7 +60,7 @@ class ChatResponse(BaseModel):
     tools_used: list
     memories_recalled: int
     thought_count: int
-    audio: Optional[str] = None  # data URI of synthesized speech (P3)
+    audio: str | None = None  # data URI of synthesized speech (P3)
 
 
 def _parse_data_uri(data_uri: str) -> tuple[str, bytes]:
@@ -97,8 +96,8 @@ async def chat(
     # Build system prompt based on mode
     system_prompt = None
     if req.mode == "coding":
-        from nexus.application.training.coding_store import CodingStore
         from nexus.application.training.coding_prompt import CodingRAG
+        from nexus.application.training.coding_store import CodingStore
 
         store = CodingStore("data/coding_examples.json")
         rag = CodingRAG(store, max_examples=3)
@@ -156,8 +155,8 @@ async def chat_stream(
 
     system_prompt = None
     if req.mode == "coding":
-        from nexus.application.training.coding_store import CodingStore
         from nexus.application.training.coding_prompt import CodingRAG
+        from nexus.application.training.coding_store import CodingStore
 
         store = CodingStore("data/coding_examples.json")
         rag = CodingRAG(store, max_examples=3)
@@ -193,7 +192,7 @@ async def chat_stream(
             while True:
                 try:
                     ev = await asyncio.wait_for(queue.get(), timeout=30.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     break
                 yield f"data: {json.dumps(ev)}\n\n"
                 if ev.get("type") == "answer":

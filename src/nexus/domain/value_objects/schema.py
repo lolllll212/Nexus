@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -11,13 +11,13 @@ class JSONSchema:
     """A JSON schema used as a tool's input/output contract."""
 
     type: str = "object"
-    properties: Dict[str, Any] = field(default_factory=dict)
-    required: List[str] = field(default_factory=list)
+    properties: dict[str, Any] = field(default_factory=dict)
+    required: list[str] = field(default_factory=list)
     description: str = ""
 
-    def validate(self, data: Dict[str, Any]) -> List[str]:
+    def validate(self, data: dict[str, Any]) -> list[str]:
         """Validate data against the schema. Returns list of errors (empty = valid)."""
-        errors: List[str] = []
+        errors: list[str] = []
         for req in self.required:
             if req not in data:
                 errors.append(f"Missing required field: {req}")

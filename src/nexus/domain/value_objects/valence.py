@@ -15,7 +15,7 @@ class ValenceTag:
     """
 
     survival: float  # 0.0 (irrelevant) to 1.0 (life-or-death)
-    utility: float   # 0.0 (niche) to 1.0 (universally useful)
+    utility: float  # 0.0 (niche) to 1.0 (universally useful)
     label: str = ""
 
     def __post_init__(self) -> None:

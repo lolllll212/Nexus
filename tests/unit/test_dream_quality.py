@@ -6,10 +6,9 @@ activity feed, and CLI report.
 
 from __future__ import annotations
 
-from tests.fakes.container import FakeContainer
-
 from nexus.domain.entities.memory import Memory, MemoryType
 from nexus.domain.ports.event_bus import EventTopic
+from tests.fakes.container import FakeContainer
 
 
 async def _seed_episodes(fake: FakeContainer, count: int = 4, tenant_id: str = "default") -> list:

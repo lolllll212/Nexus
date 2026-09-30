@@ -8,9 +8,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from nexus.domain.entities.concept import Concept, SynapticConnection
-from nexus.domain.entities.memory import Memory, MemoryType, EmotionalWeight
-from nexus.domain.value_objects.synapse import ConnectionType
+from nexus.domain.entities.memory import EmotionalWeight, Memory, MemoryType
 from nexus.domain.value_objects.emotion import EmotionalState
+from nexus.domain.value_objects.synapse import ConnectionType
 
 
 class TestConceptNeuroplasticity:
@@ -55,7 +55,7 @@ class TestMemoryConsolidation:
         import datetime
 
         m = Memory(content="x", memory_type=MemoryType.EPISODIC)
-        m.last_accessed_at = datetime.datetime.utcnow() - datetime.timedelta(days=200)
+        m.last_accessed_at = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=200)
         assert m.is_stale(threshold_days=90)
 
     def test_emotional_weight_validation(self):
