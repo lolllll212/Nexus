@@ -1,164 +1,143 @@
-# Swarm — P4 Design
+# Multi-Agent Swarm
 
-## The Capability
+## Overview
 
-A **swarm** is a team of specialized agents that cooperates on a task. A
-**leader** agent decomposes the objective, fans it out to **worker** agents,
-collects their answers, and synthesizes a final response.
+Sometimes one mind is not enough. A **swarm** is a leader agent plus a set of
+worker agents. The leader has no special powers in the code - it is just another
+agent - but by convention it is given the synthesis role.
 
-P4 reuses the P1 tenancy/auth machinery: every agent belongs to exactly one
-tenant, all agent operations are identity-gated, and swarm runs go through the
-existing chat rate limiter. Each agent has its own system prompt and tool
-access, so a swarm is effectively a set of "personalities" over the same
-brain.
+```
+        ┌───────────────────────────────┐
+        │      SwarmCoordinatorUseCase   │
+        │        (application layer)      │
+        └───────────────┬───────────────┘
+                        │
+        ┌───────────────┴───────────────┐
+        │                               │
+  PHASE 1: fan out              PHASE 2: synthesize
+  bounded to max_workers        leader sees every
+  sequential per worker         worker report
+        │                               │
+  ┌─────┼─────┬─────┐                 │
+  ▼     ▼     ▼     ▼                 ▼
+worker worker worker worker        leader
+  └─────┴─────┴─────┘                 │
+        │                               │
+  SwarmResult(final_response,
+              worker_responses, session_id)
+```
 
-## Domain Model
-
-### `Agent` — `src/nexus/domain/entities/agent.py`
+## Port
 
 ```python
-class AgentStatus(Enum):
-    ACTIVE, PAUSED, RETIRED
+class AgentRepository(Protocol): ...   # tenant-scoped agent persistence
+class SwarmRepository(Protocol): ...   # tenant-scoped swarm persistence
 
-@dataclass
-class Agent:
-    id: str
-    tenant_id: str
-    owner_id: str                 # who registered it
-    name: str
-    role: str                     # "leader" | "worker" (informational)
-    system_prompt: str            # personality / constraints injected as system message
-    tools: List[str]              # allowlisted tool names (empty = all built-ins)
-    status: AgentStatus = AgentStatus.ACTIVE
-    created_at: datetime
-    updated_at: datetime
-    metadata: Dict[str, object]
+class AgentRunner(Protocol):
+    async def run_agent(self, agent: Agent, task: str, tenant_id: str) -> str: ...
 ```
 
-### `Swarm` — `src/nexus/domain/entities/swarm.py`
+`SwarmCoordinatorUseCase` depends on the `AgentRunner` **protocol**, not on
+`ProcessMessageUseCase`. That is the only seam that matters: the concrete
+runner is chosen in `infrastructure/di/container.py`, and tests substitute a
+scripted fake. The application layer never learns that an "agent" is a ReAct
+loop.
 
-```python
-@dataclass
-class Swarm:
-    id: str
-    tenant_id: str
-    owner_id: str
-    name: str
-    leader_id: str                # agent that decomposes + synthesizes
-    worker_ids: List[str]         # agents that execute subtasks
-    created_at: datetime
-    status: str = "ready"         # ready | running | done | failed
-```
+## The Two Phases
 
-### `SwarmResult`
+`application/swarm/swarm.py::SwarmCoordinatorUseCase.run()`:
 
-```python
-@dataclass
-class SwarmResult:
-    final_response: str
-    worker_responses: Dict[str, str]   # agent_id -> output
-    session_id: str
-```
+1. **Fan out.** Workers are taken in declared order and truncated to
+   `max_workers` (default 5). A worker that is missing or `is_active == False`
+   contributes the literal string `"(worker unavailable)"` rather than aborting
+   the run - a partially-degraded swarm still produces an answer. An inactive
+   or missing **leader** is fatal: the swarm is marked `FAILED` and
+   `AgentNotFoundError` is raised, because phase 2 has no meaning without it.
+2. **Synthesize.** The leader is re-run with the task plus a `Worker reports:`
+   block of `agent_id: output` lines. Its reply becomes
+   `SwarmResult.final_response`. `session_id` is `f"swarm:{swarm.id}"`.
 
-## Ports
+Worker calls are **sequential**, not gathered. That is deliberate: the workers
+are LLM calls with real token cost and a shared rate limiter, so an unbounded
+fan-out is how you get a 429 storm. `max_workers` is the bound.
 
-### `AgentRepository` — `src/nexus/domain/ports/agent_repository.py`
+## Tool Scoping
 
-```python
-class AgentRepository(ABC):
-    async def save(self, agent: Agent, tenant_id: str = "default") -> None
-    async def get(self, agent_id: str, tenant_id: str = "default") -> Optional[Agent]
-    async def list_by_role(self, role: str, tenant_id: str = "default", limit: int = 100) -> List[Agent]
-    async def delete(self, agent_id: str, tenant_id: str = "default") -> None
-```
+`Agent.tools` is an allowlist of tool **names**. When it is non-empty,
+`SwarmAgentExecutor` wraps the real registry in `_FilteredToolRegistry`, a
+`ToolRegistry` view that:
 
-### `SwarmRepository` — same shape, persisted as `swarm:{tenant_id}:{id}`.
+- returns `None` from `get()` for a non-allowlisted tool,
+- filters `search()` (over-fetching `limit * 4` before filtering, so a small
+  allowlist does not starve results),
+- filters `list_all()`,
+- passes `register()` / `update()` straight through.
 
-No new external infra: both persist as JSON documents in the existing
-short-term store, exactly like P2 goals.
+An empty `tools` list means **all tools** - there is no way to express "no
+tools" except by registering a swarm agent with `tools: []` and relying on the
+prompt to stop it. That is a known sharp edge, not a design decision.
 
-## Application Layer — `src/nexus/application/swarm/`
+Critically, the wrapper is passed *per call* to
+`ProcessMessageUseCase.execute(tools=...)`. It used to be installed by mutating
+the container's shared `self._tools` and restoring it afterwards, which meant
+two concurrent agents silently ran with each other's tool access. See "Critical
+Bugs Fixed" in `AGENTS.md`.
 
-### `AgentUseCases`
-- `RegisterAgentUseCase` — validate name/prompt/tools, persist, tenant-scoped.
-- `ListAgentsUseCase` / `GetAgentUseCase` — tenant-scoped reads.
+## Multi-tenancy
 
-### `SwarmCoordinatorUseCase` — the orchestrator
+Every repository call is tenant-scoped: `save(agent, tenant_id=...)`,
+`get(agent_id, tenant_id=...)`, `list_all(tenant_id=...)`. `CreateSwarmUseCase`
+verifies that the leader **and every worker id** resolves within the same tenant
+before writing the swarm, so a swarm cannot be assembled across tenants by
+guessing UUIDs.
 
-```
-SwarmCoordinatorUseCase.run(swarm, task, tenant_id):
-    workers = [await agent_repo.get(wid, tenant) for wid in swarm.worker_ids if ACTIVE]
-    # phase 1: fan out
-    for worker in workers:
-        response = await executor.run_agent(worker, task, tenant_id)   # worker system_prompt + tools
-        worker_responses[worker.id] = response
-    # phase 2: synthesize
-    leader = await agent_repo.get(swarm.leader_id, tenant)
-    brief = task + "\n".join(f"{name}: {resp}" for worker_responses)
-    final = await executor.run_agent(leader, brief, tenant_id, include_worker_context=True)
-    return SwarmResult(final, worker_responses)
-```
+## Entities
 
-### `AgentExecutor` (infra) — `infrastructure/adapters/swarm/executor.py`
+`Agent` (`domain/entities/agent.py`): `name`, `tenant_id`, `owner_id`,
+`system_prompt`, `role` (`"leader" | "worker"`, informational only), `tools`,
+`status: AgentStatus`, `metadata`, and `is_active`.
 
-Wraps `ProcessMessageUseCase` with an optional `system_prompt` override and a
-tool allowlist filter:
+`Swarm` (`domain/entities/swarm.py`): `name`, `tenant_id`, `owner_id`,
+`leader_id`, `worker_ids`, `status: SwarmStatus` (`ready` / `running` /
+`done` / `failed`), `metadata`.
 
-```python
-class SwarmAgentExecutor:
-    async def run_agent(self, agent, task, tenant_id) -> str:
-        return await self._process_message.execute(
-            user_id=agent.owner_id,
-            message=task,
-            session_id=f"agent:{agent.id}",
-            tenant_id=tenant_id,
-            system_prompt=agent.system_prompt,   # new optional param (below)
-        )
-```
+`SwarmResult`: `final_response`, `worker_responses: dict[str, str]`,
+`session_id`.
 
-### `ProcessMessageUseCase` change (small)
+## API
 
-Add `system_prompt: Optional[str] = None` to `execute()`; `_build_context`
-inserts it as the top system message (above tone/memories). Default `None`
-keeps existing behavior byte-for-byte.
-
-## API Surface — `src/nexus/infrastructure/api/routes/swarm.py`
-
-All behind `require_identity`, tenant-scoped, chat-rate-limited.
-
-| Method | Path | Notes |
+| Method | Path | Purpose |
 |---|---|---|
-| POST | `/v1/agents` | register agent `{name, role, system_prompt, tools}` |
-| GET | `/v1/agents` | list tenant agents |
-| GET | `/v1/agents/{id}` | detail |
-| POST | `/v1/swarms` | create `{name, leader_id, worker_ids}` |
-| GET | `/v1/swarms` | list |
-| POST | `/v1/swarms/{id}/run` | body `{task}` → aggregated `SwarmResult` |
+| `POST` | `/v1/swarm/agents` | register an agent |
+| `GET` | `/v1/swarm/agents` | list (optional `role` filter) |
+| `GET` | `/v1/swarm/agents/{id}` | agent detail |
+| `POST` | `/v1/swarm/swarms` | create a swarm |
+| `GET` | `/v1/swarm/swarms` | list |
+| `POST` | `/v1/swarm/swarms/{id}/run` | run it |
+| `GET` | `/v1/swarm/swarms/runs` | run history |
+| `GET` | `/v1/swarm/swarms/{id}/run-history` | per-swarm run history |
 
-## Security (reuse from P1)
+Run history is persisted separately from the swarm entity, so
+`Swarm.metadata` does not grow without bound across runs.
 
-- Every agent/swarm query and mutation passes `tenant_id`; `get()` returns
-  `None` for cross-tenant ids (404).
-- Swarm runs use `require_rate_limit("chat")` like `/v1/chat`.
-- Worker agents can only use their allowlisted `tools`; a worker's executor
-  restricts the tool registry to `agent.tools` before each run.
-- `NEXUS_SWARM_MAX_WORKERS` (default 5) caps fan-out per swarm.
+## Example
 
-## Guardrail Summary
+```bash
+curl -X POST http://localhost:8000/v1/swarm/agents -H "Content-Type: application/json" \
+  -d '{"name":"security-reviewer","tenant_id":"t1","owner_id":"u1",
+       "system_prompt":"You audit dependencies for known CVEs.",
+       "role":"worker","tools":["grep","read_file"]}'
 
-| Risk | Mitigation |
-|---|---|
-| Cross-tenant agent access | tenant-scoped repo + identity (P1) |
-| Unbounded fan-out | `NEXUS_SWARM_MAX_WORKERS` |
-| Agent runs tools it shouldn't | per-agent tool allowlist enforced at execution |
-| Noisy/looping workers | chat rate limit on runs; per-agent session keys |
-| Prompt injection from worker output | leader gets worker output as data, leader's own prompt defines trust |
+curl -X POST http://localhost:8000/v1/swarm/swarms -H "Content-Type: application/json" \
+  -d '{"name":"audit","tenant_id":"t1","owner_id":"u1",
+       "leader_id":"<leader>","worker_ids":["<security-reviewer>"]}'
 
-## Rollout Order
+curl -X POST http://localhost:8000/v1/swarm/swarms/<swarm_id>/run \
+  -H "Content-Type: application/json" -d '{"task":"Audit our requirements for CVEs."}'
+```
 
-1. `Agent`/`Swarm` entities + `AgentRepository`/`SwarmRepository` + fakes.
-2. `ProcessMessageUseCase.system_prompt` optional param.
-3. Agent use cases + `SwarmCoordinatorUseCase` + `SwarmAgentExecutor`.
-4. API routes + config (`NEXUS_SWARM_MAX_WORKERS`) + env/compose updates.
-5. Tests: entity, repo tenancy, coordinator fan-out/synthesis, system-prompt
-   injection, API isolation. Fakes only — no external infra.
+## See also
+
+- [Architecture Map](architecture-map.md) - the `AgentRepository` / `SwarmRepository` bindings
+- [Dual-Loop Architecture](dual-loop.md) - each agent run is a full cortex ReAct loop
+- [Agent Onboarding](agent-onboarding.md)

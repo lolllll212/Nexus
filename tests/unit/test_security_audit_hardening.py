@@ -256,4 +256,3 @@ async def test_query_database_blocks_writes_and_disallowed_hosts():
     )
     assert "error" in bad_host_res
     assert "not in the allowed" in bad_host_res["error"].lower()
-

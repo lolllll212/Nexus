@@ -165,9 +165,10 @@ def test_request_id_and_head_probes():
 
 def test_websocket_telemetry():
     app = create_app()
-    with TestClient(app) as client, client.websocket_connect(
-        "/ws/telemetry", headers={"Authorization": "Bearer sk-test-1"}
-    ) as ws:
+    with (
+        TestClient(app) as client,
+        client.websocket_connect("/ws/telemetry", headers={"Authorization": "Bearer sk-test-1"}) as ws,
+    ):
         data = ws.receive_json()
         assert data["type"] == "telemetry_pulse"
         assert "uptime_seconds" in data

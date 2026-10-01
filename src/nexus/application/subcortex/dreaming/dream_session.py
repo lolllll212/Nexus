@@ -13,9 +13,7 @@ Emits events so the cortex can be notified of new knowledge at dawn.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-
-from nexus.domain.value_objects.clock import utc_now
+from datetime import datetime, timedelta
 
 from nexus.application.subcortex.dreaming.compress import CompressionResult, CompressionUseCase
 from nexus.application.subcortex.dreaming.consolidate import ConsolidationResult, ConsolidationUseCase
@@ -27,6 +25,7 @@ from nexus.domain.ports.llm_provider import LLMProvider
 from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
 from nexus.domain.ports.observability import Metrics, NoopMetrics, NoopTracer, Tracer
 from nexus.domain.ports.sandbox import Sandbox
+from nexus.domain.value_objects.clock import utc_now
 from nexus.domain.value_objects.synapse import SynapseConfig
 
 

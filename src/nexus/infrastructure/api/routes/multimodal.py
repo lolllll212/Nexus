@@ -9,11 +9,10 @@ color palettes, and chronological temporal keyframe logs.
 from __future__ import annotations
 
 import base64
-import json
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from nexus.application.tools.multimodal_perception import MultimodalPerceptionBridge
 from nexus.infrastructure.api.dependencies import get_container, require_identity
@@ -66,6 +65,7 @@ async def process_media_upload(
         else:
             try:
                 import urllib.request
+
                 req = urllib.request.Request(source_url, headers={"User-Agent": "NEXUS-Multimodal/1.0"})
                 with urllib.request.urlopen(req, timeout=5) as resp:
                     data = resp.read()[:5_000_000]
@@ -78,9 +78,13 @@ async def process_media_upload(
 
     is_video = False
     lower_name = filename.lower()
-    if media_type == "video" or any(lower_name.endswith(ext) for ext in [".mp4", ".webm", ".mov", ".mkv", ".avi"]):
+    if media_type == "video" or any(
+        lower_name.endswith(ext) for ext in [".mp4", ".webm", ".mov", ".mkv", ".avi"]
+    ):
         is_video = True
-    elif media_type == "image" or any(lower_name.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp"]):
+    elif media_type == "image" or any(
+        lower_name.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp"]
+    ):
         is_video = False
     else:
         is_video = "video" in lower_name

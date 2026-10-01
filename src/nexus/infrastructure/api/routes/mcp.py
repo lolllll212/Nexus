@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import time
 from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -55,7 +56,11 @@ MCP_TOOLS: List[McpToolDefinition] = [
         category="perception",
         parameters={
             "source": {"type": "string", "description": "URL or filename of media"},
-            "media_type": {"type": "string", "enum": ["image", "video", "auto"], "description": "Media modality"},
+            "media_type": {
+                "type": "string",
+                "enum": ["image", "video", "auto"],
+                "description": "Media modality",
+            },
             "question": {"type": "string", "description": "Analysis question to resolve"},
         },
         required=["source"],
@@ -67,7 +72,13 @@ MCP_TOOLS: List[McpToolDefinition] = [
         parameters={
             "module": {
                 "type": "string",
-                "enum": ["multimodal_bridge", "canvas_builder", "code_compiler", "video_studio", "claude_studio"],
+                "enum": [
+                    "multimodal_bridge",
+                    "canvas_builder",
+                    "code_compiler",
+                    "video_studio",
+                    "claude_studio",
+                ],
                 "description": "The contextual UI module to display",
             },
             "initial_data": {"type": "object", "description": "Optional payload to seed the tool"},
@@ -92,7 +103,11 @@ MCP_TOOLS: List[McpToolDefinition] = [
         description="Flash critical security or system anomaly alerts onto the outer HUD ring.",
         category="system",
         parameters={
-            "severity": {"type": "string", "enum": ["nominal", "info", "warning", "critical"], "description": "Alert severity"},
+            "severity": {
+                "type": "string",
+                "enum": ["nominal", "info", "warning", "critical"],
+                "description": "Alert severity",
+            },
             "message": {"type": "string", "description": "Telemetry status message"},
         },
         required=["severity", "message"],
@@ -147,6 +162,7 @@ async def execute_mcp_tool(
 
     elif tool_name == "process_multimodal_media":
         from nexus.infrastructure.adapters.execution.extended_tools import _process_multimodal_media
+
         res = await _process_multimodal_media(params)
         ui_action = {"type": "OPEN_MODAL", "target": "multimodal_bridge", "data": res}
         result = res

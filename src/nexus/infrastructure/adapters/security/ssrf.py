@@ -187,7 +187,9 @@ class PinnedHTTPSHandler(urllib.request.HTTPSHandler):
             except ValueError:
                 pass
         context = ssl.create_default_context()
-        conn = http.client.HTTPSConnection(self.pinned_ip, port=port, timeout=timeout, context=context, **kwargs)
+        conn = http.client.HTTPSConnection(
+            self.pinned_ip, port=port, timeout=timeout, context=context, **kwargs
+        )
         orig_connect = conn.connect
 
         def _pinned_connect():

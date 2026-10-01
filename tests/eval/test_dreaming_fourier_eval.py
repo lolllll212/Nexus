@@ -118,9 +118,7 @@ def test_fourier_grid_routing_eval():
     router = FourierRouterUseCase()
 
     # Create signal with dominant spatial frequency energy along the 'q' axis (r=0, q varies)
-    signal_q_dominant: dict[HexCoord, float] = {
-        HexCoord(i, 0): float(i % 2) for i in range(8)
-    }
+    signal_q_dominant: dict[HexCoord, float] = {HexCoord(i, 0): float(i % 2) for i in range(8)}
 
     result = router.route(signal_q_dominant)
     assert result.dominant_axis == "q"
@@ -128,9 +126,7 @@ def test_fourier_grid_routing_eval():
     assert result.axis_energy["q"] > 0
 
     # Create signal along the 'r' axis (q=0, r varies)
-    signal_r_dominant: dict[HexCoord, float] = {
-        HexCoord(0, i): float(i % 2) for i in range(8)
-    }
+    signal_r_dominant: dict[HexCoord, float] = {HexCoord(0, i): float(i % 2) for i in range(8)}
     result_r = router.route(signal_r_dominant)
     assert result_r.dominant_axis == "r"
     assert result_r.axis_energy["r"] > result_r.axis_energy["q"]

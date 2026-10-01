@@ -9,19 +9,15 @@ OCR Inscription Extraction, Color Palettes, Entity Graphs, and Temporal Keyframe
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import io
-import json
 import math
-import mimetypes
-import os
 import re
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 try:
     from PIL import Image, ImageStat
+
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
@@ -91,6 +87,11 @@ class MultimodalPerceptionBridge:
                 stat = ImageStat.Stat(rgb_img)
                 avg_r, avg_g, avg_b = [int(x) for x in stat.mean[:3]]
                 avg_luminance = round(0.2126 * avg_r + 0.7152 * avg_g + 0.0722 * avg_b, 1)
+                # RMS contrast over the three channels, normalized to 0..1.
+                # Surfaced in the payload; the seeded default above stands in
+                # when Pillow is unavailable or the image will not decode.
+                rms = math.sqrt(sum(float(s) ** 2 for s in stat.stddev[:3]) / 3.0)
+                contrast_score = round(min(rms / 128.0, 1.0), 3)
 
                 # Thumbnail palette quantization
                 small = rgb_img.resize((64, 64), Image.Resampling.LANCZOS)
@@ -104,12 +105,14 @@ class MultimodalPerceptionBridge:
                     hex_code = _rgb_to_hex(r, g, b)
                     pct = round((count / total_pixels) * 100, 1)
                     name = _color_name_heuristic(r, g, b)
-                    palette_list.append({
-                        "hex": hex_code,
-                        "rgb": [r, g, b],
-                        "percentage": pct,
-                        "name": name,
-                    })
+                    palette_list.append(
+                        {
+                            "hex": hex_code,
+                            "rgb": [r, g, b],
+                            "percentage": pct,
+                            "name": name,
+                        }
+                    )
             except Exception:
                 pass
 
@@ -129,25 +132,41 @@ class MultimodalPerceptionBridge:
         spatial_grid = {
             "top_left": {
                 "sector": "Top-Left (Quadrant 1)",
-                "visual_elements": ["Workspace Navigation Tabs", "Branding Badge 'NEXUS OS'", "Search Indexer"],
+                "visual_elements": [
+                    "Workspace Navigation Tabs",
+                    "Branding Badge 'NEXUS OS'",
+                    "Search Indexer",
+                ],
                 "density": "Medium-High",
                 "dominant_hue": palette_list[0]["name"] if palette_list else "Deep Obsidian",
             },
             "top_center": {
                 "sector": "Top-Center (Quadrant 2)",
-                "visual_elements": ["Floating Minimal TopBar", "Mode Switcher [GRAPH, VIDEO, RESEARCH, CODE]", "Voice Mode Trigger"],
+                "visual_elements": [
+                    "Floating Minimal TopBar",
+                    "Mode Switcher [GRAPH, VIDEO, RESEARCH, CODE]",
+                    "Voice Mode Trigger",
+                ],
                 "density": "Medium",
                 "dominant_hue": "Glassmorphic Slate with Cyan Border",
             },
             "top_right": {
                 "sector": "Top-Right (Quadrant 3)",
-                "visual_elements": ["World Time Zone Matrix", "System Uptime & Core Latency Clock", "Window Mode Controls"],
+                "visual_elements": [
+                    "World Time Zone Matrix",
+                    "System Uptime & Core Latency Clock",
+                    "Window Mode Controls",
+                ],
                 "density": "High",
                 "dominant_hue": "Crisp Neon Emerald Indicators",
             },
             "mid_left": {
                 "sector": "Mid-Left (Quadrant 4)",
-                "visual_elements": ["Hardware Telemetry Graphs", "CPU / Memory Core Load Monitor", "Active Agent Subcortex Tree"],
+                "visual_elements": [
+                    "Hardware Telemetry Graphs",
+                    "CPU / Memory Core Load Monitor",
+                    "Active Agent Subcortex Tree",
+                ],
                 "density": "Very High",
                 "dominant_hue": "Cyber Cyan Line Graph Streams",
             },
@@ -157,32 +176,49 @@ class MultimodalPerceptionBridge:
                     "Cybernetic Arc Reactor Orb Centerpiece",
                     "Pulsating Concentric Rotating Energy Rings",
                     "State Indicator Glow: Nominal / Listening / Thinking / Speaking",
-                    "Harmonic Audio Waveform Ripples"
+                    "Harmonic Audio Waveform Ripples",
                 ],
                 "density": "Focal Point",
                 "dominant_hue": palette_list[1]["name"] if len(palette_list) > 1 else "Electric Cyber Cyan",
             },
             "mid_right": {
                 "sector": "Mid-Right (Quadrant 6)",
-                "visual_elements": ["Network Throughput Streams", "I/O Packet Latency Visualizer", "Port Health Badges [:8000, :3000, :4890]"],
+                "visual_elements": [
+                    "Network Throughput Streams",
+                    "I/O Packet Latency Visualizer",
+                    "Port Health Badges [:8000, :3000, :4890]",
+                ],
                 "density": "High",
                 "dominant_hue": "Deep Obsidian with Green Indicators",
             },
             "bottom_left": {
                 "sector": "Bottom-Left (Quadrant 7)",
-                "visual_elements": ["Subcortex Memory Synapses", "Dream Engine Cache Counter", "Fast Navigation Icons"],
+                "visual_elements": [
+                    "Subcortex Memory Synapses",
+                    "Dream Engine Cache Counter",
+                    "Fast Navigation Icons",
+                ],
                 "density": "Medium",
                 "dominant_hue": "Neutral Steel Slate",
             },
             "bottom_center": {
                 "sector": "Bottom-Center (Quadrant 8)",
-                "visual_elements": ["Unified Command Center Input", "Glassmorphic Prompt Terminal", "Race-Collision State Locks", "Quick-Action Prompt Chips"],
+                "visual_elements": [
+                    "Unified Command Center Input",
+                    "Glassmorphic Prompt Terminal",
+                    "Race-Collision State Locks",
+                    "Quick-Action Prompt Chips",
+                ],
                 "density": "High",
                 "dominant_hue": "Obsidian Glass Overlay with Glowing Border",
             },
             "bottom_right": {
                 "sector": "Bottom-Right (Quadrant 9)",
-                "visual_elements": ["Agent Status Badge", "Microphone Hotkey Indicator [M]", "Contextual Tool Dock Trigger"],
+                "visual_elements": [
+                    "Agent Status Badge",
+                    "Microphone Hotkey Indicator [M]",
+                    "Contextual Tool Dock Trigger",
+                ],
                 "density": "Medium",
                 "dominant_hue": "Cyan Glow Shadow",
             },
@@ -190,16 +226,48 @@ class MultimodalPerceptionBridge:
 
         # Entities and scene graph relations
         entities = [
-            {"id": "e1", "name": "Arc Reactor Centerpiece (The Orb)", "category": "CORE_VISUALIZATION", "coordinates": "Center [x:50%, y:50%]"},
-            {"id": "e2", "name": "Telemetry Flank Monitors", "category": "HUD_DATA_STREAM", "coordinates": "Lateral Sides [x:5%, x:95%]"},
-            {"id": "e3", "name": "Command Center Prompt Bar", "category": "USER_INPUT_CONTROL", "coordinates": "Bottom Center [y:90%]"},
-            {"id": "e4", "name": "Glassmorphic Window Shell", "category": "CONTAINER_UI", "coordinates": "Viewport Full"},
+            {
+                "id": "e1",
+                "name": "Arc Reactor Centerpiece (The Orb)",
+                "category": "CORE_VISUALIZATION",
+                "coordinates": "Center [x:50%, y:50%]",
+            },
+            {
+                "id": "e2",
+                "name": "Telemetry Flank Monitors",
+                "category": "HUD_DATA_STREAM",
+                "coordinates": "Lateral Sides [x:5%, x:95%]",
+            },
+            {
+                "id": "e3",
+                "name": "Command Center Prompt Bar",
+                "category": "USER_INPUT_CONTROL",
+                "coordinates": "Bottom Center [y:90%]",
+            },
+            {
+                "id": "e4",
+                "name": "Glassmorphic Window Shell",
+                "category": "CONTAINER_UI",
+                "coordinates": "Viewport Full",
+            },
         ]
 
         relations = [
-            {"source": "Arc Reactor Centerpiece", "relation": "ANCHORS_VISUALLY", "target": "Viewport Center"},
-            {"source": "Telemetry Flank Monitors", "relation": "FEEDS_REALTIME_METRICS_TO", "target": "Operator"},
-            {"source": "Command Center Prompt Bar", "relation": "INJECTS_INSTRUCTION_INTO", "target": "Arc Reactor Centerpiece"},
+            {
+                "source": "Arc Reactor Centerpiece",
+                "relation": "ANCHORS_VISUALLY",
+                "target": "Viewport Center",
+            },
+            {
+                "source": "Telemetry Flank Monitors",
+                "relation": "FEEDS_REALTIME_METRICS_TO",
+                "target": "Operator",
+            },
+            {
+                "source": "Command Center Prompt Bar",
+                "relation": "INJECTS_INSTRUCTION_INTO",
+                "target": "Arc Reactor Centerpiece",
+            },
         ]
 
         # Scene description summary
@@ -236,6 +304,7 @@ class MultimodalPerceptionBridge:
             "file_size_kb": file_size_kb,
             "sha256": sha256,
             "average_luminance": avg_luminance,
+            "contrast_score": contrast_score,
             "color_palette": palette_list,
             "ocr_extracted_text": ocr_strings,
             "spatial_grid": spatial_grid,
@@ -312,8 +381,18 @@ class MultimodalPerceptionBridge:
         ]
 
         transcript = [
-            {"start": "00:06.80", "end": "00:09.90", "speaker": "OPERATOR", "text": "NEXUS, analyze systemic infrastructure and video stream."},
-            {"start": "00:12.80", "end": "00:14.50", "speaker": "NEXUS AI", "text": "Analysis complete. All 10 autonomous agents synchronized."},
+            {
+                "start": "00:06.80",
+                "end": "00:09.90",
+                "speaker": "OPERATOR",
+                "text": "NEXUS, analyze systemic infrastructure and video stream.",
+            },
+            {
+                "start": "00:12.80",
+                "end": "00:14.50",
+                "speaker": "NEXUS AI",
+                "text": "Analysis complete. All 10 autonomous agents synchronized.",
+            },
         ]
 
         action_narrative = (
@@ -383,7 +462,10 @@ class MultimodalPerceptionBridge:
             cleaned = []
             for m in ascii_matches:
                 s = m.decode("ascii", errors="ignore").strip()
-                if any(k in s.lower() for k in ["nexus", "cpu", "mode", "graph", "video", "status", "version", "http"]):
+                if any(
+                    k in s.lower()
+                    for k in ["nexus", "cpu", "mode", "graph", "video", "status", "version", "http"]
+                ):
                     cleaned.append(s)
             if cleaned:
                 found.extend(cleaned[:8])
@@ -404,11 +486,22 @@ class MultimodalPerceptionBridge:
         relations: List[Dict[str, Any]],
         scene_summary: str,
     ) -> str:
-        palette_lines = "\n".join([f"    - {c['name']} ({c['hex']}) :: {c['percentage']}% coverage" for c in palette])
-        grid_lines = "\n".join([f"    - [{v['sector']}]: {', '.join(v['visual_elements'])} (Hue: {v['dominant_hue']})" for v in spatial_grid.values()])
-        ocr_lines = "\n".join([f"    - \"{txt}\"" for txt in ocr_text])
-        entities_lines = "\n".join([f"    - {e['name']} [{e['category']}] located at {e['coordinates']}" for e in entities])
-        relations_lines = "\n".join([f"    - {r['source']} ---> ({r['relation']}) ---> {r['target']}" for r in relations])
+        palette_lines = "\n".join(
+            [f"    - {c['name']} ({c['hex']}) :: {c['percentage']}% coverage" for c in palette]
+        )
+        grid_lines = "\n".join(
+            [
+                f"    - [{v['sector']}]: {', '.join(v['visual_elements'])} (Hue: {v['dominant_hue']})"
+                for v in spatial_grid.values()
+            ]
+        )
+        ocr_lines = "\n".join([f'    - "{txt}"' for txt in ocr_text])
+        entities_lines = "\n".join(
+            [f"    - {e['name']} [{e['category']}] located at {e['coordinates']}" for e in entities]
+        )
+        relations_lines = "\n".join(
+            [f"    - {r['source']} ---> ({r['relation']}) ---> {r['target']}" for r in relations]
+        )
 
         return f"""<<< MULTIMODAL PERCEPTION BRIDGE: HIGH-DENSITY IMAGE REPRESENTATION >>>
 [IMAGE IDENTIFIER]: {filename} | Dimensions: {dimensions} ({aspect_ratio})
@@ -455,7 +548,9 @@ generate code, critique design, or analyze visual hierarchy exactly as if you po
             )
         timeline_str = "\n".join(keyframe_lines)
 
-        transcript_lines = "\n".join([f"    - [{t['start']} -> {t['end']}] {t['speaker']}: \"{t['text']}\"" for t in transcript])
+        transcript_lines = "\n".join(
+            [f"    - [{t['start']} -> {t['end']}] {t['speaker']}: \"{t['text']}\"" for t in transcript]
+        )
 
         return f"""<<< MULTIMODAL PERCEPTION BRIDGE: HIGH-DENSITY VIDEO REPRESENTATION >>>
 [VIDEO IDENTIFIER]: {filename} | Duration: {duration} | Resolution: {resolution}

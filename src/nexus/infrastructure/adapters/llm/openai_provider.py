@@ -38,9 +38,16 @@ class OpenAIProvider(StreamingLLMProvider):
     def _client(self):
         from openai import AsyncOpenAI
 
+        # Local endpoints use a 2.5s timeout/one retry; remote endpoints use 20s/two retries.
+        is_local = bool(self._base_url and ("localhost" in self._base_url or "127.0.0.1" in self._base_url))
+        timeout = 2.5 if is_local else 20.0
+        max_retries = 1 if is_local else 2
+
         if self._base_url:
-            return AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
-        return AsyncOpenAI(api_key=self._api_key)
+            return AsyncOpenAI(
+                api_key=self._api_key, base_url=self._base_url, timeout=timeout, max_retries=max_retries
+            )
+        return AsyncOpenAI(api_key=self._api_key, timeout=timeout, max_retries=max_retries)
 
     async def complete(
         self,

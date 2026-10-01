@@ -1,0 +1,8 @@
+[tool.importlinter]
+root_package = "nexus"
+
+[[tool.importlinter.contracts]]
+name = "domain-is-independent"
+type = "forbidden"
+source_modules = ["nexus.domain"]
+forbidden_modules = ["nexus.infrastructure"]

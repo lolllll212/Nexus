@@ -20,7 +20,6 @@ env/
 
 # IDE
 .idea/
-.vscode/
 *.swp
 *.swo
 *~
@@ -57,3 +56,11 @@ _test_*.py
 data/coding_examples_*.json
 py_deps/
 web_vendor/
+
+# opencode sessions
+.opencode/sessions/
+.opencode/storage/
+
+# Agent state (local only)
+nexus_state.json
+agent_activity.jsonl

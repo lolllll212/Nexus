@@ -13,15 +13,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import os
 import sys
 from pathlib import Path
 
-from nexus.eval.harness import GOLDEN_SET, EvalRunner, write_report_html
+from nexus.eval.harness import GOLDEN_SET, EvalRunner, gate, write_report_html, write_report_json
 
 
-def _build_live_runner() -> object:
+def _build_live_runner() -> EvalRunner:
     """Container in memory mode + real LLM + real extended tools."""
     from nexus.infrastructure.di.container import Config, Container
 
@@ -40,8 +39,7 @@ def _build_live_runner() -> object:
 
     # The eval runner only needs use-case + llm; keep container references
     # alive on the runner object so the event loop etc. stay wired.
-    runner = EvalRunner(container_factory=lambda: _EvalHarnessShim(container))
-    return runner
+    return EvalRunner(container_factory=lambda: _EvalHarnessShim(container))
 
 
 class _EvalHarnessShim:
@@ -53,13 +51,12 @@ class _EvalHarnessShim:
         self.process_message = container.process_message
 
 
-async def _run(root: Path) -> tuple[EvalRunner, Path]:
+async def _run(root: Path, min_pass_rate: float = 0.0) -> tuple[EvalRunner, Path]:
     runner = _build_live_runner()
     for case in GOLDEN_SET:
         runner.results.append(await runner.run_case(case))
 
-    root.mkdir(parents=True, exist_ok=True)
-    (root / "eval-report.json").write_text(json.dumps(runner.to_json(), indent=2))
+    write_report_json(runner.results, root / "eval-report.json", min_pass_rate=min_pass_rate)
     write_report_html(runner.results, root / "eval-report.html")
     return runner, root / "eval-report.html"
 
@@ -87,15 +84,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.api_key:
         os.environ["NEXUS_EVAL_API_KEY"] = args.api_key
 
-    runner, html_path = asyncio.run(_run(Path(args.output)))
+    runner, html_path = asyncio.run(_run(Path(args.output), min_pass_rate=args.min_pass_rate))
     print(runner.report())
     print(f"HTML report: {html_path}")
+    print(f"JSON report: {Path(args.output) / 'eval-report.json'}")
 
-    if runner.pass_rate < args.min_pass_rate:
-        print(
-            f"Pass rate {runner.pass_rate:.1%} below threshold {args.min_pass_rate:.1%}",
-            file=sys.stderr,
-        )
+    # Single shared gate decision - nexus.eval.harness.gate - so the CLI and the
+    # pytest coverage of NEXUS_EVAL_MIN_PASS_RATE cannot drift apart.
+    ok, reason = gate(runner.pass_rate, args.min_pass_rate)
+    if not ok:
+        print(reason, file=sys.stderr)
         return 1
     return 0
 

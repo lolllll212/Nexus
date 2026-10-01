@@ -1,7 +1,7 @@
 """Test MCP tool listing and UI action execution."""
 
-import pytest
 from starlette.testclient import TestClient
+
 from nexus.infrastructure.api.main import create_app
 
 AUTH_HEADERS = {"Authorization": "Bearer sk-test-1"}
