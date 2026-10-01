@@ -14,7 +14,14 @@ from nexus.domain.value_objects.schema import JSONSchema
 
 
 class LLMProvider(ABC):
-    """Abstraction over any chat-completion LLM."""
+    """Abstraction over any chat-completion LLM.
+
+    Subclasses must implement `complete` and `extract_structured`.
+    For function calling, subclasses with native tool support should override `complete_with_tools`.
+    Third-party plugin authors or lightweight custom providers may rely on the default
+    `complete_with_tools` fallback, which serializes tool schemas into an injected system message
+    and invokes `complete` without mutating the caller's message list.
+    """
 
     @abstractmethod
     async def complete(
