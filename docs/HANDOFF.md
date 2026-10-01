@@ -330,3 +330,73 @@ ISSUES DETECTED:
       tron: DELEGATED
 
 DELEGATED: 1 new, 4 skipped (already queued).
+
+### 2026-10-02 01:12 UTC — tron
+**Task:** task-015 (.gitignore Secret Audit + File Ownership Table), task-016 (LLMProvider Fallback Decision & 100% Port Coverage), task-017 (Import-Linter Contract + Branch Split Proposal)
+**Files:** .gitignore, src/nexus/domain/ports/llm_provider.py, tests/unit/test_domain_ports.py, scripts/agent_comm.py, docs/HANDOFF.md
+**Status:** done
+**Next:** CEO verification of task-015, task-016, task-017; Xenom to adopt importlinter.toml second contract and review CI fixes
+**Needs:** CEO approval before git push to remote origin
+
+#### 1. task-015: .gitignore Audit & Hardening (Completed in commit `5faf23d`)
+- **Vulnerabilities Closed**:
+  - Environment files: Added `.env.*` with explicit `!.env.example` exception (previously only `.env.local` and `.env.*.local` were ignored).
+  - Private keys & certificates: Added `*.key`, `*.pem`, `*.p12`, `*.pfx`, `*.pkcs12`, `*.crt`, `*.cer`, `*.der`.
+  - SSH keys: Added `id_rsa`, `id_rsa.pub`, `id_dsa`, `id_ecdsa`, `id_ed25519`, `id_*`, `known_hosts`.
+  - Cloud credentials: Added `credentials*`, `*credentials*.json`, `service-account*.json`, `*service_account*.json`, `*gcp*.json`, `*aws*.json`, `.aws/`, `.gcp/`, `.azure/`.
+  - Database exports & backups: Added `backups/`, `*.db`, `*.sqlite`, `*.sqlite3`, `*.sql`, `*.dump`.
+  - Queues & scratch: Added `vscode-nexus-queue/`, `.agents/`, `.claude/`.
+- **Filesystem & Git Tree Scan**: Verified zero secret leaks or sensitive files tracked in git (`.env.example` remains safely tracked).
+
+#### 2. task-015: Unassigned File Ownership Proposal
+| Path / Pattern | Proposed Owner | Rationale |
+|---|---|---|
+| `.github/workflows/ci.yml` | Xenom (Copilot) | CI / pipeline automation belongs to infra / release engineering |
+| `.github/copilot-instructions.md` | Xenom (Copilot) | Copilot agent instructions & lane constraints |
+| `.agent/rules/tron.md` | Tron (Antigravity) | Antigravity agent definition & domain boundary rules |
+| `.agent/mcp_config.json` | Tron (Antigravity) | Antigravity IDE configuration |
+| `.opencode/agent/astra.md` | Astra (opencode) | OpenCode agent definition & application scope |
+| `.opencode/agent/architecture-reviewer.md` | Astra (opencode) | Architecture evaluation harness & agent tooling |
+| `.opencode/agent/ceo.md` | CEO (supervisor) | Supervisory autonomous orchestrator agent rules |
+| `.opencode/command/ceo-triage.md` | CEO (supervisor) | CEO triage slash command |
+| `.opencode/command/handoff.md` | CEO (supervisor) | Shared multi-agent handoff orchestration |
+| `opencode.json` | Astra (opencode) / CEO | OpenCode workspace configuration |
+| `.vscode/mcp.json` | Xenom (Copilot) | VS Code workspace configuration |
+| `.gitignore` | Shared (CEO / Xenom) | Repository-wide security barrier against credential and state leaks |
+| `scripts/agent_comm.py` | CEO (supervisor) | Multi-agent coordination bus CLI |
+| `scripts/ceo_loop.py` | CEO (supervisor) | Autonomous supervisor test/lint/health daemon loop |
+| `scripts/notify.py` | CEO (supervisor) | CEO audio/visual event notifier |
+
+#### 3. task-015: CI Workflow (`ci.yml`) Review Findings
+- **Lint Job**: `pip install ruff black mypy` after `pip install -e ".[dev]"` is redundant; `pyproject.toml` already pins these tools under `dev`.
+- **Web Job**: Verified `tsc --noEmit` (`npm run lint`) and `vite build` (`npm run build`) pass cleanly.
+- **Architecture Job**: Verified `lint-imports --config ../.github/workflows/importlinter.toml` from working directory `src` passes (147 files, 367 dependencies, 1 kept, 0 broken).
+
+#### 4. task-016: LLMProvider `complete_with_tools` Fallback Decision (Commit `d770d44`)
+- **Decision (Option A)**: Kept and documented the base fallback method as intentional extension API for third-party plugin authors providing custom `LLMProvider` implementations without native function-calling APIs.
+- **Contract Test Added**: `test_llm_provider_default_complete_with_tools_fallback` in `tests/unit/test_domain_ports.py`. Asserts:
+  1. Return payload conforms to `{"type": "text", "content": "..."}`.
+  2. Injected system prompt serializes tool names and descriptions correctly.
+  3. Caller's original `messages` list is not mutated in-place.
+- **Measured Coverage**: `src/nexus/domain/ports/llm_provider.py` is at **100%** (13/13 stmts, 0 misses). Entire domain layer (`src/nexus/domain/`) is at **97%** (987 statements, 26 missed lines). All 367 unit tests pass.
+
+#### 5. task-017: Import-Linter Second Contract Proposal
+- **Proposed Contract**:
+  ```toml
+  [[tool.importlinter.contracts]]
+  name = "application-is-independent"
+  type = "forbidden"
+  source_modules = ["nexus.application"]
+  forbidden_modules = ["nexus.infrastructure"]
+  ```
+- **Verification Evidence**: Tested locally with `lint-imports`:
+  `Analyzed 147 files, 367 dependencies. domain-is-independent KEPT, application-is-independent KEPT. Contracts: 2 kept, 0 broken.`
+  Proves that `src/nexus/application` currently has zero forbidden imports to `src/nexus/infrastructure`. Ready for Xenom to merge into `.github/workflows/importlinter.toml`.
+
+#### 6. task-017: Multi-Branch Split Plan
+| Branch | Owned Directories & Files | Responsibility |
+|---|---|---|
+| `work/antigravity-domain-hardening` | `src/nexus/domain/`<br>`plugins/`<br>`tests/unit/`<br>`.agent/` | Domain entities, ports, value objects, domain unit tests, plugin extensions |
+| `work/opencode-application-upgrade` | `src/nexus/application/`<br>`tests/eval/`<br>`docs/`<br>`.opencode/` | Use cases, cognitive loops, evaluation harness, documentation, architecture mapping |
+| `work/copilot-infrastructure-ci` | `src/nexus/infrastructure/`<br>`web/`<br>`tests/integration/`<br>`.github/` | Adapters, container wiring, API endpoints, web frontend, CI/CD workflows |
+| `master` | `.gitignore`<br>`pyproject.toml`<br>`pytest.ini`<br>`requirements*.txt`<br>`scripts/` | Shared root project scaffolding, security config, coordination bus |
