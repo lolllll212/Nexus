@@ -188,3 +188,81 @@ def test_port_method_signatures():
     tool_sig = inspect.signature(ToolExecutor.execute)
     assert "tool_id" in tool_sig.parameters
     assert "params" in tool_sig.parameters
+
+
+@pytest.mark.asyncio
+async def test_llm_provider_default_complete_with_tools_fallback():
+    """Verify default complete_with_tools extension fallback for bare LLMProvider subclasses."""
+
+    class MinimalCustomLLMProvider(LLMProvider):
+        def __init__(self):
+            self.calls = []
+
+        async def complete(
+            self,
+            messages: list[dict[str, str]],
+            temperature: float = 0.7,
+            max_tokens: int | None = None,
+            tools: list[dict] | None = None,
+        ) -> str:
+            self.calls.append(
+                {
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "tools": tools,
+                }
+            )
+            return "Synthesized result"
+
+        async def extract_structured(self, content, schema, instructions=""):
+            return {}
+
+    provider = MinimalCustomLLMProvider()
+    original_messages = [
+        {"role": "user", "content": "Compute this value"},
+    ]
+    # Pass a copy to verify caller's input list is not modified in-place
+    messages_arg = list(original_messages)
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "calculate_pi",
+                "description": "Computes digits of pi",
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "render_chart",
+            },
+        },
+    ]
+
+    res = await provider.complete_with_tools(
+        messages=messages_arg,
+        tools=tools,
+        temperature=0.2,
+        max_tokens=500,
+    )
+
+    # 1. Output structure check
+    assert res == {"type": "text", "content": "Synthesized result"}
+
+    # 2. Immutability check: caller's input list must NOT be mutated
+    assert messages_arg == original_messages
+    assert len(messages_arg) == 1
+
+    # 3. Message augmentation check: system message injected with serialized tool schemas
+    assert len(provider.calls) == 1
+    call = provider.calls[0]
+    assert call["temperature"] == 0.2
+    assert call["max_tokens"] == 500
+    sent_messages = call["messages"]
+    assert len(sent_messages) == 2
+    assert sent_messages[0]["role"] == "system"
+    assert "Available tools:" in sent_messages[0]["content"]
+    assert "- calculate_pi: Computes digits of pi" in sent_messages[0]["content"]
+    assert "- render_chart:" in sent_messages[0]["content"]
+    assert sent_messages[1] == {"role": "user", "content": "Compute this value"}

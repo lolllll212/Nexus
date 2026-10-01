@@ -210,6 +210,71 @@ def cmd_board(args, state):
         print("No handoff board found.")
 
 
+PRIORITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+
+def cmd_ask(args, state):
+    agent = args.agent
+    msg = {
+        "id": f"msg-{len(state.get('messages', [])) + 1:03d}",
+        "from": agent,
+        "to": "ceo",
+        "kind": args.kind,
+        "text": args.text,
+        "status": "open",
+        "created_at": now(),
+        "reply": None,
+    }
+    state.setdefault("messages", []).append(msg)
+    save_state(state)
+    log_activity(agent, "ask", f"{msg['id']} [{args.kind}]: {args.text[:80]}")
+    print(f"[{agent}] sent to CEO: {msg['id']} [{args.kind}]")
+    print(f"  {args.text[:200]}")
+
+
+def cmd_inbox(args, state):
+    open_msgs = [m for m in state.get("messages", []) if m["status"] == "open"]
+    if not open_msgs:
+        print("Inbox empty.")
+        return
+    for m in open_msgs:
+        print(f"[{m['id']}] {m['from']} -> {m['to']} [{m['kind']}] {m['created_at'][:19]}")
+        print(f"  {m['text'][:250]}")
+
+
+def cmd_reply(args, state):
+    for m in state.get("messages", []):
+        if m["id"] == args.msg_id:
+            if m["status"] != "open":
+                print(f"{args.msg_id} already answered.")
+                return
+            m["status"] = "answered"
+            m["reply"] = args.text
+            m["answered_at"] = now()
+            save_state(state)
+            log_activity(args.agent, "reply", f"{args.msg_id}: {args.text[:80]}")
+            print(f"[{args.agent}] replied to {args.msg_id}")
+            return
+    print(f"Message {args.msg_id} not found.")
+
+
+def cmd_next(args, state):
+    agent = args.agent
+    mine = [t for t in state["task_queue"] if t["status"] == "pending" and t.get("for") == agent]
+    if not mine:
+        print(f"[{agent}] queue empty — nothing to do.")
+        return
+    mine.sort(key=lambda t: (PRIORITY_RANK.get(t.get("priority", "medium"), 2), t.get("created_at", "")))
+    t = mine[0]
+    print(f"[{agent}] next task: {t['id']} (priority={t.get('priority', 'medium')})")
+    print(f"  what: {t['description'][:300]}")
+    if t.get("files"):
+        print(f"  files: {', '.join(t['files'][:8])}")
+    if t.get("acceptance"):
+        print(f"  acceptance: {'; '.join(t['acceptance'])}")
+    print(f"  claim it: python scripts/agent_comm.py claim --agent {agent} --task-id {t['id']}")
+
+
 OWNER_MAP = {
     "astra": ["src/nexus/application/", "tests/eval/", "docs/"],
     "tron": ["src/nexus/domain/", "plugins/", "tests/unit/"],
@@ -361,6 +426,12 @@ def render_dashboard(state) -> str:
         flag = " [NEEDS VERIFY]" if task["status"] == "resolved" else ""
         lines.append(f"  [{task['id']}] {task['status']:8s} | {who:8s} | {task['description'][:50]}{flag}")
     lines.append("")
+    open_msgs = [m for m in state.get("messages", []) if m["status"] == "open"]
+    if open_msgs:
+        lines.append(f"INBOX ({len(open_msgs)} open):")
+        for m in open_msgs[-5:]:
+            lines.append(f"  [{m['id']}] {m['from']} [{m['kind']}] {m['text'][:55]}")
+        lines.append("")
     lines.append("RECENT ACTIVITY:")
     for entry in read_activity(10):
         lines.append(
@@ -427,6 +498,21 @@ def main():
     p = sub.add_parser("plan-status")
     p.add_argument("--plan-id", required=True)
 
+    p = sub.add_parser("next")
+    p.add_argument("--agent", required=True, choices=["ceo", "astra", "tron", "xenom"])
+
+    p = sub.add_parser("ask")
+    p.add_argument("--agent", required=True, choices=["ceo", "astra", "tron", "xenom"])
+    p.add_argument("--kind", required=True, choices=["question", "blocker", "escalation", "handoff"])
+    p.add_argument("--text", required=True, help="The message to the CEO")
+
+    sub.add_parser("inbox")
+
+    p = sub.add_parser("reply")
+    p.add_argument("--agent", required=True, choices=["ceo", "astra", "tron", "xenom"])
+    p.add_argument("--msg-id", required=True)
+    p.add_argument("--text", required=True, help="The reply")
+
     sub.add_parser("status")
     sub.add_parser("board")
 
@@ -443,6 +529,10 @@ def main():
         "watch": cmd_watch,
         "plan": cmd_plan,
         "plan-status": cmd_plan_status,
+        "next": cmd_next,
+        "ask": cmd_ask,
+        "inbox": cmd_inbox,
+        "reply": cmd_reply,
         "status": cmd_status,
         "board": cmd_board,
     }

@@ -15,8 +15,46 @@ env/
 
 # Environment secrets
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+
+# Private keys, certificates, & keystores
+*.key
+*.pem
+*.p12
+*.pfx
+*.pkcs12
+*.crt
+*.cer
+*.der
+
+# SSH keys
+id_rsa
+id_rsa.pub
+id_dsa
+id_ecdsa
+id_ed25519
+id_*
+known_hosts
+
+# Cloud & service credentials
+credentials*
+*credentials*.json
+service-account*.json
+*service_account*.json
+*gcp*.json
+*aws*.json
+.aws/
+.gcp/
+.azure/
+
+# Backups and database exports
+backups/
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+*.dump
 
 # IDE
 .idea/
@@ -61,6 +99,9 @@ web_vendor/
 .opencode/sessions/
 .opencode/storage/
 
-# Agent state (local only)
+# Agent state & queues (local only)
 nexus_state.json
 agent_activity.jsonl
+vscode-nexus-queue/
+.agents/
+.claude/
