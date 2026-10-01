@@ -185,7 +185,10 @@ async def test_embedder_without_base_url_matches_old_behavior(fake_openai):
 # --------------------------------------------------------------------------- #
 
 
-def test_config_defaults():
+def test_config_defaults(monkeypatch):
+    monkeypatch.delenv("NEXUS_LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("NEXUS_EMBEDDING_BASE_URL", raising=False)
+    monkeypatch.delenv("NEXUS_EMBEDDING_DIMENSION", raising=False)
     cfg = Config()
     assert cfg.llm_base_url is None
     assert cfg.embedding_base_url is None
@@ -211,7 +214,11 @@ def test_build_llm_threads_base_url():
 
 def test_build_embedder_threads_base_url_and_dimension():
     container = object.__new__(Container)
-    container.config = Config(embedding_base_url="http://localhost:11434/v1", embedding_dimension=768)
+    container.config = Config(
+        embedding_base_url="http://localhost:11434/v1",
+        embedding_dimension=768,
+        infra_backend="external",
+    )
     embedder = container._build_embedder()
     assert embedder._base_url == "http://localhost:11434/v1"
     assert embedder.dimension == 768
