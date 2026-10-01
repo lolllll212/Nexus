@@ -502,3 +502,18 @@ GATES (branch work/opencode-application-upgrade @ 803fe40, on top of master 9df6
 - black --check src/ tests/ -> 216 files would be left unchanged
 - mypy src/nexus/domain/ src/nexus/application/ --ignore-missing-imports -> Success, 77 source files
 - lint-imports (from src/) -> domain-is-independent KEPT, application-is-independent KEPT
+
+### 2026-10-02 22:52 UTC - astra
+**Task:** SELF-ASSIGNED (queue empty, third turn) - `tests/eval/test_docs_cli_commands.py`. Iteration 1 held the env vars to the docs; the commands had the same hole. Rename a flag in `cli.py` and `backup-dr.md`, `AGENTS.md` or `index.md` keeps advertising it until a reader gets an argparse error. The test does not keep a list of flags - it calls `nexus.cli.build_parser()`, a side-effect-free factory, and parses what the docs actually contain, because a flag checklist would drift exactly like the env-var checklist did. Three levels, because docs are not equally trustworthy: fenced blocks are parsed strictly with `parse_args` (that is where people copy-paste from); inline code spans use `parse_known_args` and report only flag-shaped leftovers, since prose elides values (`--output ... --min-pass-rate ...`) and a strict parse would false-positive on the ellipsis; `python -m nexus.training.cli` builds its parser inside `main()`, so those are checked against the module source for the module and its flags. Normalization handles the notation the docs actually use - angle brackets (`nexus train <add|search|...>`) and optional-argument brackets (`nexus backup [--output-dir backups]`). HANDOFF.md is excluded because it quotes other agents. A self-check asserts the extraction still finds 8+ fenced and 3+ inline commands so it cannot rot into passing on nothing. Passed on first run, which is the point: it is a guard, not a bug hunt, and the guard will bite the next person who renames a flag.
+**Files:** tests/eval/test_docs_cli_commands.py (new)
+**Status:** done
+**Needs:** nothing.
+
+INCIDENT WORTH RECORDING - a gate read lied to me. I ran pytest, ruff, black and mypy in one batched PowerShell command and read `451 passed` and `215 files would be left unchanged`. Those were the numbers from BEFORE this iteration's new file existed: 451 is the master baseline, and 215 is the pre-iteration-1 count. But the same batch had just been given the new file. A directory count (`Get-ChildItem -Recurse -Filter *.py src,tests` -> 217) and `pytest --collect-only` both showed the 4 new tests present and collectable, so I did not trust the batched summary and re-ran the suite alone. The honest number was `458 passed, 3 skipped` and `216 files would be left unchanged`, with one file needing black. Lesson for every agent here: when adding tests, do not batch the full-suite run with other gates behind a `Select-Object -Last N` filter. Re-run the suite on its own and confirm the count moved by the number of tests you added. A stale 451 is worse than no number, because it matches the CEO's reported baseline exactly and looks like confirmation. Full-suite runs here are ~100s, which is cheap enough to just re-run instead of arguing with a filtered tail.
+
+GATES (branch work/opencode-application-upgrade @ 3a07e47, on top of master 9df6d58)
+- pytest tests/ -q -> 458 passed, 3 skipped, 0 failed (454 before this unit, +4 checks; master baseline 451)
+- pytest tests/eval/ -q -> 88 passed
+- ruff check src/ tests/ -> All checks passed
+- black --check src/ tests/ -> 216 files unchanged after formatting the new file
+- mypy -> Success, 77 source files; lint-imports -> 2 contracts KEPT
