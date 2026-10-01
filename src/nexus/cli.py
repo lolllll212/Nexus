@@ -93,6 +93,72 @@ def _cmd_eval(args: argparse.Namespace) -> None:
     raise SystemExit(eval_main(eval_args))
 
 
+async def _run_chat(message: str, local: bool = False) -> dict:
+    from nexus.infrastructure.di.container import Config, Container
+
+    config = Config()
+    if local:
+        config.infra_backend = "memory"
+        config.llm_provider = "auto"
+    container = Container(config)
+    await container.start()
+    try:
+        result = await container.process_message.execute(
+            user_id="cli-user",
+            message=message,
+            session_id="cli-session",
+            tenant_id="default",
+            stream=False,
+        )
+        return {
+            "session_id": result.session_id,
+            "response": result.response,
+            "tools_used": result.tools_used,
+            "memories_recalled": result.memories_recalled,
+            "thought_count": len(result.thoughts),
+        }
+    finally:
+        await container.shutdown()
+
+
+def _cmd_chat(args: argparse.Namespace) -> None:
+    import asyncio
+
+    local = bool(getattr(args, "local", False))
+    fallback_prompt = "I’m in local fallback mode. Start LM Studio on http://127.0.0.1:1234/v1 for live model responses."
+
+    def _print_fallback(message: str) -> None:
+        print(f"nexus> {message}\n{fallback_prompt}")
+
+    if args.message:
+        try:
+            report = asyncio.run(_run_chat(args.message, local=local))
+        except Exception as exc:
+            _print_fallback(args.message)
+            print(f"details: {exc}", file=sys.stderr)
+            raise SystemExit(0)
+        print(json.dumps(report, indent=2, default=str))
+        return
+
+    print("NEXUS CLI ready. Type a message, or 'exit' to quit.")
+    while True:
+        try:
+            user_input = input("you> ").strip()
+        except EOFError:
+            print()
+            break
+        if not user_input or user_input.lower() in {"exit", "quit", "q"}:
+            print("Goodbye.")
+            break
+        try:
+            report = asyncio.run(_run_chat(user_input, local=local))
+        except Exception as exc:
+            _print_fallback(user_input)
+            print(f"details: {exc}", file=sys.stderr)
+            continue
+        print(f"nexus> {report['response']}")
+
+
 def _cmd_train(args: argparse.Namespace) -> None:
     from nexus.training import cli as training_cli
 
@@ -173,6 +239,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exit non-zero if pass rate is below this threshold.",
     )
     p_eval.set_defaults(func=_cmd_eval)
+
+    p_chat = sub.add_parser("chat", help="Chat with NEXUS in the terminal")
+    p_chat.add_argument("message", nargs="?", default="", help="Single message to send")
+    p_chat.add_argument("--local", action="store_true", help="Force the in-memory backend")
+    p_chat.set_defaults(func=_cmd_chat)
 
     p_train = sub.add_parser("train", help="Coding-training CLI (add/list/search/...)")
     p_train.add_argument(

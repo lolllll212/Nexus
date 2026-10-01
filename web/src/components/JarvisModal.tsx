@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { NimStatus, NimModel, AgentStatus } from '../types';
 import { speakWithStatus, stopAnySpeaking } from '../utils/voiceManager';
+import { nexusFetch } from '../api';
 
 interface JarvisModalProps {
   isOpen: boolean;
@@ -61,6 +62,7 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [configSuccess, setConfigSuccess] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -110,7 +112,7 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
 
     try {
       // First attempt real-time token streaming via SSE
-      const streamRes = await fetch('/api/nim/chat/stream', {
+      const streamRes = await nexusFetch('/api/nim/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -167,7 +169,7 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
       }
 
       // Standard fallback if streaming didn't produce tokens
-      const res = await fetch('/api/nim/chat', {
+      const res = await nexusFetch('/api/nim/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -199,7 +201,7 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
       });
       speakText(replyText);
     } catch (err: any) {
-      const fallbackReply = `NEXUS AI diagnostic: All systems nominal. Processing query '${textToSend}'. NVIDIA NIM local routing ready.`;
+      const fallbackReply = `NVIDIA NIM request failed: ${err instanceof Error ? err.message : 'provider unavailable'}`;
       const errorMsg: ChatMessage = {
         id: `bot-fallback-${Date.now()}`,
         role: 'assistant',
@@ -218,8 +220,9 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
   };
 
   const handleSaveConfig = async () => {
+    setConfigError(null);
     try {
-      await fetch('/api/nim/configure', {
+      const response = await nexusFetch('/api/nim/configure', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -227,12 +230,16 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
           model: selectedModel,
         }),
       });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.detail || `Configuration failed (${response.status})`);
+      }
       setConfigSuccess(true);
       setTimeout(() => setConfigSuccess(false), 2500);
       onRefreshNimStatus();
       setShowKeyConfig(false);
     } catch (e) {
-      console.error('Failed to configure NIM:', e);
+      setConfigError(e instanceof Error ? e.message : 'Failed to configure NVIDIA NIM');
     }
   };
 
@@ -375,6 +382,7 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
                 Save Configuration
               </button>
             </div>
+            {configError && <p role="alert" className="text-[10px] text-red-300">{configError}</p>}
           </div>
         )}
 

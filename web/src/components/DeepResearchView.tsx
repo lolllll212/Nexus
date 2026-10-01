@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Globe, 
+  Activity,
   Search, 
   ArrowRight, 
   ShieldCheck, 
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react';
 import { MOCK_RESEARCH_CLAIMS, MOCK_RESEARCH_TRACES } from '../data/nexusGraphData';
 import { ResearchClaim, ResearchTraceEvent } from '../types';
+import { nexusJson } from '../api';
 
 interface DeepResearchViewProps {
   initialTopic?: string;
@@ -39,6 +41,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
   const [traces, setTraces] = useState<ResearchTraceEvent[]>(MOCK_RESEARCH_TRACES);
   const [selectedClaim, setSelectedClaim] = useState<ResearchClaim | null>(claims[0]);
   const [activeTab, setActiveTab] = useState<'map' | 'claims' | 'synthesis'>('map');
+  const [error, setError] = useState<string | null>(null);
 
   // Live timer simulation
   useEffect(() => {
@@ -51,8 +54,10 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
     return () => clearInterval(timer);
   }, [isResearching]);
 
-  const handleStartResearch = () => {
+  const handleStartResearch = async () => {
+    if (!topic.trim() || isResearching) return;
     setIsResearching(true);
+    setError(null);
     const newTrace: ResearchTraceEvent = {
       id: `trace-${Date.now()}`,
       timestamp: new Date().toLocaleTimeString(),
@@ -62,9 +67,44 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
     };
     setTraces((prev) => [newTrace, ...prev]);
 
-    setTimeout(() => {
+    try {
+      const result = await nexusJson<{
+        summary: string;
+        key_findings: string[];
+        sources: Array<{ title: string; url: string; snippet: string }>;
+      }>('/api/research/execute', {
+        method: 'POST',
+        body: JSON.stringify({ query: topic, max_sources: 4, auto_ingest_graph: true, hub_target: 'AI Workshop' }),
+      });
+      const liveClaims: ResearchClaim[] = result.key_findings.map((claim, index) => ({
+        id: `live-claim-${index}`,
+        claim,
+        status: 'verified',
+        sources: result.sources.slice(0, 2).map((source) => source.title),
+        confidence: 80,
+        evidence: result.summary,
+      }));
+      setClaims(liveClaims);
+      setSelectedClaim(liveClaims[0] || null);
+      setTraces((prev) => [{
+        id: `trace-complete-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString(),
+        phase: 'SYNTHESIS',
+        message: result.summary,
+        status: 'complete',
+      }, ...prev]);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Research request failed');
+      setTraces((prev) => [{
+        id: `trace-error-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString(),
+        phase: 'ERROR',
+        message: requestError instanceof Error ? requestError.message : 'Research request failed',
+        status: 'warning',
+      }, ...prev]);
+    } finally {
       setIsResearching(false);
-    }, 4500);
+    }
   };
 
   const formatTime = (secs: number) => {
@@ -128,6 +168,12 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
           </button>
         </div>
       </div>
+
+      {error && (
+        <div role="alert" className="mx-6 mt-4 rounded-xl border border-red-400/40 bg-red-950/30 px-4 py-3 text-xs text-red-200">
+          Research failed: {error}
+        </div>
+      )}
 
       {/* ── Main Viewport Split: Interactive Research Map & Live Trace ──────── */}
       <div className="flex-1 flex overflow-hidden">

@@ -38,6 +38,7 @@ interface TopBarProps {
   onOpenVoiceCortex: () => void;
   onOpenAgentsModal: () => void;
   onOpenIntegrationsModal: () => void;
+  onOpenNim: () => void;
   agentStatus?: AgentStatus;
 }
 
@@ -51,6 +52,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenVoiceCortex,
   onOpenAgentsModal,
   onOpenIntegrationsModal,
+  onOpenNim,
   agentStatus = 'idle',
 }) => {
   const modes: { id: OperatingMode; label: string; icon: any }[] = [
@@ -67,10 +69,10 @@ export const TopBar: React.FC<TopBarProps> = ({
     <header className="fixed top-3 left-1/2 -translate-x-1/2 z-30 flex items-center justify-between gap-4 px-4 py-2 rounded-2xl glass-obsidian border border-[#00f0ff]/25 bg-[#0a0f1d]/90 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.8),0_0_25px_rgba(0,240,255,0.15)] select-none w-[94vw] max-w-7xl font-mono">
       {/* ── Left Quick Triggers ────────────────────────────────────────────── */}
       <div className="flex items-center gap-2">
-        <span className="text-xs font-bold text-white tracking-widest px-2 py-0.5 rounded-lg bg-cyan-950/80 border border-cyan-400/40 text-cyan-400 flex items-center gap-1.5 shadow-[0_0_10px_rgba(0,240,255,0.3)]">
+        <button onClick={onOpenNim} title="Open NVIDIA NIM console and configure provider key" className="text-xs font-bold text-white tracking-widest px-2 py-0.5 rounded-lg bg-cyan-950/80 border border-cyan-400/40 text-cyan-400 flex items-center gap-1.5 shadow-[0_0_10px_rgba(0,240,255,0.3)] cursor-pointer">
           <Cpu className="w-3.5 h-3.5" />
           <span>NEXUS</span>
-        </span>
+        </button>
 
         {/* Dedicated Claude Coding Studio Launcher */}
         <button

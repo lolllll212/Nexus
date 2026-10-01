@@ -15,6 +15,7 @@ import {
   Zap
 } from 'lucide-react';
 import { playHudClick, playSuccessChime, playAlertChime } from '../utils/soundEffects';
+import { nexusJson } from '../api';
 
 interface SynthesizedToolSpec {
   id: string;
@@ -78,6 +79,7 @@ export const ResearchModal: React.FC<ResearchModalProps> = ({
   const [result, setResult] = useState<ResearchResult | null>(null);
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [hasUpgraded, setHasUpgraded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const sampleQueries = [
     "Autonomous AI agent swarms and ReAct reasoning",
@@ -91,9 +93,8 @@ export const ResearchModal: React.FC<ResearchModalProps> = ({
     playHudClick();
     setIsUpgrading(true);
     try {
-      const res = await fetch('/api/research/apply-upgrade', {
+      const data = await nexusJson<{ success: boolean }>('/api/research/apply-upgrade', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: result.query,
           tool: result.self_evolution.synthesized_tool,
@@ -101,14 +102,15 @@ export const ResearchModal: React.FC<ResearchModalProps> = ({
           connect_to_graph: true,
         }),
       });
-      if (res.ok) {
+      if (data.success) {
         setHasUpgraded(true);
         playSuccessChime();
         onRefreshGraph();
       } else {
         playAlertChime();
       }
-    } catch (_) {
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Upgrade failed');
       playAlertChime();
     } finally {
       setIsUpgrading(false);
@@ -122,6 +124,7 @@ export const ResearchModal: React.FC<ResearchModalProps> = ({
     setIsLoading(true);
     setResult(null);
     setHasUpgraded(false);
+    setError(null);
 
     // Step simulation messages
     setActiveStep('Expanding search queries across domain matrix...');
@@ -136,9 +139,8 @@ export const ResearchModal: React.FC<ResearchModalProps> = ({
     }, 2800);
 
     try {
-      const res = await fetch('/api/research/execute', {
+      const data = await nexusJson<ResearchResult>('/api/research/execute', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: q,
           max_sources: maxSources,
@@ -147,45 +149,12 @@ export const ResearchModal: React.FC<ResearchModalProps> = ({
         }),
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: ResearchResult = await res.json();
       setResult(data);
       if (autoIngest) {
         onRefreshGraph();
       }
-    } catch (e) {
-      // Fallback result if offline
-      setResult({
-        query: q,
-        summary: `Autonomous Research Completed for '${q}'. Synthesized primary technological findings from multi-site crawl. Key architecture principles verified.`,
-        key_findings: [
-          `Verified operational consensus on ${q} across multi-site web intelligence.`,
-          `High synergy identified with Second Brain graph nodes and autonomous agent ReAct loops.`,
-          `Extracted structured entities and synchronized synaptic weights.`,
-        ],
-        sources: [
-          {
-            title: `ArXiv Research Paper: Autonomous Systems in ${q}`,
-            url: 'https://arxiv.org/abs/2401.0001',
-            snippet: `Technical evaluation of ${q} with empirical benchmarks and model accuracy metrics.`,
-            content_length: 2450,
-            key_takeaway: 'Demonstrates 35% speedup in multi-hop reasoning.',
-          },
-          {
-            title: `NVIDIA Technical Blog: Scaling ${q} with NIM`,
-            url: 'https://developer.nvidia.com/blog/nim-agents',
-            snippet: `Deploying low-latency microservices for real-time cognitive operating systems.`,
-            content_length: 3100,
-            key_takeaway: 'Achieves <15ms TTFT on Llama 3.3 70B.',
-          },
-        ],
-        extracted_concepts: [`${q.split(' ')[0]} Protocol`, 'Vector Synapse Link', 'Neural Cortex Hub'],
-        nodes_added_to_graph: 3,
-        duration_seconds: 3.2,
-      });
-      if (autoIngest) {
-        onRefreshGraph();
-      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Research request failed');
     } finally {
       clearTimeout(stepTimer1);
       clearTimeout(stepTimer2);

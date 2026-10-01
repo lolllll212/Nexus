@@ -33,10 +33,12 @@ import { MultimodalBridgeModal } from './components/MultimodalBridgeModal';
 import { CanvasBuilderModal } from './components/CanvasBuilderModal';
 import { CodeCompilerModal } from './components/CodeCompilerModal';
 import { ConversationalStream } from './components/ConversationalStream';
+import { JarvisModal } from './components/JarvisModal';
 import { AnalyticsDashboardView } from './components/AnalyticsDashboardView';
 import { MobileCompactCockpit } from './components/MobileCompactCockpit';
 import { playHudClick, playChime, playSuccessChime } from './utils/soundEffects';
 import { speakWithStatus, stopAnySpeaking } from './utils/voiceManager';
+import { nexusJson } from './api';
 
 export const App: React.FC = () => {
   // Operating Modes: 'GRAPH' | 'RESEARCH' | 'WORKFLOW' | 'ARCHITECTURE' | 'VIDEO'
@@ -68,6 +70,8 @@ export const App: React.FC = () => {
   const [isAccelerated, setIsAccelerated] = useState<boolean>(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isJarvisOpen, setIsJarvisOpen] = useState(false);
+  const [nimStatus, setNimStatus] = useState<any>(null);
 
   // Module 2: The Conversational Stream framing AI feedback
   const [conversationalMessages, setConversationalMessages] = useState<ConversationalMessage[]>([
@@ -96,6 +100,19 @@ export const App: React.FC = () => {
 
   // Deep research initial query state
   const [researchTopic, setResearchTopic] = useState('Recursive Self-Evolution & AST Guard Sandboxes in Autonomous LLMs');
+
+  const refreshNimStatus = useCallback(async () => {
+    try {
+      const response = await nexusJson<any>('/api/nim/status');
+      setNimStatus(response);
+    } catch {
+      setNimStatus(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshNimStatus();
+  }, [refreshNimStatus]);
 
   // Keyboard Shortcuts (C for Claude Studio, A for Agents, I for Integrations, 1-4 for Modes, Esc to close)
   useEffect(() => {
@@ -308,7 +325,7 @@ export const App: React.FC = () => {
     };
     setConversationalMessages((prev) => [...prev, userMsg]);
 
-    executeCommandDirect(next.query, next.actionType, () => {
+    executeCommandDirect(next.query, next.actionType, async () => {
       // Module 3: Exact millisecond action ripple "puff" effect
       setPuffTrigger((prev) => prev + 1);
       setIsAccelerated(false);
@@ -347,12 +364,35 @@ export const App: React.FC = () => {
         tools.push('cortex_eval');
       }
 
+      let responseText = reply;
+      let responseTools = tools;
+      const isSimpleGreeting = /^(hi|hello|hey)\s+nexus[!.?\s]*$/i.test(next.query.trim());
+      try {
+        if (isSimpleGreeting) {
+          responseText = `NEXUS responded: ${next.query.trim()}`;
+        } else {
+        const result = await nexusJson<{
+          response: string;
+          tools_used: string[];
+        }>('/v1/chat', {
+          method: 'POST',
+          body: JSON.stringify({ message: next.query, mode: next.actionType === 'CODE' ? 'coding' : 'general' }),
+        });
+        responseText = `NEXUS responded: ${next.query}\n\n${result.response}`;
+        responseTools = result.tools_used?.length ? result.tools_used : tools;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        responseText = `NEXUS responded: ${next.query}\n\nI’m in local fallback mode. Start LM Studio on http://127.0.0.1:1234/v1 for live model responses. ${message}`;
+        responseTools = [...tools, 'request_failed', 'local_fallback'];
+      }
+
       const aiMsg: ConversationalMessage = {
         id: `ai-${Date.now()}`,
         role: 'assistant',
-        content: reply,
+        content: responseText,
         timestamp: new Date().toLocaleTimeString(),
-        toolsUsed: tools,
+        toolsUsed: responseTools,
         difficulty: diff,
         actionTriggers: triggers,
       };
@@ -474,7 +514,17 @@ export const App: React.FC = () => {
         onOpenVoiceCortex={() => setIsVoiceCortexOpen(true)}
         onOpenAgentsModal={() => setIsAgentsModalOpen(true)}
         onOpenIntegrationsModal={() => setIsIntegrationsModalOpen(true)}
+        onOpenNim={() => setIsJarvisOpen(true)}
         agentStatus={agentStatus}
+      />
+
+      <JarvisModal
+        isOpen={isJarvisOpen}
+        onClose={() => setIsJarvisOpen(false)}
+        nimStatus={nimStatus}
+        onRefreshNimStatus={refreshNimStatus}
+        agentStatus={agentStatus}
+        onStatusChange={setAgentStatus}
       />
 
       {/* ── Left Sidebar: Workspaces, Search & System Telemetry ─────────────── */}

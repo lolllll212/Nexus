@@ -50,7 +50,7 @@ export const ConversationalStream: React.FC<ConversationalStreamProps> = ({
         className="fixed bottom-24 right-6 z-30 px-3.5 py-2 rounded-2xl glass-obsidian border border-[#00f0ff]/40 text-cyan-300 hover:text-white hover:border-[#00f0ff]/80 font-mono text-xs font-bold tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(0,240,255,0.2)] transition-all cursor-pointer hover:scale-105"
       >
         <Terminal className="w-3.5 h-3.5 text-cyan-400" />
-        <span>CONVERSATIONAL STREAM</span>
+        <span>CHAT WITH NEXUS</span>
         <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
       </button>
     );
@@ -62,9 +62,9 @@ export const ConversationalStream: React.FC<ConversationalStreamProps> = ({
       <div className="p-3 bg-[#060a16]/95 border-b border-[#00f0ff]/20 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Terminal className="w-3.5 h-3.5 text-cyan-400" />
-          <span className="text-[10px] font-bold tracking-widest text-cyan-200 uppercase">
-            CONVERSATIONAL STREAM
-          </span>
+              <span className="text-[10px] font-bold tracking-widest text-cyan-200 uppercase">
+                CHAT WITH NEXUS
+              </span>
           <span className="px-1.5 py-0.2 rounded bg-cyan-950/80 border border-cyan-400/30 text-[8px] text-cyan-300">
             NEXUS CORTEX
           </span>

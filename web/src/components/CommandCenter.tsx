@@ -76,7 +76,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
     if (agentStatus === 'listening') {
       return '🎙️ Voice Cortex listening... Speak your command or hotkey M to stop';
     }
-    return 'Ask NEXUS anything or give it an autonomous task...';
+    return 'Message NEXUS...';
   };
 
   return (
@@ -233,7 +233,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
             ) : (
               <>
                 <Send className="w-3.5 h-3.5" />
-                <span>{isInjecting ? 'INJECTING' : 'EXECUTE'}</span>
+                <span>{isInjecting ? 'SENDING' : 'SEND'}</span>
               </>
             )}
           </button>

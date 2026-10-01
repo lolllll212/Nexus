@@ -2,6 +2,7 @@ import React from 'react';
 import { Filter, Activity, Zap, Check } from 'lucide-react';
 import { LegendItem, NodeGroup, SystemStates } from '../types';
 import { JarvisHUD } from './JarvisHUD';
+import { nexusJson } from '../api';
 
 interface RightSidebarProps {
   legendItems: LegendItem[];
@@ -30,12 +31,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
   React.useEffect(() => {
     const fetchTelemetry = async () => {
       try {
-        const res = await fetch('/api/system/telemetry');
-        if (res.ok) {
-          const data = await res.json();
-          setTelemetry(data);
-        }
-      } catch (_) {}
+        const data = await nexusJson<{ uptime_seconds?: number; tools_count?: number }>('/api/system/telemetry');
+        setTelemetry(data);
+      } catch (_) {
+        setTelemetry(null);
+      }
     };
     fetchTelemetry();
     const interval = setInterval(fetchTelemetry, 10000);

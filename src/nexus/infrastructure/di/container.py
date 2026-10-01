@@ -10,7 +10,15 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import dataclass, field
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+_root_env = Path(__file__).resolve().parents[4] / ".env"
+if _root_env.exists() and "pytest" not in sys.modules and "PYTEST_CURRENT_TEST" not in os.environ:
+    load_dotenv(_root_env, override=False)
 
 from nexus.application.autonomy.goals import (
     ApproveGoalUseCase,
@@ -60,6 +68,9 @@ def _parse_json_env(name: str, default: dict | None = None) -> dict:
     raw = os.getenv(name, "")
     if not raw:
         return default or {}
+    raw = raw.strip()
+    if (raw.startswith("'") and raw.endswith("'")) or (raw.startswith('"') and raw.endswith('"')):
+        raw = raw[1:-1].strip()
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
@@ -82,15 +93,25 @@ class Config:
     nim_model: str = field(
         default_factory=lambda: os.getenv("NEXUS_NIM_MODEL", "meta/llama-3.3-70b-instruct")
     )
-    llm_provider: str = field(default_factory=lambda: os.getenv("NEXUS_LLM_PROVIDER", "openai").lower())
-    llm_model: str = field(default_factory=lambda: os.getenv("NEXUS_LLM_MODEL", "gpt-4o"))
+    llm_provider: str = field(
+        default_factory=lambda: os.getenv("NEXUS_LLM_PROVIDER", "openai").lower()
+    )
+    llm_model: str = field(
+        default_factory=lambda: os.getenv("NEXUS_LLM_MODEL", "gpt-4o")
+    )
     llm_max_tokens: int = field(default_factory=lambda: int(os.getenv("NEXUS_LLM_MAX_TOKENS", "8192")))
     embedding_model: str = field(
-        default_factory=lambda: os.getenv("NEXUS_EMBEDDING_MODEL", "text-embedding-3-large")
+        default_factory=lambda: os.getenv(
+            "NEXUS_EMBEDDING_MODEL", "text-embedding-3-large"
+        )
     )
     # Offline LLM (Ollama / LM Studio): point the OpenAI-compatible adapters at a local base URL.
-    llm_base_url: str | None = field(default_factory=lambda: os.getenv("NEXUS_LLM_BASE_URL"))
-    embedding_base_url: str | None = field(default_factory=lambda: os.getenv("NEXUS_EMBEDDING_BASE_URL"))
+    llm_base_url: str | None = field(
+        default_factory=lambda: os.getenv("NEXUS_LLM_BASE_URL")
+    )
+    embedding_base_url: str | None = field(
+        default_factory=lambda: os.getenv("NEXUS_EMBEDDING_BASE_URL")
+    )
     embedding_dimension: int = field(
         default_factory=lambda: int(os.getenv("NEXUS_EMBEDDING_DIMENSION", "1536"))
     )
@@ -472,20 +493,30 @@ class Container:
 
         from nexus.infrastructure.adapters.llm.openai_provider import OpenAIProvider
 
+        provider_name = (self.config.llm_provider or "").lower()
+        if provider_name in ("auto", "local", "lmstudio", "ollama", "openai-compatible"):
+            base_url = self.config.llm_base_url or "http://127.0.0.1:1234/v1"
+            api_key = self.config.openai_api_key or "local-no-key"
+        else:
+            base_url = self.config.llm_base_url
+            api_key = self.config.openai_api_key
+
         return OpenAIProvider(
-            api_key=self.config.openai_api_key,
+            api_key=api_key,
             model=self.config.llm_model,
-            base_url=self.config.llm_base_url,
+            base_url=base_url,
             default_max_tokens=self.config.llm_max_tokens,
         )
 
     def _build_background_llm(self) -> LLMProvider:
         from nexus.infrastructure.adapters.llm.openai_provider import OpenAIProvider
 
+        background_model = self.config.background_llm_model or self.config.llm_model
+        background_base_url = self.config.background_llm_base_url or self.config.llm_base_url
         return OpenAIProvider(
-            api_key=self.config.background_llm_api_key or self.config.openai_api_key,
-            model=self.config.background_llm_model,
-            base_url=self.config.background_llm_base_url,
+            api_key=(self.config.background_llm_api_key or self.config.openai_api_key or "local-no-key"),
+            model=background_model,
+            base_url=background_base_url,
         )
 
     def _build_speech_to_text(self) -> SpeechToText:
