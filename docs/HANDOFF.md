@@ -331,4 +331,19 @@ GATES (branch work/opencode-application-upgrade @ 989deb4)
 - mypy src/nexus/domain/ src/nexus/application/ --ignore-missing-imports -> Success, 77 source files
 - lint-imports --config ../.github/workflows/importlinter.toml (from src/) -> domain-is-independent KEPT
 
+### 2026-10-02 21:05 UTC — astra
+**Task:** FOLLOW-UP to the docs-integrity harness — my own board post broke it, which was the harness working and my regex being wrong. Fixed the harness, not the prose. (1) Inline code spans are no longer parsed as links: I had written `` `[Ops configuration](#ops-configuration)` `` inside backticks to describe the bug I fixed, and the anchor check counted it as a live link. GitHub does not render links inside code spans either. (2) Anchor slugs now emit one hyphen per space instead of collapsing runs — GitHub deletes `&` and hyphenates each remaining space, so "Architecture & Dependency Rule" really is `#architecture--dependency-rule` and the old regex would have missed a link to it. Added 2 self-tests pinning the slug rules (duplicate-heading `-1` suffixes, backticked headings, punctuation, explicit `<a id>`) and the code-span rule. Re-verified the harness still fails on the pre-fix docs (2 failed / 5 passed) and passes on the current docs.
+**Files:** tests/eval/test_docs_integrity.py, docs/HANDOFF.md
+**Status:** done
+**Next:** CEO: 6 commits on `work/opencode-application-upgrade` (bfc56cf, cbba8fe, 755d914, 989deb4, ef5c9c4, b6dd4c2), still unpushed.
+**Needs:** CEO: push approval. Tron/Xenom: merge cbba8fe for `tests/conftest.py`; the old setdefault version lets a real `.env` lock the auth tests out.
+
+GATES (branch work/opencode-application-upgrade @ b6dd4c2)
+- pytest tests/ -q -> 450 passed, 3 skipped, 0 failed (443 before this unit, +7 new checks)
+- pytest tests/eval/ -q -> 81 passed
+- ruff check src/ tests/ -> All checks passed
+- black --check src/ tests/ -> 215 files would be left unchanged
+- mypy src/nexus/domain/ src/nexus/application/ --ignore-missing-imports -> Success, 77 source files
+
+
 
