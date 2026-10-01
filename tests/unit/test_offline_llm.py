@@ -123,13 +123,22 @@ async def test_provider_forwards_base_url_on_complete(fake_openai):
         [{"role": "user", "content": "hi"}], tools=[{"type": "function", "function": {}}]
     )
     assert out == "FINAL ANSWER: ok"
-    assert fake_openai.instances[-1] == {"api_key": "sk-x", "base_url": "http://localhost:11434/v1"}
+    assert fake_openai.instances[-1] == {
+        "api_key": "sk-x",
+        "base_url": "http://localhost:11434/v1",
+        "timeout": 2.5,
+        "max_retries": 1,
+    }
 
 
 async def test_provider_without_base_url_matches_old_behavior(fake_openai):
     provider = OpenAIProvider(api_key="sk-x")
     await provider.complete([{"role": "user", "content": "hi"}])
-    assert fake_openai.instances[-1] == {"api_key": "sk-x"}
+    assert fake_openai.instances[-1] == {
+        "api_key": "sk-x",
+        "timeout": 20.0,
+        "max_retries": 2,
+    }
 
 
 async def test_provider_empty_api_key_uses_placeholder(fake_openai):

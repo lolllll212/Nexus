@@ -16,7 +16,6 @@ from typing import Any, Dict, List
 from nexus.domain.entities.tool import Tool, ToolStatus
 from nexus.domain.value_objects.schema import JSONSchema
 
-
 TOOLS: List[Tool] = [
     Tool(
         id="word_count",

@@ -69,7 +69,7 @@ def test_github_webhook_fails_closed_without_configured_secret(auth_test_client,
     monkeypatch.delenv("GITHUB_WEBHOOK_SECRET", raising=False)
     response = client.post(
         "/api/integrations/github/webhook",
-        content=b'{}',
+        content=b"{}",
         headers={"X-Hub-Signature-256": "sha256=invalid"},
     )
     assert response.status_code == 401
@@ -147,4 +147,3 @@ def test_admin_routes_reject_non_admin_role_with_403(auth_test_client):
             f"Expected {method} {path} to return 403 Forbidden for non-admin, "
             f"got {res.status_code}: {res.text}"
         )
-

@@ -1,9 +1,8 @@
 """Test the multimodal API endpoint."""
 
-import pytest
 from starlette.testclient import TestClient
-from nexus.infrastructure.api.main import create_app
 
+from nexus.infrastructure.api.main import create_app
 
 AUTH_HEADERS = {"Authorization": "Bearer sk-test-1"}
 
