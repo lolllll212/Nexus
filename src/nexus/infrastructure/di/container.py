@@ -139,6 +139,7 @@ class Config:
             if o.strip()
         ]
     )
+    webhook_url: str | None = field(default_factory=lambda: os.getenv("NEXUS_WEBHOOK_URL"))
     # ---- Production hardening (P1) ----
     api_keys: dict = field(default_factory=lambda: _parse_json_env("NEXUS_API_KEYS"))
     deploy_platform: str = field(default_factory=lambda: os.getenv("NEXUS_DEPLOY_PLATFORM", "local"))
@@ -371,7 +372,7 @@ class Container:
         backend = os.getenv("NEXUS_SECRET_BACKEND", "env")
         if backend.startswith("json:"):
             path = backend.split(":", 1)[1].strip()
-            return ChainedSecretStore([JsonFileSecretStore(path), EnvSecretStore()])
+            return ChainedSecretStore([EnvSecretStore(), JsonFileSecretStore(path)])
         return EnvSecretStore()
 
     def _resolve_secrets_into_config(self) -> None:
@@ -380,16 +381,18 @@ class Container:
             ("NVIDIA_API_KEY", "nvidia_api_key"),
             ("NIM_API_KEY", "nvidia_api_key"),
             ("NEO4J_PASSWORD", "neo4j_password"),
+            ("NEXUS_WEBHOOK_URL", "webhook_url"),
         ):
             value = self.secrets.get(env_name)
             if value:
                 setattr(self.config, attr, value)
         raw_keys = self.secrets.get("NEXUS_API_KEYS")
         if raw_keys:
-            try:
-                self.config.api_keys = json.loads(raw_keys)
-            except json.JSONDecodeError:
-                self.config.api_keys = {}
+            parsed = _parse_json_env("NEXUS_API_KEYS") if isinstance(raw_keys, str) else {}
+            if parsed:
+                merged = dict(self.config.api_keys)
+                merged.update(parsed)
+                self.config.api_keys = merged
 
     def _build_authenticator(self) -> Authenticator:
         from nexus.infrastructure.adapters.auth.api_key_authenticator import ApiKeyAuthenticator
