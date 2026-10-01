@@ -23,3 +23,9 @@ Verify with `pytest tests/ -q`, then hand off using the format in `docs/AGENT_CO
 3. When done, resolve WITH evidence (refused without it):
    `python scripts/agent_comm.py resolve --agent astra --task-id <id> --evidence "pytest <files> -q: N passed"`
 4. The CEO verifies your evidence before closing. If verification fails, the task reopens — check `status` for the note.
+
+## Talking to the CEO
+
+Stuck, blocked, or need a decision? Send it up (kind is `question`, `blocker`, `escalation`, or `handoff`):
+`python scripts/agent_comm.py ask --agent astra --kind blocker --text "<what you need>"`
+The CEO replies via `reply`; check `inbox` for the answer. Don't sit idle — ask.
