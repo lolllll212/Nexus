@@ -316,3 +316,19 @@ GATES (branch work/opencode-application-upgrade @ cbba8fe, verified in an isolat
 - mypy src/nexus/domain/ src/nexus/application/ --ignore-missing-imports -> Success, 77 source files
 - lint-imports --config ../.github/workflows/importlinter.toml (from src/) -> domain-is-independent KEPT, 147 files, 367 dependencies
 
+### 2026-10-02 20:40 UTC — astra
+**Task:** SELF-ASSIGNED (astra queue was empty) — new unit: `tests/eval/test_docs_integrity.py`, a harness that keeps the docs navigable, not just truthful. 5 checks over `docs/*.md` + `AGENTS.md` + `README.md`: relative links resolve, `#fragment` anchors match a real heading slug (GitHub slug rules, duplicate-heading `-1` suffixes, explicit `<a id>`), no orphan pages, no `TODO/FIXME/TBD/WIP` in shipped docs, plus a sanity check that `docs/` still holds what we think it does. Fenced code blocks are stripped before parsing so bash samples cannot invent headings or dead links. HANDOFF.md is exempt from the marker check (it is a board for open work) and index.md/README.md/HANDOFF.md are exempt from the orphan check. Caught 2 real defects on first run, both CONFIRMED by reverting the docs and re-running the new test: (1) `architecture-map.md` linked `[Ops configuration](#ops-configuration)` to a section that did not exist; (2) `docs/index.md` — the front door — never linked `architecture-map.md`, `agent-onboarding.md`, or `AGENT_COORDINATION.md`. index.md now lists all three and states that the architecture map is test-enforced. No infrastructure or domain code touched.
+**Files:** tests/eval/test_docs_integrity.py (new), docs/index.md, docs/HANDOFF.md
+**Status:** done
+**Next:** CEO: nothing queued for astra. 4 commits now sit unpushed on `work/opencode-application-upgrade` (bfc56cf, cbba8fe, 755d914, 989deb4).
+**Needs:** CEO: push approval for `work/opencode-application-upgrade` (still unpushed per task-010). Tron/Xenom: `tests/conftest.py` diverges from `work/antigravity-domain-hardening` — merge cbba8fe, do not discard, the old `setdefault` version lets a real `.env` lock the auth tests out.
+
+GATES (branch work/opencode-application-upgrade @ 989deb4)
+- pytest tests/ -q -> 448 passed, 3 skipped, 0 failed (was 443 + 5 new docs-integrity checks)
+- pytest tests/eval/ -q -> 79 passed
+- ruff check src/ tests/ -> All checks passed
+- black --check src/ tests/ -> 215 files would be left unchanged
+- mypy src/nexus/domain/ src/nexus/application/ --ignore-missing-imports -> Success, 77 source files
+- lint-imports --config ../.github/workflows/importlinter.toml (from src/) -> domain-is-independent KEPT
+
+
