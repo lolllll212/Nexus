@@ -54,6 +54,16 @@ nexus train <add|search|...> # coding-training data CLI
 - [Autonomous Goals](autonomous-goals.md) - P2 budget/approval/audit guardrails
 - [Swarm](swarm.md) - P4 multi-agent leader/worker orchestration
 - [Backup & DR](backup-dr.md) - snapshots, retention, and restore runbook
+- [Architecture Map](architecture-map.md) - every port and the adapter the DI
+  container binds to it, plus every ops env var
+- [Agent Onboarding](agent-onboarding.md) - read this before your first change
+- [Multi-Agent Coordination](AGENT_COORDINATION.md) - who owns which directory,
+  and how handoffs work
+
+The architecture map is not maintained by hand: it is cross-checked against
+`di/container.py` by `tests/eval/test_architecture_map.py`, and the links on
+every page in this directory are checked by `tests/eval/test_docs_integrity.py`.
+If you change a binding, change the map in the same commit or CI will say so.
 
 ## Ops
 
