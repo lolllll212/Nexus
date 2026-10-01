@@ -79,7 +79,7 @@ GENERATING -> TESTING -> (READY | DEPLOYED) -> DEPRECATED -> (regenerated | garb
 ```bash
 curl -X POST http://localhost:8000/v1/tools/generate \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $NEXUS_API_KEY" \
+  -H "Authorization: Bearer $API_KEY" \
   -d '{"name":"csv_summarizer",
        "problem_statement":"Read a CSV and summarize each column'"'"'s stats",
        "requirements":["pandas"]}'

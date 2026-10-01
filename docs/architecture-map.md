@@ -154,9 +154,16 @@ sqlite/postgres/mysql/redis.
 
 ## Ops configuration
 
-Every knob below is read once by the `Config` dataclass at the top of
-`container.py` (default in brackets) — never by the `Container` class itself.
+Every knob below is read once at startup (default in brackets) — most by the
+`Config` dataclass at the top of `container.py`, the rest by the adapter that
+needs them (`NEXUS_OTEL_ENDPOINT` by the OTEL exporter, `NEXUS_WORKSPACE_ROOT`
+by the file tools, `NEXUS_SECRET_BACKEND` by `_build_secret_store`).
 `.env` is gitignored: copy `.env.example` to `.env`.
+
+This table is not maintained by hand.
+[`tests/eval/test_docs_env_vars.py`](../tests/eval/test_docs_env_vars.py) fails
+if the code reads a variable this page does not mention, or if this page
+mentions a variable the code never reads.
 
 | Variable | Effect |
 |---|---|
@@ -171,6 +178,29 @@ Every knob below is read once by the `Config` dataclass at the top of
 | `NEXUS_LLM_PROVIDER` | `openai` (default), or `nvidia`/`nim` for `NvidiaNimProvider`. |
 | `NEXUS_LLM_BASE_URL` | Points the OpenAI-compatible adapters at a local server (LM Studio, Ollama). |
 | `NEXUS_API_KEYS` | JSON map of key to `{user_id, tenant_id, role}`. Empty means fail-closed: every request gets 401. |
+| `NEXUS_TENANTS` | Comma-separated tenant ids; each one gets its memory collection pre-created at startup. |
+
+### Models and providers
+
+| Variable | Effect |
+|---|---|
+| `NEXUS_LLM_MAX_TOKENS` | Max tokens per completion (`8192`). |
+| `NEXUS_NVIDIA_API_KEY` | Key for the `nvidia`/`nim` provider; falls back to `NVIDIA_API_KEY` then `NIM_API_KEY`. |
+| `NEXUS_EMBEDDING_MODEL` | Embedding model name (`text-embedding-3-large`). |
+| `NEXUS_EMBEDDING_BASE_URL` | Base URL for the embedding provider, for a local server. |
+| `NEXUS_EMBEDDING_DIMENSION` | Embedding vector width (`1536`); must match what the model actually returns. |
+| `NEXUS_OTEL_ENDPOINT` | OTLP endpoint for traces and metrics (`http://localhost:4317`). |
+
+### Limits, tenancy and plumbing
+
+| Variable | Effect |
+|---|---|
+| `NEXUS_TOOL_GEN_RATE_LIMIT` | Tool-generation requests allowed per window (`20`). |
+| `NEXUS_RATE_LIMIT_FAIL_CLOSED` | `true` rejects on rate-limiter backend failure instead of allowing. |
+| `NEXUS_PATTERN_INTERVAL_SECONDS` | Seconds between pattern-detection runs (`1800`). |
+| `NEXUS_PLUGINS_DIR` | Directory scanned by `PluginLoader` (`plugins`). |
+| `NEXUS_WORKSPACE_ROOT` | Root directory the file tools are confined to (`.`). |
+| `NEXUS_WEBHOOK_URL` | Resolved into `config.webhook_url`, and also readable from the secret store. **Plumbed but not consumed** — no outbound delivery reads it yet, so setting it changes nothing today. |
 
 ## See also
 
