@@ -98,7 +98,20 @@ def test_every_abstract_port_type_is_documented():
     from nexus.domain import ports as ports_pkg
 
     found: set[str] = set()
-    for module_name in ("auth", "autonomy", "cognition", "deployment", "execution", "llm_provider", "memory_repository", "sandbox", "secrets", "speech", "swarm", "tool_registry"):
+    for module_name in (
+        "auth",
+        "autonomy",
+        "cognition",
+        "deployment",
+        "execution",
+        "llm_provider",
+        "memory_repository",
+        "sandbox",
+        "secrets",
+        "speech",
+        "swarm",
+        "tool_registry",
+    ):
         module = getattr(ports_pkg, module_name, None)
         if module is None:
             continue
@@ -125,9 +138,9 @@ def test_documented_adapters_exist_in_the_container_source():
             for adapter in _names(row[column]):
                 adapter = adapter.split(" or ")[0].strip()
                 checked += 1
-                assert adapter in source, (
-                    f"{row['port']} -> {adapter} is documented but the container never builds it"
-                )
+                assert (
+                    adapter in source
+                ), f"{row['port']} -> {adapter} is documented but the container never builds it"
     assert checked > 30, f"only checked {checked} adapter names; the table probably stopped parsing"
 
 
@@ -148,9 +161,9 @@ def test_memory_backend_column_matches_the_container_branches():
 
     # Every one of them must sit behind an `infra_backend == "memory"` check.
     branches = len(re.findall(r'infra_backend\s*==\s*"memory"', source))
-    assert branches == len(memory_adapters), (
-        f"container has {branches} memory-backend branches, expected {len(memory_adapters)}"
-    )
+    assert branches == len(
+        memory_adapters
+    ), f"container has {branches} memory-backend branches, expected {len(memory_adapters)}"
 
     # Every port backed by an external store must document its in-memory swap.
     external = ("Redis", "Qdrant", "Neo4j", "OpenAIEmbedder")
@@ -159,9 +172,9 @@ def test_memory_backend_column_matches_the_container_branches():
             continue
         if "StreamingLLMProvider" in row["port"]:
             continue  # capability mixin, never bound on its own
-        assert "InMemory" in row["memory"], (
-            f"{row['port']} uses an external store but its memory column says {row['memory']!r}"
-        )
+        assert (
+            "InMemory" in row["memory"]
+        ), f"{row['port']} uses an external store but its memory column says {row['memory']!r}"
 
 
 def test_sandbox_default_is_docker():
@@ -198,14 +211,25 @@ def test_route_module_list_matches_disk():
     block = text.split("## API route modules")[1].split("##")[0]
     documented = set(re.findall(r"`(\w+)`", block))
 
-    assert documented == on_disk, (
-        f"docs list {sorted(documented - on_disk)} extra / omit {sorted(on_disk - documented)}"
-    )
+    assert (
+        documented == on_disk
+    ), f"docs list {sorted(documented - on_disk)} extra / omit {sorted(on_disk - documented)}"
 
 
-@pytest.mark.parametrize("doc", ["dual-loop.md", "memory.md", "dreaming.md", "swarm.md",
-                                 "self-evolution.md", "autonomous-goals.md", "backup-dr.md",
-                                 "architecture-map.md", "agent-onboarding.md"])
+@pytest.mark.parametrize(
+    "doc",
+    [
+        "dual-loop.md",
+        "memory.md",
+        "dreaming.md",
+        "swarm.md",
+        "self-evolution.md",
+        "autonomous-goals.md",
+        "backup-dr.md",
+        "architecture-map.md",
+        "agent-onboarding.md",
+    ],
+)
 def test_ops_config_families_are_documented(doc):
     """NEXUS_INFRA_BACKEND, the quota family, goals cap, and backup CLI must be written down."""
     text = (DOC.parent / doc).read_text(encoding="utf-8")

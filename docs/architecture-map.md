@@ -36,7 +36,7 @@ the `Container` class. See [Ops configuration](#ops-configuration).
 
 | Port (module) | Abstract type | `external` (default) | `memory` |
 |---|---|---|---|
-| `ports/secrets.py` | `SecretStore` | `EnvSecretStore`, or `ChainedSecretStore` over `JsonFileSecretStore` when `NEXUS_SECRET_BACKEND=json:<path>` | same |
+| `ports/secrets.py` | `SecretStore` | `EnvSecretStore`, or `ChainedSecretStore` over `JsonFileSecretStore` when NEXUS_SECRET_BACKEND is set to json:<path> | same |
 | `ports/auth.py` | `Authenticator` | `ApiKeyAuthenticator` | same |
 | `ports/observability.py` | `Tracer` | `OTELTracer` if `config.otel_enabled`, else `LoggingTracer` | same |
 | `ports/observability.py` | `Metrics` | `OTELMetrics` if `config.otel_enabled`, else `InMemoryMetrics` | same |
@@ -151,6 +151,26 @@ sqlite/postgres/mysql/redis.
 | `infrastructure/workers/` | Celery tasks + beat schedule (`dream`, `autonomy_loop`, `pattern_detection`, `entity_synthesis`) |
 | `infrastructure/backup/` | `QdrantBackup`, `Neo4jBackup`, `BackupManager` |
 | `infrastructure/di/` | `container.py` — the only place adapters are chosen |
+
+## Ops configuration
+
+Every knob below is read once by the `Config` dataclass at the top of
+`container.py` (default in brackets) — never by the `Container` class itself.
+`.env` is gitignored: copy `.env.example` to `.env`.
+
+| Variable | Effect |
+|---|---|
+| `NEXUS_INFRA_BACKEND` | `external` (default): Redis / Qdrant / Neo4j / OpenAI embeddings. `memory`: fully in-process adapters, for offline dreaming, evals and CI. |
+| `NEXUS_SECRET_BACKEND` | `env` (default), or `json:<path>` to chain a JSON-file secret store in front of the env store. |
+| `NEXUS_QUOTA_CHAT_PER_DAY` | Per-tenant daily chat-message cap (`0` = unlimited), enforced by `RateLimitQuota` over `RateLimiter`. |
+| `NEXUS_QUOTA_TOOL_GEN_PER_DAY` | Per-tenant daily generated-tool cap (`0` = unlimited). |
+| `NEXUS_QUOTA_MEMORIES_PER_DAY` | Per-tenant daily memory-write cap (`0` = unlimited). |
+| `NEXUS_GOALS_MAX_ACTIVE` | Ceiling on simultaneously active autonomous goals (`10`), enforced in `CreateGoalUseCase`. |
+| `NEXUS_SANDBOX_BACKEND` | `docker` (default) or `subprocess`. |
+| `NEXUS_OTEL_ENABLED` | `true` binds `OTELTracer` + `OTELMetrics`; otherwise the logging / in-memory pair. |
+| `NEXUS_LLM_PROVIDER` | `openai` (default), or `nvidia`/`nim` for `NvidiaNimProvider`. |
+| `NEXUS_LLM_BASE_URL` | Points the OpenAI-compatible adapters at a local server (LM Studio, Ollama). |
+| `NEXUS_API_KEYS` | JSON map of key to `{user_id, tenant_id, role}`. Empty means fail-closed: every request gets 401. |
 
 ## See also
 
