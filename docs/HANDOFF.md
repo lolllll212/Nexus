@@ -487,3 +487,18 @@ ISSUES DETECTED: none.
 **Status:** done
 **Next:** waiting on the CEO for the branch split (task-017, Tron) and a push decision. Not pushing, not force-pushing, not touching another agent's lane.
 **Needs:** Tron: run `git merge --ff-only master` on `work/antigravity-domain-hardening` when you are ready - it is a fast-forward, zero conflict, and it brings you the harness. CEO: confirm the shared-gate line in item 2 above and whether `work/copilot-ci-first-run` should be fast-forwarded or dropped.
+
+### 2026-10-02 22:20 UTC - astra
+**Task:** SELF-ASSIGNED (queue empty again) - `tests/eval/test_docs_env_vars.py`, a bidirectional contract between the ops env vars and the docs. The rule: a var the code reads must be documented, and a var the docs name must be read by the code. This exists because the quota and goals vars shipped undocumented - a hand-written checklist in `test_architecture_map.py` cannot keep up with the `Config` dataclass, so I replaced the checklist with a rule. It failed on first run and named 14 problems: 13 env vars the code reads that no doc mentioned (NEXUS_TENANTS, NEXUS_TOOL_GEN_RATE_LIMIT, NEXUS_RATE_LIMIT_FAIL_CLOSED, NEXUS_PATTERN_INTERVAL_SECONDS, NEXUS_PLUGINS_DIR, NEXUS_WORKSPACE_ROOT, NEXUS_WEBHOOK_URL, NEXUS_OTEL_ENDPOINT, NEXUS_LLM_MAX_TOKENS, NEXUS_NVIDIA_API_KEY, NEXUS_EMBEDDING_MODEL / _BASE_URL / _DIMENSION) - all now in the ops table with their real defaults read from the code; `NEXUS_WEBHOOK_URL`, which turned out to be plumbed into `config.webhook_url` and consumed by nothing, now documented as inert instead of implied to work; and `self-evolution.md` using `$NEXUS_API_KEY` as a shell placeholder in a curl example, one underscore away from the real `NEXUS_API_KEYS`, now `$API_KEY`. The two directions are deliberately asymmetric - reading a knob obliges you to document it, but a doc may legitimately name a var consumed by something other than a plain `os.getenv` (secret-store indirection, settings class), so the reverse direction only requires the name to appear as a literal under `src/`. A self-check asserts the scan still finds 25+ reads so the patterns cannot rot into passing on nothing. `HANDOFF.md` is excluded from the docs side because it quotes other agents and records what was once said. I also corrected my own ops-table intro, which had claimed every knob is read by the `Config` dataclass - three are not.
+**Files:** tests/eval/test_docs_env_vars.py (new), docs/architecture-map.md, docs/self-evolution.md
+**Status:** done
+**Next:** looping. Nothing pushed, nothing force-pushed, no other lane touched.
+**Needs:** none. Note for whoever wires outbound webhooks: `NEXUS_WEBHOOK_URL` has a config field and a secret-store entry but no consumer.
+
+GATES (branch work/opencode-application-upgrade @ 803fe40, on top of master 9df6d58)
+- pytest tests/ -q -> 454 passed, 3 skipped, 0 failed (451 before this unit, +3 checks)
+- pytest tests/eval/ -q -> 84 passed
+- ruff check src/ tests/ -> All checks passed
+- black --check src/ tests/ -> 216 files would be left unchanged
+- mypy src/nexus/domain/ src/nexus/application/ --ignore-missing-imports -> Success, 77 source files
+- lint-imports (from src/) -> domain-is-independent KEPT, application-is-independent KEPT
