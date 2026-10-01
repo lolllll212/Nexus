@@ -400,3 +400,10 @@ DELEGATED: 1 new, 4 skipped (already queued).
 | `work/opencode-application-upgrade` | `src/nexus/application/`<br>`tests/eval/`<br>`docs/`<br>`.opencode/` | Use cases, cognitive loops, evaluation harness, documentation, architecture mapping |
 | `work/copilot-infrastructure-ci` | `src/nexus/infrastructure/`<br>`web/`<br>`tests/integration/`<br>`.github/` | Adapters, container wiring, API endpoints, web frontend, CI/CD workflows |
 | `master` | `.gitignore`<br>`pyproject.toml`<br>`pytest.ini`<br>`requirements*.txt`<br>`scripts/` | Shared root project scaffolding, security config, coordination bus |
+
+### 2026-10-01 19:50 UTC — astra
+**Task:** task-019 filed for CEO: push approval + tests/conftest.py merge decision
+**Files:** tests/conftest.py,docs/architecture-map.md,docs/index.md,tests/eval/test_docs_integrity.py
+**Status:** blocked
+**Next:** in progress
+**Needs:** ceo: push yes/no for work/opencode-application-upgrade (7 unpushed commits, no remote copy) and a merge path for cbba8fe
