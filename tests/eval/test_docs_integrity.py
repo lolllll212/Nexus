@@ -40,6 +40,8 @@ EXPLICIT_ANCHOR = re.compile(r"<a\s+(?:name|id)=[\"']([^\"']+)[\"']")
 UNRESOLVED = re.compile(r"\b(?:TODO|FIXME|TBD|WIP)\b")
 
 FENCE = re.compile(r"^(?:```|~~~).*?^(?:```|~~~)\s*$", re.MULTILINE | re.DOTALL)
+INLINE_CODE = re.compile(r"`[^`\n]*`")
+INLINE_DELIMS = re.compile(r"(`+)")
 
 
 def _sources() -> list[Path]:
@@ -57,18 +59,33 @@ def _body(path: Path) -> str:
 
 
 def _local_links(path: Path) -> list[tuple[str, str]]:
-    """(label, target) for every non-http link in the file."""
+    """(label, target) for every non-http link in the file.
+
+    Inline code spans are dropped first: a doc that *shows* link syntax, e.g.
+    ``` `[Ops configuration](#ops-configuration)` ```, is quoting a link, not
+    shipping one. GitHub does not render links inside code spans either, so
+    counting them produces false alarms on prose about links.
+    """
+    text = INLINE_CODE.sub("", _body(path))
     return [
         (label, target)
-        for label, target in LINK.findall(_body(path))
+        for label, target in LINK.findall(text)
         if not target.startswith(("http://", "https://", "mailto:", "tel:"))
     ]
 
 
 def _anchor(text: str) -> str:
-    """GitHub's heading -> anchor rule: lowercase, drop punctuation, spaces to dashes."""
+    """GitHub's heading -> anchor rule.
+
+    Lowercase, delete everything that is not a word character / space / hyphen,
+    then turn *each* remaining space into its own hyphen. Collapsing runs of
+    whitespace would be tidier and wrong: "Architecture & Dependency" loses the
+    ampersand and keeps both spaces, so GitHub's real id is
+    ``architecture--dependency``, not ``architecture-dependency``.
+    """
+    text = INLINE_DELIMS.sub(r"\1", text)  # keep the code, drop the backticks
     text = re.sub(r"[^\w\s-]", "", text.lower())
-    return re.sub(r"\s+", "-", text.strip())
+    return re.sub(r"\s", "-", text.strip())
 
 
 def _anchors(path: Path) -> set[str]:
@@ -77,13 +94,14 @@ def _anchors(path: Path) -> set[str]:
     Repeated headings get GitHub's ``-1``/``-2`` suffixes, so they are counted
     rather than collapsed.
     """
+    body = _body(path)
     found: set[str] = set()
     seen: dict[str, int] = {}
-    for _, title in HEADING.findall(_body(path)):
+    for _, title in HEADING.findall(body):
         slug = _anchor(title)
         seen[slug] = seen.get(slug, 0) + 1
         found.add(slug if seen[slug] == 1 else f"{slug}-{seen[slug] - 1}")
-    found.update(m.group(1).lower() for m in EXPLICIT_ANCHOR.finditer(_body(path)))
+    found.update(m.group(1).lower() for m in EXPLICIT_ANCHOR.finditer(body))
     return found
 
 
@@ -101,6 +119,46 @@ def test_docs_directory_is_populated():
     found = sorted(p.name for p in DOCS.glob("*.md"))
     assert len(found) >= 10, f"docs/ looks wrong: only {found}"
     assert "index.md" in found, "docs/index.md is the entry point and must exist"
+
+
+def test_anchor_slugs_follow_github_rules(tmp_path):
+    """The slug logic itself, pinned to GitHub's behaviour.
+
+    Without this the anchor check is only as trustworthy as my memory of how
+    GitHub turns a heading into an id.
+    """
+    page = tmp_path / "page.md"
+    page.write_text(
+        "## Ops configuration\n"
+        "\n"
+        "## Ops Configuration\n"  # duplicate heading -> -1 suffix
+        "\n"
+        "## The `NEXUS_QUOTA_*` family\n"  # backticks drop, inner text stays
+        "\n"
+        "## Clean Architecture & Dependency Rule\n"  # punctuation and & drop
+        "\n"
+        '<a id="handbook"></a>\n',
+        encoding="utf-8",
+    )
+    assert _anchors(page) == {
+        "ops-configuration",
+        "ops-configuration-1",
+        "the-nexus_quota_-family",
+        "clean-architecture--dependency-rule",
+        "handbook",
+    }
+
+
+def test_links_inside_code_spans_are_not_links(tmp_path):
+    """Prose that quotes link syntax must not be counted as a shipped link."""
+    page = tmp_path / "page.md"
+    page.write_text(
+        "```bash\ncurl http://localhost:8000/docs/gone.md\n```\n"
+        "\n"
+        "See `[gone](nowhere.md)` for the old path.\n",
+        encoding="utf-8",
+    )
+    assert _local_links(page) == []
 
 
 def test_relative_file_links_resolve():
@@ -166,7 +224,7 @@ def test_no_unresolved_markers_in_docs():
         f"{path.relative_to(REPO_ROOT)}:{line_no}: {line.strip()}"
         for path in _sources()
         if path.name not in MARKER_EXEMPT
-        for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        for line_no, line in enumerate(_body(path).splitlines(), 1)
         if UNRESOLVED.search(line)
     ]
     assert not offenders, "unresolved markers in docs:\n" + "\n".join(offenders)
