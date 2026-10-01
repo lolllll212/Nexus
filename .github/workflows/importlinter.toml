@@ -6,3 +6,9 @@ name = "domain-is-independent"
 type = "forbidden"
 source_modules = ["nexus.domain"]
 forbidden_modules = ["nexus.infrastructure"]
+
+[[tool.importlinter.contracts]]
+name = "application-is-independent"
+type = "forbidden"
+source_modules = ["nexus.application"]
+forbidden_modules = ["nexus.infrastructure"]

@@ -17,7 +17,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
-      - run: pip install ruff black mypy
       - run: ruff check src/ tests/
       - run: black --check src/ tests/
       - run: mypy src/nexus/domain/ src/nexus/application/ --ignore-missing-imports
@@ -59,6 +58,6 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install import-linter
-      - name: Check dependency rule (domain must not import infrastructure)
+      - name: Check dependency rules (domain and application must not import infrastructure)
         run: lint-imports --config ../.github/workflows/importlinter.toml
         working-directory: src
