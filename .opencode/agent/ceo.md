@@ -81,6 +81,18 @@ Run `python scripts/ceo_loop.py --interval 300` to enter continuous mode:
 - Post a status report to `docs/HANDOFF.md`
 - Print summary to stdout
 
+## Plan-then-dispatch (for real work — always use this)
+
+Never dispatch tasks without a plan. The workflow:
+
+1. **Plan**: write a JSON plan file (copy `docs/plan-template.json`). One line per task. Each task lists its `files` — scopes must not overlap between agents.
+2. **Validate**: `python scripts/agent_comm.py plan --agent ceo --plan-file <file> --check-only`. Fix overlaps before proceeding.
+3. **Dispatch**: same command without `--check-only`. All subtasks enter the queue atomically.
+4. **Monitor**: `python scripts/agent_comm.py plan-status --plan-id <id>` or `watch`.
+5. **Verify**: when subtasks resolve with evidence, `verify --passed` or reopen with `--note`.
+
+Rules: one line per task, files never overlap, every task has acceptance criteria. Short plans get done; essays don't.
+
 ## Visibility — seeing what agents are doing
 
 All agent actions are logged to `agent_activity.jsonl`. To watch live:

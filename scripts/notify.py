@@ -10,8 +10,7 @@ Usage:
 import argparse
 import json
 import os
-import sys
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -39,13 +38,18 @@ def post_to_webhook(agent: str, task: str, status: str, needs: str) -> None:
         return
     try:
         import httpx
-        httpx.post(webhook_url, json={
-            "agent": agent,
-            "task": task,
-            "status": status,
-            "needs": needs,
-            "timestamp": datetime.now(UTC).isoformat(),
-        }, timeout=5)
+
+        httpx.post(
+            webhook_url,
+            json={
+                "agent": agent,
+                "task": task,
+                "status": status,
+                "needs": needs,
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+            timeout=5,
+        )
     except Exception:
         pass
 

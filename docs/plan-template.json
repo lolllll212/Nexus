@@ -1,0 +1,26 @@
+{
+  "goal": "ONE LINE: what the whole plan achieves",
+  "tasks": [
+    {
+      "for": "astra",
+      "task": "ONE LINE: what Astra does",
+      "files": ["src/nexus/application/example.py", "tests/eval/test_example.py"],
+      "acceptance": ["pytest tests/eval/test_example.py -q passes"],
+      "priority": "high"
+    },
+    {
+      "for": "tron",
+      "task": "ONE LINE: what Tron does",
+      "files": ["src/nexus/domain/ports/example.py", "tests/unit/test_example.py"],
+      "acceptance": ["pytest tests/unit/test_example.py -q passes"],
+      "priority": "high"
+    },
+    {
+      "for": "xenom",
+      "task": "ONE LINE: what Xenom does",
+      "files": ["src/nexus/infrastructure/adapters/example.py"],
+      "acceptance": ["pytest tests/integration/test_example.py -q passes", "ruff check src/nexus/infrastructure/adapters/example.py clean"],
+      "priority": "medium"
+    }
+  ]
+}

@@ -12,10 +12,9 @@ Usage:
 
 import argparse
 import json
-import os
 import sys
 import time
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -121,8 +120,8 @@ def cmd_resolve(args, state):
     for task in state["task_queue"]:
         if task["id"] == task_id:
             if not args.evidence:
-                print(f"Resolve refused: --evidence is required (test output proving the fix).")
-                print(f"Example: --evidence \"pytest tests/eval/test_x.py -q: 12 passed\"")
+                print("Resolve refused: --evidence is required (test output proving the fix).")
+                print('Example: --evidence "pytest tests/eval/test_x.py -q: 12 passed"')
                 sys.exit(1)
             task["status"] = "resolved"
             task["resolved_at"] = now()
@@ -161,12 +160,16 @@ def cmd_status(args, state):
     print("=== Task Queue ===")
     for task in state["task_queue"]:
         flag = " [UNVERIFIED]" if task["status"] == "resolved" and not task.get("verified") else ""
-        print(f"  [{task['id']}] {task['status']:8s} | {task['requested_by']:12s} -> {task['for']:12s} | {task['description'][:60]}{flag}")
+        print(
+            f"  [{task['id']}] {task['status']:8s} | {task['requested_by']:12s} -> {task['for']:12s} | {task['description'][:60]}{flag}"
+        )
     print()
     print("=== Scoreboard ===")
     for name in state["agents"]:
         claimed = sum(1 for t in state["task_queue"] if t.get("claimed_by") == name)
-        resolved = sum(1 for t in state["task_queue"] if t.get("claimed_by") == name and t["status"] == "resolved")
+        resolved = sum(
+            1 for t in state["task_queue"] if t.get("claimed_by") == name and t["status"] == "resolved"
+        )
         verified = sum(1 for t in state["task_queue"] if t.get("claimed_by") == name and t.get("verified"))
         print(f"  {name:12s} | claimed: {claimed} | resolved: {resolved} | verified: {verified}")
     print()
@@ -207,6 +210,125 @@ def cmd_board(args, state):
         print("No handoff board found.")
 
 
+OWNER_MAP = {
+    "astra": ["src/nexus/application/", "tests/eval/", "docs/"],
+    "tron": ["src/nexus/domain/", "plugins/", "tests/unit/"],
+    "xenom": ["src/nexus/infrastructure/", "web/", "config/", "tests/integration/"],
+}
+
+
+def owner_of(path: str) -> str | None:
+    p = path.replace("\\", "/")
+    for owner, prefixes in OWNER_MAP.items():
+        if any(p.startswith(pref) or p == pref.rstrip("/") for pref in prefixes):
+            return owner
+    return None
+
+
+def cmd_plan(args, state):
+    try:
+        plan = json.loads(Path(args.plan_file).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"Cannot read plan file: {e}")
+        sys.exit(1)
+
+    goal = plan.get("goal", "")
+    items = plan.get("tasks", [])
+    if not goal or not items:
+        print("Plan needs 'goal' and non-empty 'tasks'.")
+        sys.exit(1)
+
+    errors, warnings = [], []
+    seen_files: dict[str, str] = {}
+    for i, item in enumerate(items):
+        who = item.get("for", "")
+        files = item.get("files", [])
+        if who not in OWNER_MAP:
+            errors.append(f"task {i}: unknown agent '{who}'")
+            continue
+        for f in files:
+            if f in seen_files:
+                errors.append(
+                    f"task {i}: file '{f}' also claimed by task for {seen_files[f]} — scopes must not overlap"
+                )
+            else:
+                seen_files[f] = who
+            if owner_of(f) not in (who, None):
+                warnings.append(f"task {i}: file '{f}' is {owner_of(f)}'s area, not {who}'s")
+
+    if errors:
+        print("PLAN REJECTED:")
+        for e in errors:
+            print(f"  - {e}")
+        sys.exit(1)
+    for w in warnings:
+        print(f"WARNING: {w}")
+
+    if args.check_only:
+        print(f"PLAN OK: '{goal}' — {len(items)} tasks, no overlap.")
+        return
+
+    plan_id = f"plan-{len(state.get('plans', [])) + 1:03d}"
+    task_ids = []
+    for item in items:
+        task = {
+            "id": f"task-{len(state['task_queue']) + 1:03d}-{plan_id}",
+            "description": item.get("task", ""),
+            "requested_by": args.agent,
+            "for": item.get("for"),
+            "status": "pending",
+            "priority": item.get("priority", "medium"),
+            "files": item.get("files", []),
+            "acceptance": item.get("acceptance", []),
+            "evidence": None,
+            "verified": False,
+            "plan_id": plan_id,
+            "created_at": now(),
+            "claimed_by": None,
+            "claimed_at": None,
+            "resolved_at": None,
+        }
+        state["task_queue"].append(task)
+        task_ids.append(task["id"])
+        log_activity(args.agent, "request", f"{task['id']} for {task['for']}: {task['description'][:80]}")
+
+    state.setdefault("plans", []).append(
+        {
+            "id": plan_id,
+            "goal": goal,
+            "tasks": task_ids,
+            "status": "active",
+            "created_by": args.agent,
+            "created_at": now(),
+        }
+    )
+    save_state(state)
+    print(f"PLAN {plan_id} DISPATCHED: '{goal}'")
+    for tid in task_ids:
+        print(f"  - {tid}")
+
+
+def cmd_plan_status(args, state):
+    plan = next((p for p in state.get("plans", []) if p["id"] == args.plan_id), None)
+    if not plan:
+        print(f"Plan {args.plan_id} not found.")
+        sys.exit(1)
+    print(f"PLAN {plan['id']}: {plan['goal']} [{plan['status']}]")
+    by_id = {t["id"]: t for t in state["task_queue"]}
+    done = 0
+    for tid in plan["tasks"]:
+        t = by_id.get(tid)
+        if not t:
+            print(f"  [{tid}] missing")
+            continue
+        who = t.get("claimed_by") or t["for"]
+        mark = "OK" if t.get("verified") or t["status"] == "resolved" else ".."
+        if mark == "OK":
+            done += 1
+        print(f"  [{mark}] {tid} {t['status']:8s} | {who:8s} | {t['description'][:55]}")
+    print(f"{done}/{len(plan['tasks'])} subtasks done")
+
+
 def cmd_progress(args, state):
     agent = args.agent
     if agent not in state["agents"]:
@@ -241,7 +363,9 @@ def render_dashboard(state) -> str:
     lines.append("")
     lines.append("RECENT ACTIVITY:")
     for entry in read_activity(10):
-        lines.append(f"  {entry['ts'][11:19]} {entry['agent']:8s} {entry['action']:9s} {entry.get('detail','')[:60]}")
+        lines.append(
+            f"  {entry['ts'][11:19]} {entry['agent']:8s} {entry['action']:9s} {entry.get('detail','')[:60]}"
+        )
     return "\n".join(lines)
 
 
@@ -295,6 +419,14 @@ def main():
     p = sub.add_parser("watch")
     p.add_argument("--interval", type=int, default=5, help="Refresh seconds")
 
+    p = sub.add_parser("plan")
+    p.add_argument("--agent", required=True, choices=["ceo", "astra", "tron", "xenom"])
+    p.add_argument("--plan-file", required=True, help="JSON plan file to validate + dispatch")
+    p.add_argument("--check-only", action="store_true", help="Validate without dispatching")
+
+    p = sub.add_parser("plan-status")
+    p.add_argument("--plan-id", required=True)
+
     sub.add_parser("status")
     sub.add_parser("board")
 
@@ -309,6 +441,8 @@ def main():
         "verify": cmd_verify,
         "progress": cmd_progress,
         "watch": cmd_watch,
+        "plan": cmd_plan,
+        "plan-status": cmd_plan_status,
         "status": cmd_status,
         "board": cmd_board,
     }

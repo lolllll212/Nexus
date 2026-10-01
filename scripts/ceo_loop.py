@@ -271,7 +271,7 @@ def route_issue(issue: str, files: list[str] | None = None) -> list[str]:
     Multi-owner issues yield several owners so the caller can split the work;
     anything nobody claims is routed to UNASSIGNED rather than dumped on xenom.
     """
-    buckets = classify_files(files if files is not None else extract_paths(issue))
+    buckets = classify_files(files or extract_paths(issue))
     owners = [owner for owner in OWNER_MAP if owner in buckets]
     if owners:
         return owners
@@ -296,8 +296,14 @@ def find_existing_task(state: dict, signature: str, files: list[str]) -> str | N
     for task in state.get("task_queue", []):
         if task.get("status") not in ACTIVE_TASK_STATUSES:
             continue
-        if signature and task.get("signature") == signature:
-            return str(task.get("id"))
+        if task.get("signature"):
+            # Script-created task: only its exact signature counts, so a "tests" task
+            # never suppresses a separate "ruff" task for the same file.
+            if signature and task.get("signature") == signature:
+                return str(task.get("id"))
+            continue
+        # Legacy prose task (scripts/agent_comm.py or a human): no signature to compare,
+        # so treat it as covering any issue that names one of the same files.
         description = norm(str(task.get("description", "")))
         for path in files:
             if path and path in description:
@@ -321,7 +327,11 @@ def acceptance_for(kind: str, files: list[str]) -> tuple[list[str], str]:
 
 
 def delegate_task(
-    ceo_agent: str, target: str, description: str, signature: str = "", files: list[str] | None = None,
+    ceo_agent: str,
+    target: str,
+    description: str,
+    signature: str = "",
+    files: list[str] | None = None,
     kind: str = "",
 ) -> str:
     state = load_state()
@@ -400,9 +410,11 @@ def post_board(message: str, force: bool = False) -> bool:
         headers = list(AUTONOMOUS_HEADER_RE.finditer(existing))
         if headers:
             last = headers[-1]
-            segment = existing[last.start() :]
-            nxt = FOREIGN_HEADER_RE.search(segment[last.end() - last.start() :])
-            previous = segment[: last.end() - last.start() + nxt.start()] if nxt else segment
+            # Digest the previous entry BODY only. Including its "### <ts> — ceo (autonomous)"
+            # header would bake a fresh timestamp into every digest and defeat the comparison.
+            segment = existing[last.end() :]
+            nxt = FOREIGN_HEADER_RE.search(segment)
+            previous = segment[: nxt.start()] if nxt else segment
             if board_digest(previous) == board_digest(message):
                 return False
     timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
@@ -477,6 +489,48 @@ def build_issues(tests: dict, ruff: dict, black: dict) -> list[dict]:
     return issues
 
 
+def dispatch_issues(state: dict, issues: list[dict]) -> tuple[int, int, list[str], list[str]]:
+    """Route every issue to its owners, skipping issues already queued.
+
+    Multi-owner issues are split into one task per owner, each scoped to that
+    owner's files. Returns (delegated, skipped, created_task_ids, report_lines).
+    """
+    lines: list[str] = []
+    created: list[str] = []
+    delegated = skipped = 0
+    for issue in issues:
+        owners = route_issue(issue["text"], issue["files"])
+        lines.append(f"  - {issue['text']} -> owners: {', '.join(owners)}")
+        for owner in owners:
+            scoped = classify_files(issue["files"]).get(owner) or issue["files"]
+            signature = issue_signature(issue["kind"], scoped)
+            existing_id = find_existing_task(state, signature, scoped)
+            if existing_id:
+                skipped += 1
+                lines.append(f"      {owner}: SKIPPED, already queued as {existing_id}")
+                continue
+            detail = ", ".join(scoped[:5]) or "no files attributed"
+            description = f"Fix {issue['kind']}: {detail} [signature={signature}]"
+            created.append(
+                delegate_task(
+                    "ceo",
+                    owner,
+                    description,
+                    signature=signature,
+                    files=scoped,
+                    kind=issue["kind"],
+                )
+            )
+            delegated += 1
+            lines.append(f"      {owner}: DELEGATED")
+            # Mirror the new task into the in-memory state so a later issue in this
+            # same cycle dedups against it instead of queueing a second copy.
+            state.setdefault("task_queue", []).append(
+                {"id": created[-1], "status": "pending", "signature": signature, "description": description}
+            )
+    return delegated, skipped, created, lines
+
+
 def run_autonomous_cycle() -> None:
     timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
@@ -503,31 +557,8 @@ AGENTS:
     delegated, skipped, created = 0, 0, []
 
     if issues:
-        report += "\nISSUES DETECTED:\n"
-        for issue in issues:
-            owners = route_issue(issue["text"], issue["files"])
-            report += f"  - {issue['text']} -> owners: {', '.join(owners)}\n"
-            for owner in owners:
-                scoped = classify_files(issue["files"]).get(owner) or issue["files"]
-                signature = issue_signature(issue["kind"], scoped)
-                existing_id = find_existing_task(state, signature, scoped)
-                if existing_id:
-                    skipped += 1
-                    report += f"      {owner}: SKIPPED, already queued as {existing_id}\n"
-                    continue
-                detail = ", ".join(scoped[:5]) or "no files attributed"
-                created.append(
-                    delegate_task(
-                        "ceo",
-                        owner,
-                        f"Fix {issue['kind']}: {detail} [signature={signature}]",
-                        signature=signature,
-                        files=scoped,
-                        kind=issue["kind"],
-                    )
-                )
-                delegated += 1
-                report += f"      {owner}: DELEGATED\n"
+        delegated, skipped, created, lines = dispatch_issues(state, issues)
+        report += "\nISSUES DETECTED:\n" + "\n".join(lines) + "\n"
         report += f"\nDELEGATED: {delegated} new, {skipped} skipped (already queued)."
     else:
         report += "\nISSUES DETECTED: none."
