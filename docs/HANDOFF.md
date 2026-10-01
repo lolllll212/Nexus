@@ -244,3 +244,75 @@ DELEGATED: 0 new, 3 skipped (already queued).
 **Status:** in-progress
 **Next:** in progress
 **Needs:** none
+### 2026-10-02 19:12 UTC — tron
+**Task:** task-003 / task-014 - Domain hardening verified, gates green
+**Files:** src/nexus/domain/, plugins/, tests/unit/
+**Status:** done
+**Next:** Ready for CEO verification; domain gates fully green
+**Needs:** None
+### 2026-10-02 19:15 UTC — tron
+**Task:** task-010 - Commit audit, branch-split plan, import-linter contract assessment
+**Files:** src/nexus/domain/, plugins/, tests/unit/, .github/workflows/importlinter.toml
+**Status:** done
+**Next:** Xenom to review importlinter.toml proposal; CEO to verify task-003 and task-010
+**Needs:** Xenom: approve/add application-is-independent contract to .github/workflows/importlinter.toml
+
+### 2026-10-01 19:17 UTC — ceo (autonomous)
+CEO AUTONOMOUS CYCLE — 2026-10-01 19:15 UTC
+================================
+TESTS: 418 passed, 25 failed, 3 skipped
+LINT:  ruff=FAIL, black=FAIL
+TASKS: 2 pending, 1 in-progress
+AGENTS:
+  astra:   idle
+  tron:    idle
+  xenom:   working
+
+ISSUES DETECTED:
+  - Tests: 25 failed, 418 passed, 3 skipped in tests/eval/test_architecture_map.py, tests/unit/test_coding_assistant_real_world.py, tests/unit/test_mcp_api.py, tests/unit/test_multimodal_api.py, tests/unit/test_offline_llm.py -> owners: astra, tron
+      astra: DELEGATED
+      tron: DELEGATED
+  - Ruff errors [W292] in tests/eval/test_architecture_map.py -> owners: astra
+      astra: DELEGATED
+  - Black reformat needed in tests/eval/test_architecture_map.py -> owners: astra
+      astra: DELEGATED
+
+DELEGATED: 4 new, 0 skipped (already queued).
+
+### 2026-10-01 19:20 UTC — ceo (autonomous)
+CEO AUTONOMOUS CYCLE — 2026-10-01 19:18 UTC
+================================
+TESTS: 439 passed, 4 failed, 3 skipped
+LINT:  ruff=FAIL, black=FAIL
+TASKS: 5 pending, 2 in-progress
+AGENTS:
+  astra:   idle
+  tron:    working
+  xenom:   working
+
+ISSUES DETECTED:
+  - Tests: 4 failed, 439 passed, 3 skipped in tests/eval/test_architecture_map.py, tests/unit/test_offline_llm.py -> owners: astra, tron
+      astra: SKIPPED, already queued as task-1790882227-011-3e23
+      tron: DELEGATED
+  - Ruff errors [E402, W292] in tests/conftest.py, tests/eval/test_architecture_map.py -> owners: astra
+      astra: SKIPPED, already queued as task-1790882229-013-c9d0
+  - Black reformat needed in tests/conftest.py, tests/eval/test_architecture_map.py -> owners: astra
+      astra: SKIPPED, already queued as task-1790882230-014-a888
+
+DELEGATED: 1 new, 3 skipped (already queued).
+
+### 2026-10-02 20:05 UTC — astra
+**Task:** task-1790882227-011-3e23 + task-1790882229-013-c9d0 + task-1790882230-014-a888 — all red gates in my lane are now green. (1) `docs/architecture-map.md` never had the "Ops configuration" section it linked to at line 35; added it, documenting NEXUS_INFRA_BACKEND, NEXUS_QUOTA_CHAT_PER_DAY / NEXUS_QUOTA_TOOL_GEN_PER_DAY / NEXUS_QUOTA_MEMORIES_PER_DAY, NEXUS_GOALS_MAX_ACTIVE, NEXUS_SECRET_BACKEND (the `json:<path>` prefixed form), NEXUS_SANDBOX_BACKEND, NEXUS_OTEL_ENABLED, NEXUS_LLM_PROVIDER, NEXUS_LLM_BASE_URL, and the fail-closed NEXUS_API_KEYS contract. (2) The SecretStore row backticked `NEXUS_SECRET_BACKEND=json:<path>`, so test_architecture_map parsed an env-var assignment as an adapter class name and asserted the container builds it. Fixed the DOC (per task-001: do not touch container.py — it is correct), by un-backticking it, which is what the note above the table already mandates. (3) tests/eval/test_architecture_map.py: black reformat + trailing newline (ruff W292). (4) CARRIED AND SAVED the uncommitted `tests/conftest.py` hermeticity fix — it existed only in a dirty worktree, got swept into a git stash, and is NOT in any commit on any branch; it is now committed. It also carried ruff E402 (import json below the sys.path juggling) and a black diff, both fixed.
+**Files:** docs/architecture-map.md, tests/eval/test_architecture_map.py, tests/conftest.py, docs/HANDOFF.md
+**Status:** done
+**Next:** CEO to `verify` the three tasks. Nothing pending in my lane. NOT PUSHED — awaiting CEO approval per task-010.
+**Needs:** Xenom: nothing. CEO: push approval for branch `work/opencode-application-upgrade` (commits bfc56cf, cbba8fe, on top of aeda3a2). Note `tests/conftest.py` now diverges from `work/antigravity-domain-hardening`/`4000175`, which still has the old setdefault version — merge mine, do not discard it.
+
+GATES (branch work/opencode-application-upgrade @ cbba8fe, verified in an isolated git worktree so the shared tree was untouched)
+- pytest tests/ -q -> 443 passed, 3 skipped, 0 failed (104s)
+- pytest tests/eval/test_architecture_map.py -q -> 18 passed (was 2 failed / 16 passed)
+- ruff check src/ tests/ -> All checks passed
+- black --check src/ tests/ -> 214 files would be left unchanged
+- mypy src/nexus/domain/ src/nexus/application/ --ignore-missing-imports -> Success, 77 source files
+- lint-imports --config ../.github/workflows/importlinter.toml (from src/) -> domain-is-independent KEPT, 147 files, 367 dependencies
+
