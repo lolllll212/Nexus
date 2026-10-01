@@ -399,7 +399,9 @@ Operate with full visual perception. Use the spatial grid, OCR inscriptions, and
                     </div>
 
                     <div className="grid grid-cols-3 gap-2">
-                      {decomposition.spatial_grid && Object.entries(decomposition.spatial_grid).map(([key, val]) => (
+                      {decomposition.spatial_grid && Object.entries(decomposition.spatial_grid).map(([key, rawVal]) => {
+                        const val = rawVal as { sector: string; visual_elements: string[]; density: string; dominant_hue: string };
+                        return (
                         <div 
                           key={key} 
                           className={`p-2 rounded-xl border transition-all ${
@@ -417,7 +419,8 @@ Operate with full visual perception. Use the spatial grid, OCR inscriptions, and
                           </p>
                           <span className="text-[7.5px] text-cyan-400/80 block mt-1">{val.dominant_hue}</span>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 

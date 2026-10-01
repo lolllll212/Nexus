@@ -1,21 +1,21 @@
-export type NodeCategory = 
-  | 'MEMORY' 
-  | 'DOCUMENT' 
-  | 'WEBSITE' 
-  | 'RESEARCH' 
-  | 'PROJECT' 
-  | 'TASK' 
-  | 'AGENT' 
-  | 'WORKFLOW' 
-  | 'API' 
-  | 'TOOL' 
-  | 'PERSON' 
-  | 'COMPANY' 
-  | 'CONCEPT' 
-  | 'CODE' 
-  | 'DATABASE' 
-  | 'CONVERSATION' 
-  | 'FILE' 
+export type NodeCategory =
+  | 'MEMORY'
+  | 'DOCUMENT'
+  | 'WEBSITE'
+  | 'RESEARCH'
+  | 'PROJECT'
+  | 'TASK'
+  | 'AGENT'
+  | 'WORKFLOW'
+  | 'API'
+  | 'TOOL'
+  | 'PERSON'
+  | 'COMPANY'
+  | 'CONCEPT'
+  | 'CODE'
+  | 'DATABASE'
+  | 'CONVERSATION'
+  | 'FILE'
   | 'SOURCE';
 
 export type OperatingMode = 'HUD' | 'GRAPH' | 'RESEARCH' | 'WORKFLOW' | 'ARCHITECTURE' | 'VIDEO' | 'DASHBOARD';
@@ -240,4 +240,79 @@ export interface SystemTelemetry {
   totalTools: number;
   memorySyncRate: number;
   activeWorkflows: number;
+}
+
+// ── Legacy types (used by CenterCanvas, RightSidebar, mockData) ───────────
+export type NodeGroup = 'Router' | 'Concepts' | 'Suites' | 'Skills' | 'Tools' | 'Worlds' | 'Notes' | 'Files';
+export type HubCategory = 'Skill Suites' | 'Local Businesses' | 'AI Workshop' | 'Claude Code';
+
+export interface GraphNode {
+  id: string;
+  group: NodeGroup;
+  val: number;
+  hub: HubCategory;
+  desc: string;
+  x?: number;
+  y?: number;
+  vx?: number;
+  vy?: number;
+  fx?: number | null;
+  fy?: number | null;
+}
+
+export interface GraphLink {
+  source: string;
+  target: string;
+  value?: number;
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  links: GraphLink[];
+}
+
+export interface ForceSettings {
+  charge: number;
+  distance: number;
+  center: number;
+  collision: number;
+}
+
+export interface SystemStates {
+  ONLINE: boolean;
+  RING: boolean;
+  CUBE: boolean;
+  FACE: boolean;
+  EYES: boolean;
+  WATCH: boolean;
+  HOLO: boolean;
+  FOCUS: boolean;
+}
+
+export interface LegendItem {
+  id: NodeGroup;
+  label: string;
+  color: string;
+  count: number;
+}
+
+export interface HubItem {
+  id: HubCategory;
+  label: string;
+  color: string;
+}
+
+// ── NIM provider types (used by JarvisModal) ──────────────────────────────
+export interface NimModel {
+  id: string;
+  name?: string;
+  owned_by?: string;
+  provider?: string;
+}
+
+export interface NimStatus {
+  provider: string;
+  base_url: string;
+  has_key: boolean;
+  models: NimModel[];
 }

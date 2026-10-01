@@ -139,10 +139,10 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
         {/* ── Recent Operational Activity Feed ──────────────────────────────── */}
         <div>
-          <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest px-2 block mb-2 flex items-center gap-1.5">
+          <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest px-2 mb-2 flex items-center gap-1.5">
             <Activity className="w-3 h-3 text-cyan-400" />
             <span>RECENT ACTIVITY</span>
-          </span>
+          </div>
           <div className="space-y-1.5 px-1">
             {recentActivities.map((act, i) => {
               const ActIcon = act.icon;

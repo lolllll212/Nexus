@@ -4,7 +4,10 @@ import {
   NodeCategory, 
   AutonomousAgent, 
   InterAgentMessage, 
-  IntegrationService 
+  IntegrationService,
+  ResearchClaim,
+  ResearchTraceEvent,
+  WorkflowStep
 } from '../types';
 
 export const CATEGORY_STYLES: Record<NodeCategory, { color: string; glow: string; label: string }> = {

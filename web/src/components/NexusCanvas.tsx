@@ -128,7 +128,7 @@ export const NexusCanvas: React.FC<NexusCanvasProps> = ({
 
   // Synchronize incoming nodes into local simulation array with preserved coordinates
   useEffect(() => {
-    const existingMap = new Map(simulationNodesRef.current.map((n) => [n.id, n]));
+    const existingMap = new Map<string, NexusNode>(simulationNodesRef.current.map((n) => [n.id, n]));
     const width = containerRef.current?.clientWidth || 1000;
     const height = containerRef.current?.clientHeight || 800;
     const cx = width / 2;
@@ -315,7 +315,7 @@ export const NexusCanvas: React.FC<NexusCanvasProps> = ({
       const nodeCount = localNodes.length;
       if (nodeCount === 0) return;
 
-      const nodeMap = new Map(localNodes.map((n) => [n.id, n]));
+      const nodeMap = new Map<string, NexusNode>(localNodes.map((n) => [n.id, n]));
 
       if (layout === 'FORCE') {
         // Multi-body repulsive force
@@ -543,7 +543,7 @@ export const NexusCanvas: React.FC<NexusCanvasProps> = ({
       }
 
       const localNodes = simulationNodesRef.current;
-      const nodeMap = new Map(localNodes.map((n) => [n.id, n]));
+      const nodeMap = new Map<string, NexusNode>(localNodes.map((n) => [n.id, n]));
       const hovered = hoveredNodeRef.current;
 
       // ── Render Connections (Edges) ─────────────────────────────────────────
