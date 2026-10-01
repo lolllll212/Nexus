@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "opencode": {
+      "type": "local",
+      "command": ["opencode", "serve"],
+      "enabled": true,
+      "environment": {}
+    }
+  }
+}

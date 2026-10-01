@@ -7,6 +7,7 @@ and sandbox execution of untrusted scripts.
 from __future__ import annotations
 
 import shutil
+import subprocess
 
 import pytest
 
@@ -15,7 +16,18 @@ from nexus.infrastructure.adapters.sandbox.docker_sandbox import DockerSandbox
 
 @pytest.fixture
 def docker_available() -> bool:
-    return shutil.which("docker") is not None
+    if shutil.which("docker") is None:
+        return False
+    try:
+        result = subprocess.run(
+            ["docker", "info"],
+            check=False,
+            capture_output=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
 
 
 @pytest.mark.asyncio

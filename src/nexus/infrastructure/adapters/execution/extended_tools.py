@@ -6,13 +6,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextvars
 import difflib
 import hashlib
 import json
 import os
 import platform
 import re
-import contextvars
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
@@ -42,15 +42,27 @@ def get_execution_context() -> dict[str, Any]:
 
 
 DENYLISTED_FILES = {
-    ".env", ".env.local", ".env.production", ".env.development", ".env.staging", ".env.test",
-    "credentials", "secrets.json", ".git-credentials", ".netrc"
+    ".env",
+    ".env.local",
+    ".env.production",
+    ".env.development",
+    ".env.staging",
+    ".env.test",
+    "credentials",
+    "secrets.json",
+    ".git-credentials",
+    ".netrc",
 }
-DENYLISTED_EXTENSIONS = {
-    ".pem", ".key", ".pkcs12", ".p12", ".pfx", ".cert", ".crt"
-}
+DENYLISTED_EXTENSIONS = {".pem", ".key", ".pkcs12", ".p12", ".pfx", ".cert", ".crt"}
 DENYLISTED_SUBSTRINGS = {
-    "id_rsa", "id_ed25519", "id_ecdsa", "id_dsa",
-    ".git/config", ".git/credentials", ".git\\config", ".git\\credentials",
+    "id_rsa",
+    "id_ed25519",
+    "id_ecdsa",
+    "id_dsa",
+    ".git/config",
+    ".git/credentials",
+    ".git\\config",
+    ".git\\credentials",
 }
 
 
@@ -483,10 +495,9 @@ async def _run_shell(params: dict[str, Any]) -> dict[str, Any]:
             "approval_required": True,
         }
 
-    is_approved = (
-        await policy.require_approval(action, actor=actor, tenant_id=tenant_id)
-        or await policy.require_approval(base_action, actor=actor, tenant_id=tenant_id)
-    )
+    is_approved = await policy.require_approval(
+        action, actor=actor, tenant_id=tenant_id
+    ) or await policy.require_approval(base_action, actor=actor, tenant_id=tenant_id)
     if not is_approved:
         return {
             "stdout": "",
@@ -552,10 +563,9 @@ async def _write_file(params: dict[str, Any]) -> dict[str, Any]:
             "approval_required": True,
         }
 
-    is_approved = (
-        await policy.require_approval(action, actor=actor, tenant_id=tenant_id)
-        or await policy.require_approval(base_action, actor=actor, tenant_id=tenant_id)
-    )
+    is_approved = await policy.require_approval(
+        action, actor=actor, tenant_id=tenant_id
+    ) or await policy.require_approval(base_action, actor=actor, tenant_id=tenant_id)
     if not is_approved:
         return {
             "error": f"Approval required for '{action}'. Action has not been approved.",
@@ -727,7 +737,9 @@ async def _http_request(params: dict[str, Any]) -> dict[str, Any]:
 
     try:
         data = body.encode("utf-8") if body else None
-        status, resp_body, _ = safe_http_fetch(url, method=method, headers=clean_headers, body=data, timeout=15.0)
+        status, resp_body, _ = safe_http_fetch(
+            url, method=method, headers=clean_headers, body=data, timeout=15.0
+        )
         return {"status": status, "body": resp_body}
     except Exception as e:
         return {"status": 0, "body": str(e)}
@@ -867,9 +879,21 @@ async def _query_database(params: dict[str, Any]) -> dict[str, Any]:
                 return {"error": "missing 'sql' for query mode", "tables": "use mode='list_tables' instead"}
             stripped = sql.lstrip().lower()
             if not stripped.startswith(("select", "pragma", "with", "explain")):
-                return {"error": "Write operations are forbidden. query_database is strictly read-only.", "sql": sql}
+                return {
+                    "error": "Write operations are forbidden. query_database is strictly read-only.",
+                    "sql": sql,
+                }
             forbidden_keywords = (
-                "insert ", "update ", "delete ", "drop ", "alter ", "create ", "attach ", "detach ", "replace ", "truncate "
+                "insert ",
+                "update ",
+                "delete ",
+                "drop ",
+                "alter ",
+                "create ",
+                "attach ",
+                "detach ",
+                "replace ",
+                "truncate ",
             )
             if any(kw in stripped for kw in forbidden_keywords):
                 return {"error": "Write statements are forbidden in query_database.", "sql": sql}
@@ -904,7 +928,9 @@ async def _query_database(params: dict[str, Any]) -> dict[str, Any]:
         port = params.get("port", 5432 if engine == "postgres" else 3306)
         user = params.get("user", "")
         # Resolve password from secure environment / secrets store instead of prompt
-        password = os.getenv("POSTGRES_PASSWORD") or os.getenv("MYSQL_PASSWORD") or os.getenv("DB_PASSWORD") or ""
+        password = (
+            os.getenv("POSTGRES_PASSWORD") or os.getenv("MYSQL_PASSWORD") or os.getenv("DB_PASSWORD") or ""
+        )
         db = params.get("database", "postgres" if engine == "postgres" else "")
         driver = "psycopg2" if engine == "postgres" else "pymysql"
         import importlib
@@ -939,8 +965,20 @@ async def _query_database(params: dict[str, Any]) -> dict[str, Any]:
 
             stripped = sql.strip().lower()
             if not stripped.startswith(("select", "show", "explain", "with")):
-                return {"error": "Write operations are forbidden. query_database is strictly read-only.", "sql": sql}
-            forbidden_keywords = ("insert ", "update ", "delete ", "drop ", "alter ", "create ", "replace ", "truncate ")
+                return {
+                    "error": "Write operations are forbidden. query_database is strictly read-only.",
+                    "sql": sql,
+                }
+            forbidden_keywords = (
+                "insert ",
+                "update ",
+                "delete ",
+                "drop ",
+                "alter ",
+                "create ",
+                "replace ",
+                "truncate ",
+            )
             if any(kw in stripped for kw in forbidden_keywords):
                 return {"error": "Write statements are forbidden in query_database.", "sql": sql}
 
@@ -1038,11 +1076,12 @@ async def _process_multimodal_media(params: dict[str, Any]) -> dict[str, Any]:
     elif source.startswith("http://") or source.startswith("https://"):
         try:
             import urllib.request
+
             req = urllib.request.Request(source, headers={"User-Agent": "NEXUS-Multimodal-Bridge/1.0"})
             with urllib.request.urlopen(req, timeout=5) as resp:
                 raw_bytes = resp.read()[:5_000_000]
             filename = source.split("/")[-1].split("?")[0] or "web_media"
-        except Exception as e:
+        except Exception:
             raw_bytes = f"mock_media_data_for_{source}".encode()
             filename = source.split("/")[-1] or "media"
     else:
@@ -1062,23 +1101,30 @@ async def _process_multimodal_media(params: dict[str, Any]) -> dict[str, Any]:
     # Determine if video or image
     is_video = False
     lower_name = filename.lower()
-    if media_type == "video" or any(lower_name.endswith(ext) for ext in [".mp4", ".webm", ".mov", ".mkv", ".avi"]):
+    if media_type == "video" or any(
+        lower_name.endswith(ext) for ext in [".mp4", ".webm", ".mov", ".mkv", ".avi"]
+    ):
         is_video = True
-    elif media_type == "image" or any(lower_name.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp"]):
+    elif media_type == "image" or any(
+        lower_name.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp"]
+    ):
         is_video = False
     else:
         # Heuristic check
         is_video = "video" in lower_name
 
     if is_video:
-        decomp = MultimodalPerceptionBridge.analyze_video_bytes(raw_bytes, filename=filename, detail_level=detail_level)
+        decomp = MultimodalPerceptionBridge.analyze_video_bytes(
+            raw_bytes, filename=filename, detail_level=detail_level
+        )
     else:
-        decomp = MultimodalPerceptionBridge.analyze_image_bytes(raw_bytes, filename=filename, detail_level=detail_level)
+        decomp = MultimodalPerceptionBridge.analyze_image_bytes(
+            raw_bytes, filename=filename, detail_level=detail_level
+        )
 
     # If question is provided, answer it using text reasoning over the decomposed tokens
     answer = ""
     if question:
-        decomp_block = decomp.get("prompt_injection_block", "")
         answer = (
             f"Based on the NEXUS Multimodal Perception Bridge transcoding:\n\n"
             f"- Focal Visual Structure: {decomp.get('scene_summary') or decomp.get('action_narrative')}\n"

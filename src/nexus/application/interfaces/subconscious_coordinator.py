@@ -12,9 +12,6 @@ zero-blocking: everything here runs on the subcortex side.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
-
-from nexus.domain.value_objects.clock import utc_now
 
 from nexus.application.subcortex.amygdala import AmygdalaUseCase
 from nexus.application.subcortex.basal_ganglia import BasalGangliaUseCase
@@ -23,6 +20,7 @@ from nexus.application.subcortex.pattern_detection import PatternDetectionUseCas
 from nexus.application.subcortex.synthesis import EntitySynthesisUseCase
 from nexus.application.subcortex.thalamus import ThalamicGatingUseCase
 from nexus.domain.ports.event_bus import Event, EventBus, EventTopic
+from nexus.domain.value_objects.clock import utc_now
 
 
 class SubconsciousCoordinator:

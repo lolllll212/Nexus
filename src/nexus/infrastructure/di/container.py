@@ -6,6 +6,9 @@ together. Swapping Redis for Kafka, Neo4j for Memgraph, OpenAI for Llama
 means editing THIS file (or its config) - never the application layer.
 """
 
+# The dotenv load below must run before application imports so their settings
+# observe the repository environment.
+# ruff: noqa: E402
 from __future__ import annotations
 
 import json
@@ -93,25 +96,15 @@ class Config:
     nim_model: str = field(
         default_factory=lambda: os.getenv("NEXUS_NIM_MODEL", "meta/llama-3.3-70b-instruct")
     )
-    llm_provider: str = field(
-        default_factory=lambda: os.getenv("NEXUS_LLM_PROVIDER", "openai").lower()
-    )
-    llm_model: str = field(
-        default_factory=lambda: os.getenv("NEXUS_LLM_MODEL", "gpt-4o")
-    )
+    llm_provider: str = field(default_factory=lambda: os.getenv("NEXUS_LLM_PROVIDER", "openai").lower())
+    llm_model: str = field(default_factory=lambda: os.getenv("NEXUS_LLM_MODEL", "gpt-4o"))
     llm_max_tokens: int = field(default_factory=lambda: int(os.getenv("NEXUS_LLM_MAX_TOKENS", "8192")))
     embedding_model: str = field(
-        default_factory=lambda: os.getenv(
-            "NEXUS_EMBEDDING_MODEL", "text-embedding-3-large"
-        )
+        default_factory=lambda: os.getenv("NEXUS_EMBEDDING_MODEL", "text-embedding-3-large")
     )
     # Offline LLM (Ollama / LM Studio): point the OpenAI-compatible adapters at a local base URL.
-    llm_base_url: str | None = field(
-        default_factory=lambda: os.getenv("NEXUS_LLM_BASE_URL")
-    )
-    embedding_base_url: str | None = field(
-        default_factory=lambda: os.getenv("NEXUS_EMBEDDING_BASE_URL")
-    )
+    llm_base_url: str | None = field(default_factory=lambda: os.getenv("NEXUS_LLM_BASE_URL"))
+    embedding_base_url: str | None = field(default_factory=lambda: os.getenv("NEXUS_EMBEDDING_BASE_URL"))
     embedding_dimension: int = field(
         default_factory=lambda: int(os.getenv("NEXUS_EMBEDDING_DIMENSION", "1536"))
     )

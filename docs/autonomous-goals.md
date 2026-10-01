@@ -1,219 +1,173 @@
-# Autonomous Goals — P2 Design
+# Autonomous Goals - Self-Directed Work with Guardrails
 
-> **Status: implemented.** All items in Rollout Order are complete; 118 tests
-> green (including P1's 96). See the design below for the architecture, and
-> `tests/unit/test_autonomy_goals.py` for coverage.
+## The Idea
 
-## The Capability
-
-Today NEXUS only reacts: it answers messages and runs a scheduled dream cycle.
-P2 lets the brain **pursue objectives on its own** — set a goal, plan a route,
-execute bounded steps, adapt when a step fails, and report back — while a
-budget, an approval gate, and an audit log keep that autonomy safe.
-
-Two kinds of autonomy are covered by the same guardrail model:
-
-1. **User-assigned goals** (explicit): a user creates a `Goal`, the autonomy
-   loop drives it to completion.
-2. **Self-initiated improvements** (implicit): the existing `SelfHealUseCase`
-   regeneration of failing tools, plus any future self-modification, goes
-   through the same budget/approval/audit gates.
-
-## Domain Model
-
-### `Goal` entity — `src/nexus/domain/entities/goal.py`
-
-```python
-class GoalStatus(Enum):
-    PROPOSED = "proposed"    # awaiting approval (if approval required)
-    ACTIVE   = "active"      # loop is working it
-    BLOCKED  = "blocked"     # needs human input / budget exhausted
-    COMPLETED= "completed"
-    FAILED   = "failed"
-    CANCELLED= "cancelled"
-
-class GoalPriority(Enum):
-    LOW, NORMAL, HIGH, CRITICAL
-
-@dataclass
-class Goal:
-    id: str
-    tenant_id: str
-    owner_id: str                       # who created it
-    statement: str                      # natural-language objective
-    status: GoalStatus = GoalStatus.PROPOSED
-    priority: GoalPriority = GoalPriority.NORMAL
-    budget_units: int                   # max autonomous steps
-    budget_spent: int = 0
-    max_cost_per_step: float            # estimated LLM/exec cost ceiling
-    created_at: datetime
-    updated_at: datetime
-    deadline: Optional[datetime]
-    requires_approval: bool = True
-    approved_by: Optional[str] = None
-    approved_at: Optional[datetime] = None
-    plan: List[GoalStep] = field(default_factory=list)
-    result: Optional[str] = None        # final summary on completion
-    # lifecycle ledger (append-only)
-    history: List[GoalEvent] = field(default_factory=list)
-```
-
-### `GoalStep`
-
-```python
-@dataclass
-class GoalStep:
-    description: str
-    status: str = "pending"             # pending|in_progress|done|failed|skipped
-    tool: Optional[str] = None          # tool name used to execute
-    output: Optional[str] = None
-    error: Optional[str] = None
-```
-
-### `GoalEvent` (audit)
-
-```python
-@dataclass
-class GoalEvent:
-    ts: datetime
-    kind: str        # step_started|step_completed|step_failed|budget_decremented|approved|rejected|cancelled|regenerated_tool
-    actor: str       # "user:u1" | "system"
-    detail: str
-```
-
-### `Tool` becomes audit-trailed
-
-Add `tool.id` to `GoalEvent.detail` whenever `SelfHealUseCase` regenerates a
-tool so the audit log covers existing autonomy too.
-
-## Ports
-
-### `GoalRepository` — `src/nexus/domain/ports/goal_repository.py`
-
-```python
-class GoalRepository(Protocol):
-    async def save(self, goal: Goal, tenant_id: str = "default") -> None
-    async def get(self, goal_id: str, tenant_id: str = "default") -> Optional[Goal]
-    async def list_by_status(self, status: GoalStatus, tenant_id: str = "default", limit: int = 50) -> List[Goal]
-    async def find_stale_active(self, max_active: int, tenant_id: str = "default") -> List[Goal]
-    async def delete(self, goal_id: str, tenant_id: str = "default") -> None
-```
-
-Implementation note: persist as JSON documents in the same store as
-short-term/episodic memory, keyed `goal:{tenant_id}:{goal_id}` with an index
-`goal:{tenant_id}:active`. Neo4j/Qdrant stay for their current roles.
-
-### `AutonomyPolicy` — `src/nexus/domain/ports/autonomy.py`
-
-Central guardrail contract shared by the goal loop **and** `SelfHealUseCase`.
-
-```python
-@dataclass
-class AutonomyDecision:
-    allowed: bool
-    reason: str
-    remaining_budget: int
-
-class AutonomyPolicy(Protocol):
-    async def authorize_step(self, goal: Goal, tenant_id: str) -> AutonomyDecision
-    async def spend(self, goal: Goal, tenant_id: str, units: int = 1) -> AutonomyDecision
-    async def require_approval(self, action: str, actor: str, tenant_id: str) -> bool
-    async def audit(self, event: GoalEvent, tenant_id: str) -> None
-```
-
-Rules enforced in `authorize_step` / `spend`:
-
-- `goal.budget_spent + units <= goal.budget_units` — hard step budget.
-- Cumulative per-tenant hourly autonomy budget (`NEXUS_AUTONOMY_HOURLY_BUDGET`,
-  default 0 = unlimited) tracked in the rate-limit store.
-- No step while `goal.status == BLOCKED` or `FAILED`.
-- Steps that **self-modify** (regenerate a tool, change own code, deploy)
-  always require approval unless the action is in the tenant allowlist
-  (`NEXUS_AUTONOMY_ALLOWLIST`, e.g. `tool_selfheal`).
-
-### `ApprovalStore` (may fold into `AutonomyPolicy`)
-
-Pending approvals persisted as `approval:{tenant_id}:{goal_id}`; surfaced via a
-`/v1/goals/approvals` endpoint. `require_approval` resolves against the same
-store.
-
-## Application Layer
-
-### `GoalUseCases` — `src/nexus/application/autonomy/goals.py`
-
-- `CreateGoalUseCase` — validate statement, compute budget, persist as
-  `PROPOSED` (approval) or `ACTIVE` (if owner is admin or approval waived).
-- `ApproveGoalUseCase` — flips to `ACTIVE`, records `approved_by/approved_at`.
-- `CancelGoalUseCase` — owner/admin only; ledger entry.
-- `ListGoalsUseCase` / `GetGoalUseCase` — tenant-scoped reads.
-- `AutonomyLoopUseCase` — the driver:
+A goal is a piece of work the user states once and the system drives to
+completion on its own, within an explicit budget. This is the difference
+between "answer this question" and "go fix the failing deploy tests."
 
 ```
-AutonomyLoopUseCase.run()
-  for goal in repo.list_by_status(ACTIVE):
-      while goal.budget_spent < goal.budget_units:
-          decision = policy.authorize_step(goal)
-          if not decision.allowed: mark BLOCKED; break
-          step = current pending step
-          execute via ReAct loop (existing cortex pipeline, tenant-scoped)
-          policy.spend(goal); policy.audit(...)
-          update step status, goal.updated_at
-          if done: goal.status = COMPLETED; record result
+POST /v1/goals  {statement, budget_units, requires_approval}
+        │
+        ▼
+   PROPOSED ──approve──► ACTIVE ──AutonomyLoopUseCase──► COMPLETED
+        │                    │                              ▲
+        │                    └──authorize_step denied──► BLOCKED
+        │                                     │
+        └──────────────── cancel ◄────────────┘
+              CANCELLED
 ```
 
-Executes as a Celery task (`tasks.autonomy_loop`) on the beat schedule and can
-be triggered on-demand via the API. All memory/tool work is tenant-scoped the
-same way P1 threaded `tenant_id`.
+## Entities
 
-### Gating existing `SelfHealUseCase`
+`domain/entities/goal.py`:
 
-`self_heal.py` currently regenerates freely at 03:30. Change:
-
-- Accept `policy: AutonomyPolicy` + `tenant_id`.
-- Before regenerating a failing tool, call
-  `policy.authorize_step(...)` and `policy.require_approval("tool_selfheal", "system", tenant)`.
-  Unapproved actions leave the tool `DEPRECATED` but do **not** regenerate.
-- Every regeneration appends a `GoalEvent(kind="regenerated_tool", actor="system")`.
-
-This keeps the SelfHeal path working by default (add `tool_selfheal` to the
-allowlist) while making it auditable and budgeted.
-
-## API Surface — `src/nexus/infrastructure/api/routes/goals.py`
-
-All behind `require_identity` + tenant scoping; rate-limited like chat.
-
-| Method | Path | Body | Notes |
-|---|---|---|---|
-| POST | `/v1/goals` | `{statement, priority, budget_units, requires_approval}` | creates goal |
-| GET | `/v1/goals` | — | list tenant goals |
-| GET | `/v1/goals/{goal_id}` | — | detail incl. plan + history |
-| POST | `/v1/goals/{goal_id}/approve` | — | admin/user approval |
-| POST | `/v1/goals/{goal_id}/cancel` | — | owner/admin |
-| POST | `/v1/goals/{goal_id}/run` | — | trigger loop now (admin) |
-| GET | `/v1/goals/audit` | — | audit log for tenant |
-
-## Config
-
-- `NEXUS_AUTONOMY_HOURLY_BUDGET` (default `0` = unlimited)
-- `NEXUS_AUTONOMY_DEFAULT_BUDGET` (default `20` steps)
-- `NEXUS_AUTONOMY_ALLOWLIST` (comma-separated actions exempt from approval)
-- `NEXUS_GOALS_MAX_ACTIVE` (default `10` — `find_stale_active` ceiling)
-
-## Guardrail Summary
-
-| Risk | Mitigation |
+| Enum | Values |
 |---|---|
-| Unbounded autonomous work | step budget, hourly per-tenant budget, `MAX_ACTIVE` |
-| Self-modification without consent | approval gate for non-allowlisted actions |
-| Unreviewable behavior | append-only `GoalEvent` audit log per tenant |
-| Cross-tenant leakage | every repo/step call passes `tenant_id` (P1) |
-| Infinite loop on failing goal | step failure marks `BLOCKED`, loop breaks on budget |
+| `GoalStatus` | `proposed`, `active`, `blocked`, `completed`, `failed`, `cancelled` |
+| `GoalPriority` | `low`, `normal`, `high`, `critical` |
+| `StepStatus` | `pending`, `in_progress`, `done`, `failed`, `skipped` |
 
-## Rollout Order
+`Goal` carries `statement`, `tenant_id`, `owner_id`, `budget_units`,
+`budget_spent`, `requires_approval`, `approved_by`, `priority`, a `plan:
+list[GoalStep]`, and `events: list[GoalEvent]`. State transitions live on the
+entity as methods - `mark_active`, `mark_blocked`, `mark_completed`,
+`mark_failed`, `cancel` - and each one appends a `GoalEvent`. Nothing writes
+`goal.status` directly.
 
-1. `Goal` entity + `GoalRepository` + `AutonomyPolicy` + fakes.
-2. `SelfHealUseCase` gating + audit (fastest, secures existing autonomy).
-3. Goal use cases + autonomy loop task.
-4. API routes + config + `.env.example`/docker-compose updates.
-5. Tests: entity, policy budget/approval, loop lifecycle, self-heal gating,
-   API tenant isolation. No external infra needed (fakes only).
+`GoalStep(description, status, output)` is one bounded unit of work.
+`GoalEvent(kind, detail, actor)` is the audit record.
+
+## Lifecycle
+
+`application/autonomy/goals.py`:
+
+| Use case | Behaviour |
+|---|---|
+| `CreateGoalUseCase` | `requires_approval=True` -> `PROPOSED`; `False` -> `ACTIVE` immediately. Rejects `budget_units < 1` with `ValueError`. |
+| `ApproveGoalUseCase` | `PROPOSED` -> `ACTIVE`, records `approved_by`. Any other status raises `GoalStatusError`. |
+| `CancelGoalUseCase` | Cancels an unfinished goal; `Goal.cancel` raises `ValueError` if the goal is already terminal, surfaced as `GoalStatusError`. |
+| `ListGoalsUseCase` | `execute()` -> active goals (or filtered by status); `list_all()` -> everything. |
+| `GetGoalUseCase` | Full goal including plan and event history. |
+| `AutonomyLoopUseCase` | Drives one goal, or `run_all_active()` for up to 10. |
+
+## The Loop
+
+`AutonomyLoopUseCase.run_goal()` is a `while` loop with two exit conditions:
+the goal must be `ACTIVE` and `has_budget`.
+
+```
+while goal.has_budget and goal.status == ACTIVE:
+    decision = policy.authorize_step(goal, tenant_id)     # <- the guardrail
+    if decision.denied:
+        goal.mark_blocked(decision.reason); break
+    step = GoalStep("autonomous work iteration {budget_spent + 1}")
+    goal.plan.append(step)
+    outcome = executor.run_step(goal, step, tenant_id)    # CortexStepExecutor
+    policy.spend(goal, tenant_id)
+    if outcome.completed:
+        step.output = outcome.summary; goal.mark_completed(outcome.summary)
+    else:
+        step.output = outcome.summary                     # keep going, budget permitting
+```
+
+Two things to notice. `authorize_step` is called **before** every step, not once
+at the start, so a goal can be stopped mid-flight by budget exhaustion. And
+`spend()` is called after the step regardless of outcome - a failed step still
+cost budget. A step that returns `completed=False` does not advance the goal
+toward `COMPLETED`, but it does not burn the loop either; the goal retries
+until the budget runs out, at which point `authorize_step` returns denied and
+the goal lands in `BLOCKED` with a reason.
+
+`StepExecutor` is a `Protocol`, so `CortexStepExecutor` (which routes the step
+through the cortex) is a container decision, not an application-layer one.
+
+## The AutonomyPolicy Port
+
+`domain/ports/autonomy.py` is the single guardrail contract. It is deliberately
+shared between explicit goals *and* implicit self-modification, so tool
+regeneration, deployment, and code changes are all bounded by the same budget
+and the same audit trail.
+
+| Method | Used by |
+|---|---|
+| `authorize_action(tenant_id, units)` | self-modification (e.g. self-heal) |
+| `authorize_step(goal, tenant_id)` | the autonomy loop - checks step budget **and** the shared hourly budget |
+| `spend(goal, tenant_id, units)` | decrement the goal's step budget |
+| `require_approval(action, actor, tenant_id)` | "is this action pre-approved?" |
+| `grant_approval(action, approver, tenant_id)` | human grants one |
+| `audit(event, tenant_id)` | append to the tenant's log |
+| `pending_approvals(tenant_id, limit)` | UI for the approvals queue |
+| `audit_log(tenant_id, limit)` | UI for the audit trail |
+
+`AutonomyDecision` returns `allowed`, `reason`, `remaining_budget`, and a
+`denied` convenience property.
+
+`DefaultAutonomyPolicy`
+(`infrastructure/adapters/autonomy/policy.py`) implements the hourly budget by
+borrowing the `RateLimiter` port under the key
+`f"autonomy_hourly:{tenant_id}"` with a `HOURLY_WINDOW_SECONDS = 3600` window.
+The approval store and audit log are plain in-process dicts. That is the one
+part of the autonomy system that does **not** survive a restart - if you need
+durable approvals, that is the adapter to replace.
+
+`AllowAllAutonomyPolicy` is a test/opt-out subclass that approves everything
+and still audits. It is what `FakeContainer` wires.
+
+## Configuration
+
+| Var | Default | Effect |
+|---|---|---|
+| `NEXUS_GOALS_MAX_ACTIVE` | `10` | Per-tenant ceiling on concurrently active goals. `0` = unlimited. |
+| `NEXUS_AUTONOMY_HOURLY_BUDGET` | `0` | Shared per-tenant autonomous actions per hour. `0` = unlimited. |
+| `NEXUS_AUTONOMY_DEFAULT_BUDGET` | `20` | Default `budget_units` for a new goal. |
+| `NEXUS_AUTONOMY_ALLOWLIST` | `tool_selfheal` | Comma-separated actions pre-approved per tenant. |
+
+`NEXUS_GOALS_MAX_ACTIVE` is enforced in `CreateGoalUseCase` **only for
+unapproved goals**. An approved goal is already an explicit human decision, so
+it is not subject to the ceiling - otherwise approving your tenth goal would
+fail and you would be stuck with a `PROPOSED` goal you cannot start. Hitting the
+ceiling raises `QuotaExceededError`.
+
+## Multi-tenancy
+
+Every `GoalRepository` call is tenant-scoped, and `list_active`,
+`list_by_status`, and `list_all` are all filtered by `tenant_id`. The autonomy
+budget key is namespaced by tenant. The audit log is keyed by tenant. There is
+no cross-tenant goal execution.
+
+## API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/goals` | create (201) |
+| `GET` | `/v1/goals` | list active, or filter by `status` |
+| `GET` | `/v1/goals/{id}` | detail with plan + history |
+| `POST` | `/v1/goals/{id}/approve` | `PROPOSED` -> `ACTIVE` |
+| `POST` | `/v1/goals/{id}/cancel` | cancel |
+| `POST` | `/v1/goals/{id}/run` | drive it now |
+| `GET` | `/v1/goals/audit` | tenant audit log |
+| `POST` | `/v1/goals/approvals/grant` | grant an action approval |
+
+`/v1/goals/audit` must be matched before `/v1/goals/{goal_id}` or `audit` is
+parsed as a goal id.
+
+## Example
+
+```bash
+curl -X POST http://localhost:8000/v1/goals -H "Content-Type: application/json" \
+  -d '{"statement":"Get tests/unit/test_swarm.py green",
+       "tenant_id":"t1","owner_id":"u1","budget_units":5,
+       "priority":"high","requires_approval":true}'
+
+curl -X POST http://localhost:8000/v1/goals/<goal_id>/approve \
+  -H "Content-Type: application/json" -d '{"approver":"u1"}'
+
+curl -X POST http://localhost:8000/v1/goals/<goal_id>/run -d '{}' -H "Content-Type: application/json"
+```
+
+## See also
+
+- [Self-Evolution](self-evolution.md) - self-healing shares this policy
+- [Architecture Map](architecture-map.md) - the `AutonomyPolicy` binding
+- [Multi-Agent Swarm](swarm.md) - a different kind of delegated work

@@ -1,152 +1,174 @@
-# Backup & Disaster Recovery — NEXUS
+# Backup & Disaster Recovery
 
-Memories are the product. If Qdrant or Neo4j is lost, the brain is lobotomised.
-This doc is the runbook.
+## What Actually Needs Backing Up
 
-## What is backed up
+NEXUS has four pieces of state. Only two of them are irreplaceable.
 
-| Store | What | How | Frequency |
-|-------|------|-----|-----------|
-| **Qdrant** (vector memory) | Per-collection snapshots (`nexus_memory`, `nexus_memory_{tenant}`) | `POST /collections/{name}/snapshots` via `QdrantBackup` | Nightly (after `dream`) + on demand |
-| **Neo4j** (concept graph) | Concept nodes + `CONNECTS` edges | Cypher export to JSONL via `Neo4jBackup.export()` | Nightly (after `dream`) + on demand |
-| Retention | Old Qdrant snapshots pruned | `BackupManager(…, retain_snapshots=7)` keeps newest 7 | Automatic |
+| State | Store | In `memory` mode | Backup story |
+|---|---|---|---|
+| **Memories (vectors)** | Qdrant collection `nexus_memory` | in-process dict | Qdrant collection snapshots |
+| **Concept graph** | Neo4j `:Concept` / `:CONNECTS` | in-process dict | portable Cypher JSONL dump |
+| **Short-term memory** | Redis | in-process dict | disposable, TTL-based |
+| **Rate limits / autonomy budget** | Redis | in-process dict | disposable, resets on restart |
 
-In `memory` backend (`NEXUS_INFRA_BACKEND=memory`) there is nothing to snapshot;
-`BackupManager` no-ops when no adapters are injected.
+Short-term memory and rate limits are caches with a TTL. Losing them costs you
+a warm cache, not data, so they are deliberately not backed up. Redis
+persistence (AOF/RDB) is still worth having in production, but it is not a
+DR concern.
 
-## Running a backup
+Under `NEXUS_INFRA_BACKEND=memory` there is nothing to back up at all - the
+process is the database. See [architecture-map.md](architecture-map.md).
+
+## Tenant Isolation
+
+Qdrant collections are **per tenant**: `nexus_memory` for `default`,
+`nexus_memory_{tenant_id}` otherwise. The backup command mirrors the same
+naming rule, so backing up tenant `acme` snapshots `nexus_memory_acme` and dumps
+only `:Concept {tenant: 'acme'}`.
+
+Every `Concept` node carries a `tenant` property and every `CONNECTS`
+relationship carries one too. That is not decoration - a dump that filtered
+only on nodes would happily re-link two tenants' concepts on restore.
+
+## `nexus backup`
 
 ```bash
-# Live infra (reads NEXUS_* env / .env for Qdrant/Neo4j hosts)
-python -m nexus backup
-python -m nexus backup --output-dir /data/backups --retain 14 --tenant acme
-
-# Or via the installed console script
-nexus backup --output-dir backups --retain 7
+nexus backup [--output-dir backups] [--retain 7] [--tenant t1,t2]
 ```
 
-Output `backups/`:
+| Flag | Default | Meaning |
+|---|---|---|
+| `--output-dir` | `backups` | Where the Neo4j JSONL dumps land. |
+| `--retain` | `7` | Keep the newest N Qdrant snapshots per collection; delete the rest. |
+| `--tenant` | `default` | Comma-separated tenants. One pass per tenant. |
 
-```
-backups/
-  neo4j-default-2026-09-22T03-10-00.jsonl   # one JSON object per line (_kind=node|rel)
-  # Qdrant snapshots live inside Qdrant; BackupManager only records their names.
-```
-
-`nexus backup` prints JSON to stdout:
+It prints a JSON summary to stdout and **exits 1 only if everything failed** -
+partial success (e.g. Qdrant up, Neo4j down) still exits 0, with the failures
+listed in `errors`. That is deliberate: a monitoring check that alarms on every
+partial backup trains you to ignore it.
 
 ```json
 {
-  "timestamp": "2026-09-22T03:10:00.123456",
-  "qdrant_snapshots": [{"name": "snap-...", "creation_time": "..."}],
-  "qdrant_pruned": ["snap-old-..."],
-  "neo4j": {"path": "backups/neo4j-default-....jsonl", "nodes": 142, "relationships": 89},
+  "timestamp": "2026-10-01T03:00:00+00:00",
+  "qdrant_snapshots": [{"name": "snap-...", "creation_time": "...", "size": 1048576}],
+  "qdrant_pruned": ["snap-old-1"],
+  "neo4j": {"path": "backups/neo4j-acme-2026-10-01T03-00-00+00-00.jsonl",
+            "nodes": 412, "relationships": 1287},
   "errors": []
 }
 ```
 
-Non-zero exit if `errors` is non-empty and no snapshot/dump was produced.
+In `memory` mode the command wires no Qdrant and no Neo4j client, so it exits 0
+with empty results. Useful as a smoke test, useless as a backup - it is not
+trying to mislead you, it just has nothing to copy.
 
-## Docker / cron
+## The Pieces
 
-`docker-compose.yml` runs a `nexus-worker` (Celery beat schedules `dream` at 03:00).
-Add a sibling service or host cron:
+`infrastructure/backup/`:
 
-```yaml
-  nexus-backup:
-    build: .
-    entrypoint: ["python", "-m", "nexus", "backup", "--output-dir", "/backups"]
-    volumes: ["/data/backups:/backups:rw"]
-    environment: *nexus-env
+| Module | Class | Responsibility |
+|---|---|---|
+| `qdrant_backup.py` | `QdrantBackup` | `create_snapshot`, `list_snapshots`, `delete_snapshot`, `prune` |
+| `neo4j_backup.py` | `Neo4jBackup` | `export` (Cypher -> JSONL), `import_dump` (JSONL -> Cypher `MERGE`) |
+| `manager.py` | `BackupManager` | orchestrates both, applies retention, returns `BackupResult` |
+
+`BackupResult` is a dataclass of `timestamp`, `qdrant_snapshots`,
+`qdrant_pruned`, `neo4j`, `errors`. The manager **collects errors instead of
+raising**: one dead store must not prevent the other from being backed up. Every
+store is individually `try`/`except`-wrapped.
+
+Both adapters take an injectable client / driver, which is how the DR path is
+tested without a live Qdrant or Neo4j.
+
+### Qdrant: snapshots, not dumps
+
+`QdrantBackup` is a thin wrapper over the Qdrant HTTP snapshot API rather than a
+volume copy, so it works against a managed cluster with no filesystem access:
+
+```
+POST   /collections/{name}/snapshots          create
+GET    /collections/{name}/snapshots          list
+DELETE /collections/{name}/snapshots/{snap}   delete
+POST   /collections/{name}/snapshots/recover  restore
 ```
 
-Or host cron:
+`prune(collection, retain)` sorts by `creation_time` ascending and deletes
+everything before the newest `retain`. Retention is applied immediately after
+each snapshot, so an unattended nightly run cannot fill the disk.
 
+### Neo4j: a portable JSONL dump
+
+The module docstring is explicit about why: production Neo4j should really use
+`neo4j-admin database dump` (or `backup` for an online database) on the volume,
+which needs shell access the app does not have. `Neo4jBackup.export` is the
+portable alternative - pure Cypher over the driver - which is enough to verify
+DR in tests and offline, and to get the data *out* when the volume is already
+gone. Do not treat it as a substitute for a volume-level dump at scale.
+
+Format: one JSON object per line, discriminated by `_kind`.
+
+```json
+{"_kind": "node","id":"c-1","label":"Deploy pipeline","type":"topic"}
+{"_kind": "rel","src":"c-1","dst":"c-2","type":"semantic","weight":2.5}
 ```
-0 3 * * *  cd /opt/nexus && NEXUS_INFRA_BACKEND=external python -m nexus backup --output-dir /data/backups >>/var/log/nexus-backup.log 2>&1
-```
 
-## Restore (DR)
+`import_dump` replays it with `MERGE` on `(id, tenant)`, so a restore is
+idempotent - running it twice does not duplicate the graph. Relationship
+`weight` and `type` are `SET` on match, so a restore also repairs a graph whose
+edges drifted.
 
-### Qdrant — point-in-time
+Dump filenames are `neo4j-{tenant}-{timestamp}.jsonl` with `:` replaced by `-`,
+so they are safe on Windows and sort chronologically.
+
+## Suggested Schedule
 
 ```bash
-# list snapshots for a collection
-curl http://qdrant:6333/collections/nexus_memory/snapshots | jq .
+# nightly, 03:15 - after the 03:00 dream cycle settles
+15 3 * * *  cd /srv/nexus && nexus backup --retain 7 >> /var/log/nexus/backup.log 2>&1
 
-# download one (D — needs Qdrant snapshot recovery API)
-curl -o /tmp/snap.snapshot http://qdrant:6333/collections/nexus_memory/snapshots/<name>
-
-# recover into a fresh Qdrant (or same host after wipe)
-curl -X POST http://qdrant:6333/collections/nexus_memory/snapshots/recover \
-  -H 'Content-Type: application/json' \
-  -d '{"location": "http://backup-host/snap.snapshot"}'
-
-# Via Python (uses Qdrant HTTP client in future — today restore is manual via HTTP)
+# copy the Neo4j JSONL + Qdrant volume off-host; snapshots are not offsite
+0 4 * * *  rclone sync /srv/nexus/backups s3:nexus-dr/
 ```
 
-For per-tenant collections repeat for `nexus_memory_{tenant}`.
+Off-host copy is a separate step on purpose. Qdrant snapshots live in the
+cluster's storage, so a snapshot that saves you from a bad `prune` will not save
+you from losing the node. Verify the off-host copy, not the snapshot's existence.
 
-Verification:
+## Restore Runbook
+
+1. **Stop writes.** Bring the API and workers down so nothing writes mid-restore.
+2. **Restore the graph first**, then the vectors: concepts are the index, memories
+   are the payload, and re-embedding is expensive enough that you want it once.
+   ```python
+   await Neo4jBackup(uri=..., user=..., password=...).import_dump(
+       "backups/neo4j-acme-<ts>.jsonl", tenant_id="acme"
+   )
+   ```
+   Confirm `nodes` / `relationships` match the `neo4j` block of the backup JSON.
+3. **Restore vectors.**
+   ```
+   POST /collections/nexus_memory_acme/snapshots/recover  {"snapshot": "<name>"}
+   ```
+4. **Bring the API up**, then the workers. Check `GET /v1/system/dreams` and one
+   real chat turn before declaring victory - an empty graph will answer fine and
+   remember nothing, which is the failure mode you will not catch with a health
+   check.
+5. **Record the drill.** A backup you have never restored is a hypothesis.
+
+## Testing the Backup Path
+
+The adapters take an injected HTTP client / Neo4j driver, so the DR path is
+covered without live infrastructure:
 
 ```bash
-curl http://qdrant:6333/collections/nexus_memory | jq .result.points_count
+pytest tests/unit -k backup -q
 ```
 
-### Neo4j — graph
+Verify a restore by round-tripping a dump: export, wipe, import, and assert the
+node and relationship counts match the export.
 
-```bash
-# JSONL dump produced by BackupManager; replay with the same tool
-python - << 'PY'
-import asyncio
-from nexus.infrastructure.backup import Neo4jBackup
-async def main():
-    nb = Neo4jBackup(uri="bolt://neo4j:7687", user="neo4j", password="secret")
-    info = await nb.import_dump("backups/neo4j-default-2026-09-22T03-10-00.jsonl", tenant_id="default")
-    print(info)
-asyncio.run(main())
-PY
-```
+## See also
 
-For a hard disaster (volume lost), start a fresh Neo4j, then `import_dump` the latest
-`backups/neo4j-*.jsonl`. For online hot backups prefer `neo4j-admin database backup`
-on the volume; the JSONL export is the portable/app-level fallback and is exercised
-by `tests/unit/test_backup.py`.
-
-Verification:
-
-```cypher
-MATCH (c:Concept {tenant:"default"}) RETURN count(c);
-MATCH (:Concept {tenant:"default"})-[r:CONNECTS {tenant:"default"}]->(:Concept) RETURN count(r);
-```
-
-## RPO / RTO targets
-
-* **RPO** ≤ 24h (nightly snapshots). Reduce to 6h by scheduling `nexus backup` every 6h.
-* **RTO** ≤ 1h (Qdrant snapshot recover ~ minutes; Neo4j JSONL replay ~ minutes for
-  <100k concepts). Large graphs — use `neo4j-admin` volume snapshots instead.
-
-## Retention & pruning
-
-`BackupManager.prune()` sorts by `creation_time` and deletes the oldest beyond `retain`.
-Qdrant deletes are `DELETE /collections/{name}/snapshots/{snap}`. Local JSONL files
-are not auto-pruned — rotate `backups/*.jsonl` with `logrotate` or S3 lifecycle.
-
-## Env
-
-| Var | Default | Meaning |
-|-----|---------|---------|
-| `QDRANT_HOST` / `QDRANT_PORT` | `localhost:6333` | Qdrant for snapshots |
-| `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD` | `bolt://localhost:7687` | Neo4j for graph dump |
-| `NEXUS_TENANTS` | `` | Tenants to back up (comma-separated) |
-
-## Testing DR without prod
-
-```bash
-NEXUS_INFRA_BACKEND=memory python -m pytest tests/unit/test_backup.py -v
-# Uses FakeQdrantClient + FakeNeo4jDriver — no Docker needed
-python -m nexus backup --output-dir /tmp/bkp  # exercises the same path with live infra
-```
-
-See `src/nexus/infrastructure/backup/` (`QdrantBackup`, `Neo4jBackup`, `BackupManager`)
-and `tests/unit/test_backup.py` for the contract.
+- [Architecture Map](architecture-map.md) - which adapters are live per `NEXUS_INFRA_BACKEND`
+- [Memory System](memory.md) - what is actually in those two stores
+- [Dual-Loop Architecture](dual-loop.md) - the 3 AM dream cycle that runs just before backup

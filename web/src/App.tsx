@@ -38,7 +38,7 @@ import { AnalyticsDashboardView } from './components/AnalyticsDashboardView';
 import { MobileCompactCockpit } from './components/MobileCompactCockpit';
 import { playHudClick, playChime, playSuccessChime } from './utils/soundEffects';
 import { speakWithStatus, stopAnySpeaking } from './utils/voiceManager';
-import { nexusJson } from './api';
+import { nexusChatStream, nexusJson } from './api';
 
 export const App: React.FC = () => {
   // Operating Modes: 'GRAPH' | 'RESEARCH' | 'WORKFLOW' | 'ARCHITECTURE' | 'VIDEO'
@@ -330,73 +330,76 @@ export const App: React.FC = () => {
       setPuffTrigger((prev) => prev + 1);
       setIsAccelerated(false);
 
-      // Determine AI response, MCP tools, and contextual action triggers (Module 4)
-      const tools: string[] = [];
+      // Prepare contextual actions; tool labels below come from the backend stream.
       const triggers: Array<{ label: string; action: string; payload?: any }> = [];
-      let reply = `Command executed successfully. Synapse checkpointed to Knowledge Cosmos.`;
 
       if (diff === 'medium' || lq.includes('image') || lq.includes('video') || lq.includes('multimodal')) {
-        tools.push('process_multimodal_media');
         triggers.push({ label: '✦ Open Multimodal Bridge', action: 'OPEN_MULTIMODAL' });
-        reply = `Decomposed media payload into 3x3 spatial grid and OCR inscriptions. Non-vision LLM prompt block prepared.`;
         if (lq.includes('open') || lq.includes('transcode') || lq.includes('show')) {
           setIsMultimodalBridgeOpen(true);
         }
       } else if (diff === 'high' || lq.includes('code') || lq.includes('python')) {
-        tools.push('execute_sandbox_code');
         triggers.push({ label: '⚡ Open Code Compiler', action: 'OPEN_CODE' });
-        reply = `Python sandbox initialized with AST safety constraints. Ready for live execution.`;
         if (lq.includes('open') || lq.includes('run') || lq.includes('code')) {
           setIsCodeCompilerOpen(true);
         }
       } else if (lq.includes('canvas') || lq.includes('diagram') || lq.includes('node')) {
-        tools.push('canvas_builder');
         triggers.push({ label: '◈ Open Canvas Builder', action: 'OPEN_CANVAS' });
-        reply = `Visual diagramming workspace prepared. Ready to draft and connect new nodes.`;
         if (lq.includes('open') || lq.includes('show')) {
           setIsCanvasBuilderOpen(true);
         }
       } else if (lq.includes('video') || lq.includes('studio') || lq.includes('render')) {
-        tools.push('runway_video_studio');
         triggers.push({ label: '🎬 Open Video Studio', action: 'OPEN_VIDEO' });
-        reply = `Runway-style creative video studio activated with 6-axis camera trajectory controls.`;
-      } else {
-        tools.push('cortex_eval');
       }
 
-      let responseText = reply;
-      let responseTools = tools;
-      const isSimpleGreeting = /^(hi|hello|hey)\s+nexus[!.?\s]*$/i.test(next.query.trim());
+      const assistantId = `ai-${Date.now()}`;
+      setConversationalMessages((prev) => [
+        ...prev,
+        {
+          id: assistantId,
+          role: 'assistant',
+          content: 'Connecting to NEXUS cognitive stream...',
+          timestamp: new Date().toLocaleTimeString(),
+          toolsUsed: [],
+          difficulty: diff,
+          actionTriggers: triggers,
+        },
+      ]);
+
       try {
-        if (isSimpleGreeting) {
-          responseText = `NEXUS responded: ${next.query.trim()}`;
-        } else {
-        const result = await nexusJson<{
-          response: string;
-          tools_used: string[];
-        }>('/v1/chat', {
-          method: 'POST',
-          body: JSON.stringify({ message: next.query, mode: next.actionType === 'CODE' ? 'coding' : 'general' }),
+        let answerReceived = false;
+        const toolsUsed = new Set<string>();
+        await nexusChatStream(next.query, next.actionType === 'CODE' ? 'coding' : 'general', (event) => {
+          if (event.type === 'tool_call' && event.tool_id) toolsUsed.add(event.tool_id);
+          if (event.type === 'start' || event.type === 'thought' || event.type === 'tool_call') {
+            setConversationalMessages((prev) =>
+              prev.map((item) => item.id === assistantId
+                ? {
+                    ...item,
+                    content: event.type === 'thought' ? 'NEXUS is reasoning...' : 'NEXUS is processing...',
+                    toolsUsed: [...toolsUsed],
+                  }
+                : item),
+            );
+          }
+          if (event.type === 'answer') {
+            answerReceived = true;
+            setConversationalMessages((prev) =>
+              prev.map((item) => item.id === assistantId
+                ? { ...item, content: event.content || '', toolsUsed: [...toolsUsed] }
+                : item),
+            );
+          }
         });
-        responseText = `NEXUS responded: ${next.query}\n\n${result.response}`;
-        responseTools = result.tools_used?.length ? result.tools_used : tools;
-        }
+        if (!answerReceived) throw new Error('NEXUS stream ended without an answer.');
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        responseText = `NEXUS responded: ${next.query}\n\nI’m in local fallback mode. Start LM Studio on http://127.0.0.1:1234/v1 for live model responses. ${message}`;
-        responseTools = [...tools, 'request_failed', 'local_fallback'];
+        const message = error instanceof Error ? error.message : 'Unknown stream error.';
+        setConversationalMessages((prev) =>
+          prev.map((item) => item.id === assistantId
+            ? { ...item, content: `NEXUS stream failed: ${message}` }
+            : item),
+        );
       }
-
-      const aiMsg: ConversationalMessage = {
-        id: `ai-${Date.now()}`,
-        role: 'assistant',
-        content: responseText,
-        timestamp: new Date().toLocaleTimeString(),
-        toolsUsed: responseTools,
-        difficulty: diff,
-        actionTriggers: triggers,
-      };
-      setConversationalMessages((prev) => [...prev, aiMsg]);
 
       if (voiceEnabled) {
         // Spoken confirmation - voice synthesis coordinates agentStatus to 'speaking'
@@ -675,6 +678,8 @@ export const App: React.FC = () => {
           playHudClick();
         }}
         isStreaming={agentStatus === 'thinking'}
+        onSendMessage={(q) => handleExecuteCommand(q, 'GRAPH')}
+        onClearMessages={() => setConversationalMessages([])}
       />
 
       {/* ── Bottom Floating Command Center Bar (In Graph or HUD Mode) ───────── */}

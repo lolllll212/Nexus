@@ -125,7 +125,9 @@ def _cmd_chat(args: argparse.Namespace) -> None:
     import asyncio
 
     local = bool(getattr(args, "local", False))
-    fallback_prompt = "I’m in local fallback mode. Start LM Studio on http://127.0.0.1:1234/v1 for live model responses."
+    fallback_prompt = (
+        "I’m in local fallback mode. Start LM Studio on http://127.0.0.1:1234/v1 for live model responses."
+    )
 
     def _print_fallback(message: str) -> None:
         print(f"nexus> {message}\n{fallback_prompt}")

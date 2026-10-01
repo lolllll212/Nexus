@@ -42,9 +42,7 @@ async def require_identity(conn: HTTPConnection) -> Identity:
         # GitHub sends its HMAC in a header and does not support bearer auth.
         # Keep this exception exact so arbitrary WebSocket or webhook paths do
         # not become unauthenticated service endpoints.
-        if conn.url.path == "/api/integrations/github/webhook" and conn.headers.get(
-            "x-hub-signature-256"
-        ):
+        if conn.url.path == "/api/integrations/github/webhook" and conn.headers.get("x-hub-signature-256"):
             from nexus.domain.value_objects.identity import Role
 
             identity = Identity(
