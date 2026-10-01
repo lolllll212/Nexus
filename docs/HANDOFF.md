@@ -463,3 +463,27 @@ ISSUES DETECTED: none.
 **Status:** done
 **Next:** awaiting review
 **Needs:** none
+### 2026-10-02 21:55 UTC - astra
+**Task:** ANSWERING CEO task-020 (3) - docs-integrity harness ownership proposal, with verified commands. FIRST, A CORRECTION: the premise is stale. The harness is ALREADY on master. It landed with merge commit c63443c, and I verified `git cat-file -e master:tests/eval/test_docs_integrity.py` returns present. task-020 says master is at 3ff839e; master has since moved to 9df6d58 and has absorbed my branch plus the infra and CI commits. So the protection is not branch-local any more. I also fast-forwarded my own branch to master (work/opencode-application-upgrade == master == 9df6d58) so there is no longer a split to reconcile on my side.
+
+**VERIFIED master @ 9df6d58** (detached worktree, not the shared tree): pytest 451 passed, 3 skipped, 0 failed | ruff clean | black 215 files unchanged | mypy 77 files clean | lint-imports 2 contracts KEPT (domain-is-independent AND application-is-independent). The application-is-independent contract from 80176b8 is on master now, and my application layer satisfies it - that was the one open risk in the previous report and it is closed.
+
+**OWNERSHIP PROPOSAL (what the CEO actually asked for).**
+1. No new owner is needed. The harness lives in `tests/eval/` and asserts on `docs/`, both of which the ownership table already assigns to Astra. It imports nothing from another agent's lane.
+2. Treat it as a SHARED GATE, not as Astra-private work: it fails for whoever breaks a link, in any lane. Concretely, if a future agent edits `docs/`, renames a route module, or deletes a doc, this is what stops the docs from quietly rotting. Recommend the ownership table add one line: `tests/eval/test_docs_integrity.py` = shared gate, Astra maintains, everyone is bound by.
+3. Standing rule worth writing down: this file may never be deleted or `# skip`ped to make a red suite green. A guard that gets removed the first time it is inconvenient is worse than no guard, because it looks like coverage.
+4. Five checks, all cheap and hermetic: dead relative links, dangling `#fragment` anchors using GitHub's real slug rules, orphan pages unreachable from `docs/index.md`, `TODO/FIXME/TBD/WIP` left in shipped docs, plus a sanity check that `docs/` still holds what we think it does. Fenced code blocks are stripped first, so bash samples cannot invent headings or links. `HANDOFF.md` is exempt from the marker check (it is a board for open work); `index.md`, `README.md` and `HANDOFF.md` are exempt from the orphan check.
+
+**EXACT COMMANDS FOR THE THREE BRANCHES THAT STILL LACK IT** (I checked ancestry; these are not guesses).
+- `work/antigravity-domain-hardening` @ 1a33dc0 - already an ancestor of master, so this is a clean fast-forward:
+  `git merge --ff-only master`
+- `work/copilot-ci-first-run` @ 7b46f5f - NOT an ancestor, needs a real merge. Take the harness without touching that branch's infra work:
+  `git cherry-pick 989deb4 b6dd4c2` (989deb4 adds `tests/eval/test_docs_integrity.py` and the `docs/index.md` links the orphan check requires; b6dd4c2 is the GitHub-slug and code-span correction. If that branch already has its own `docs/index.md` edits, use `git cherry-pick -n 989deb4 b6dd4c2`, then `git checkout HEAD -- docs/index.md` to keep theirs, and stage only the test file.)
+- `work/copilot-infrastructure-ci` @ 4000175 - NOT an ancestor either. Same cherry-pick applies.
+
+**DO NOT MERGE `work/copilot-ci-first-run` INTO master.** That branch reports 444 passed where master reports 451; merging it backwards would delete my 7 harness tests with nothing failing to announce the loss. Its infra work is already on master via 9df6d58, so the branch is obsolete rather than pending - it should be fast-forwarded or dropped, not merged.
+
+**Files:** docs/HANDOFF.md
+**Status:** done
+**Next:** waiting on the CEO for the branch split (task-017, Tron) and a push decision. Not pushing, not force-pushing, not touching another agent's lane.
+**Needs:** Tron: run `git merge --ff-only master` on `work/antigravity-domain-hardening` when you are ready - it is a fast-forward, zero conflict, and it brings you the harness. CEO: confirm the shared-gate line in item 2 above and whether `work/copilot-ci-first-run` should be fast-forwarded or dropped.
