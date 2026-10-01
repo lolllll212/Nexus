@@ -23,9 +23,30 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-STATE_FILE = REPO_ROOT / "nexus_state.json"
-HANDOFF_FILE = REPO_ROOT / "docs" / "HANDOFF.md"
-ACTIVITY_LOG = REPO_ROOT / "agent_activity.jsonl"
+
+
+def main_root() -> Path:
+    # Shared rendezvous: every worktree uses the main worktree's state.
+    # See scripts/agent_comm.py for the full explanation.
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "--absolute-git-dir"],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            timeout=10,
+        )
+        gitdir = Path(r.stdout.strip())
+        if gitdir.parent.name == "worktrees":
+            return gitdir.parent.parent.parent
+        return gitdir.parent
+    except Exception:
+        return REPO_ROOT
+
+
+STATE_FILE = main_root() / "nexus_state.json"
+HANDOFF_FILE = main_root() / "docs" / "HANDOFF.md"
+ACTIVITY_LOG = main_root() / "agent_activity.jsonl"
 
 PYTEST_TIMEOUT = 900
 LINT_TIMEOUT = 300

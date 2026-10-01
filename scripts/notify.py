@@ -10,6 +10,7 @@ Usage:
 import argparse
 import json
 import os
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -17,9 +18,29 @@ from dotenv import load_dotenv
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+
+def main_root() -> Path:
+    # Shared rendezvous: every worktree uses the main worktree's state.
+    # See scripts/agent_comm.py for the full explanation.
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "--absolute-git-dir"],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            timeout=10,
+        )
+        gitdir = Path(r.stdout.strip())
+        if gitdir.parent.name == "worktrees":
+            return gitdir.parent.parent.parent
+        return gitdir.parent
+    except Exception:
+        return REPO_ROOT
+
+
 load_dotenv(REPO_ROOT / ".env")
-STATE_FILE = REPO_ROOT / "nexus_state.json"
-HANDOFF_FILE = REPO_ROOT / "docs" / "HANDOFF.md"
+STATE_FILE = main_root() / "nexus_state.json"
+HANDOFF_FILE = main_root() / "docs" / "HANDOFF.md"
 
 
 def load_state() -> dict:
@@ -32,26 +53,34 @@ def save_state(state: dict) -> None:
     STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 
-def post_to_webhook(agent: str, task: str, status: str, needs: str) -> None:
-    webhook_url = os.environ.get("NEXUS_WEBHOOK_URL", "")
-    if not webhook_url:
-        return
+def _fire_webhook(url: str, payload: dict) -> None:
     try:
         import httpx
 
-        httpx.post(
-            webhook_url,
-            json={
-                "agent": agent,
-                "task": task,
-                "status": status,
-                "needs": needs,
-                "timestamp": datetime.now(UTC).isoformat(),
-            },
-            timeout=5,
-        )
+        httpx.post(url, json=payload, timeout=5)
     except Exception:
         pass
+
+
+def post_to_webhook(agent: str, task: str, status: str, needs: str) -> None:
+    # Notifications must never block work: socket timeouts don't cover DNS
+    # hangs on all platforms, so the POST runs on a daemon thread with a
+    # hard join deadline. Worst case this function costs 10s, never 120s.
+    import threading
+
+    webhook_url = os.environ.get("NEXUS_WEBHOOK_URL", "")
+    if not webhook_url:
+        return
+    payload = {
+        "agent": agent,
+        "task": task,
+        "status": status,
+        "needs": needs,
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
+    t = threading.Thread(target=_fire_webhook, args=(webhook_url, payload), daemon=True)
+    t.start()
+    t.join(timeout=10)
 
 
 def main() -> None:

@@ -12,15 +12,41 @@ Usage:
 
 import argparse
 import json
+import subprocess
 import sys
 import time
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-STATE_FILE = REPO_ROOT / "nexus_state.json"
-HANDOFF_FILE = REPO_ROOT / "docs" / "HANDOFF.md"
-ACTIVITY_LOG = REPO_ROOT / "agent_activity.jsonl"
+
+
+def main_root() -> Path:
+    # Every worktree shares ONE coordination state, kept in the main
+    # worktree. nexus_state.json is gitignored, so without this each
+    # worktree reads/writes its own phantom copy and agents can't see
+    # each other. --absolute-git-dir is <main>/.git in the main worktree
+    # and <main>/.git/worktrees/<name> in a linked one.
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "--absolute-git-dir"],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            timeout=10,
+        )
+        gitdir = Path(r.stdout.strip())
+        if gitdir.parent.name == "worktrees":
+            return gitdir.parent.parent.parent
+        return gitdir.parent
+    except Exception:
+        return REPO_ROOT
+
+
+STATE_FILE = main_root() / "nexus_state.json"
+HANDOFF_FILE = main_root() / "docs" / "HANDOFF.md"
+ACTIVITY_LOG = main_root() / "agent_activity.jsonl"
 
 
 def load_state() -> dict:
@@ -216,7 +242,7 @@ PRIORITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 def cmd_ask(args, state):
     agent = args.agent
     msg = {
-        "id": f"msg-{len(state.get('messages', [])) + 1:03d}",
+        "id": f"msg-{int(time.time())}-{uuid.uuid4().hex[:4]}",
         "from": agent,
         "to": "ceo",
         "kind": args.kind,
