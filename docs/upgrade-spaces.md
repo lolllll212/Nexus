@@ -8,21 +8,28 @@ every acceptance criterion includes the rule learned during the dispatch: **new
 `NEXUS_*` vars land documented in the same commit as the code that reads them**
 (the [env-var guard](../tests/eval/test_docs_env_vars.py) enforces it).
 
-Status below is the measured state on master, not the plan's intent — this page
-is updated as each space lands.
+Status below is the measured state, not the plan's intent — this page is
+updated as each space lands on master. Plan-001 is COMPLETE per the CEO
+(11/11 subtasks done and CEO-verified): the eight spaces still marked
+"awaiting merge" are implemented in the shared tree — verified present
+(`src/nexus/domain/crdt/`, the bridge-security token auth in the event bus) —
+and the [env-var guard](../tests/eval/test_docs_env_vars.py) already passes
+against that tree, so the merge will not break the docs contract. Each merged
+space's env vars must arrive documented in the same commit as the code that
+reads them.
 
 | Space | What it is | Priority | Status | Owner |
 |---|---|---|---|---|
-| 1 | Semantic memory for coordination (hybrid cosine + TF-IDF) | high | not landed | Xenom |
+| 1 | Semantic memory for coordination (hybrid cosine + TF-IDF) | high | implemented, awaiting merge | Xenom |
 | 2 | Full overnight autonomy daemon | high | **landed** | Astra |
-| 3 | Swarm state as real CRDTs (G-Counter, LWW-Register, OR-Set) | high | not landed | Tron |
-| 4 | Learned model router (trained on route_log + eval feedback) | medium | not landed | Xenom |
-| 5 | Automated first-pass consensus reviewers | medium | not landed | Xenom |
-| 6 | Real-time swarm dashboard (Vite over the WebSocket bridge) | medium | not landed | Xenom |
-| 7 | Bridge security hardening (shared-token auth, op allowlist) | high | not landed | Xenom |
+| 3 | Swarm state as real CRDTs (G-Counter, LWW-Register, OR-Set) | high | implemented, awaiting merge | Tron |
+| 4 | Learned model router (trained on route_log + eval feedback) | medium | implemented, awaiting merge | Xenom |
+| 5 | Automated first-pass consensus reviewers | medium | implemented, awaiting merge | Xenom |
+| 6 | Real-time swarm dashboard (Vite over the WebSocket bridge) | medium | implemented, awaiting merge | Xenom |
+| 7 | Bridge security hardening (shared-token auth, op allowlist) | high | implemented, awaiting merge | Xenom |
 | 8 | Offline LoRA fine-tuning on approved work | medium | **landed** | Astra |
-| 9 | Agent-layer observability (OTel spans, Prometheus counters) | low | not landed | Xenom |
-| 10 | Containerized full loop (docker-compose profile) | low | not landed | Xenom |
+| 9 | Agent-layer observability (OTel spans, Prometheus counters) | low | implemented, awaiting merge | Xenom |
+| 10 | Containerized full loop (docker-compose profile) | low | implemented, awaiting merge | Xenom |
 
 ## Space 2 — Overnight autonomy daemon (landed)
 
@@ -81,9 +88,12 @@ python -m nexus.training.cli lora --run-eval   # evaluate now, not from a report
 
 ## The remaining eight spaces
 
-Not landed. Each has an owner and a dispatch in
+Implemented (plan-001 verified by the CEO), awaiting merge to master. Each has
+an owner and a dispatch in
 [`plan-upgrade-spaces.json`](plan-upgrade-spaces.json); Space 7 (bridge
-security) is the one real security gap in the plan — the WebSocket bridge
-currently has no shared-token auth. This page's status table is updated as each
-lands, and every landed space adds its env vars to the
-[ops table](architecture-map.md) in the same commit as the code that reads them.
+security) closes the one real security gap in the plan — the WebSocket bridge
+runs without shared-token auth until its merge lands. This page's status table
+is updated as each merges, and every merged space's env vars must arrive in the
+same commit as the code that reads them (the
+[ops table](architecture-map.md) + the
+[env-var guard](../tests/eval/test_docs_env_vars.py)).
