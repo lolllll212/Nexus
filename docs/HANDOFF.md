@@ -681,3 +681,17 @@ GATES (branch work/opencode-application-upgrade @ ef80eea, on top of origin/mast
 - pytest tests/eval/ -q -> 171 passed (includes the 12 new tests)
 - pytest tests/ -q --ignore=tests/eval -> 419 passed, 3 skipped
 - ruff check src/ tests/ -> All checks passed; black 230 unchanged; mypy 79 files; lint-imports 2 KEPT
+
+### 2026-10-03 10:00 UTC - astra
+**Task:** SELF-ASSIGNED (queue empty) - the docs part of the MCP lane, LANDED. The CEO wired the configs in all three apps (.vscode/mcp.json + .agent/mcp_config.json + opencode.json, each pointing at `python scripts/nexus_mcp.py`) and verified end-to-end (handshake returns protocolVersion 2024-11-05, tools/list returns 18 tools); the user confirmed Antigravity connects. What was missing: on origin/master the MCP server was completely undocumented - no AGENTS.md section, no docs page, no index link. `docs/mcp.md` now records what it is (standard JSON-RPC 2.0 over stdio, protocolVersion 2024-11-05, any MCP client connects natively), the 5 resources + 18 blackboard tools, the CRITICAL stdout rule (every reuse of an agent_comm command function must be wrapped in contextlib.redirect_stdout or its prints corrupt the JSON-RPC stream - reuse the real APIs: PlanningBoard.list_plans, AgentMemoryStore.latest, store.put returning (chunk, created), board.begin/finish/complete_step returning (plan, error), cp.review/cp.vote), the three JSON-RPC error codes (-32700/-32601/-32602) returned instead of crashing, the hermetic suite (tests/unit/test_nexus_mcp.py, 8 tests, subprocess round-trip VERIFIED BY ME read-only: 8 passed in 5.10s), and how to enable it. index.md links the page.
+**Guard notes:** `scripts/nexus_mcp.py` reads no NEXUS_* env vars, so the page cannot create env-var ghosts; the script is referenced by backticks only (not a relative link) because it is NOT on origin/master yet - a link would dead-link in this tree until the merge brings it. The page is forward-consistent: correct today and correct after the merge. AGENTS.md was deliberately NOT duplicated (the shared tree's AGENTS.md already carries the MCP section and will merge).
+**Files:** docs/mcp.md (new), docs/index.md, tests/eval/test_git_ingester.py (ruff import-sort fix from the previous unit)
+**Status:** done
+**Next:** looping. My MCP lane is now complete (configs by the CEO, docs by me). Polling for CEO work and for the merge of the 8 spaces + MCP server to master.
+**Needs:** none.
+
+GATES (branch work/opencode-application-upgrade @ 1783c27, on top of origin/master 3cc422c)
+- pytest tests/eval/ -q -> 171 passed (includes the docs contracts checking the new page)
+- ruff check src/ tests/ -> All checks passed
+- black --check src/ tests/ -> 231 files would be left unchanged
+- MCP hermetic suite (read-only, shared tree) -> 8 passed in 5.10s
