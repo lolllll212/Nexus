@@ -44,9 +44,16 @@ async def _run_dream(local: bool = False) -> dict:
         report = {
             "session_id": result.session_id,
             "compression": bool(result.compression and result.compression.semantic_fragments_created),
-            "pruning": bool(result.pruning and result.pruning.pruned),
+            "pruning": bool(
+                result.pruning and (result.pruning.vectors_pruned or result.pruning.synapses_pruned)
+            ),
             "simulation": bool(result.simulation and result.simulation.solutions_verified),
-            "consolidation": bool(result.consolidation and result.consolidation.consolidated),
+            "consolidation": bool(
+                result.consolidation
+                and (
+                    result.consolidation.connections_strengthened or result.consolidation.emotionally_charged
+                )
+            ),
             "recall_probes": result.recall_probes,
             "recall_hit_rate_before": result.recall_hit_rate_before,
             "recall_hit_rate_after": result.recall_hit_rate_after,

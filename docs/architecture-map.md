@@ -232,9 +232,22 @@ mentions a variable the code never reads.
 | `NEXUS_BRIDGE_RATE_LIMIT` | Maximum allowed bridge commands per op within the rate window (`10`). |
 | `NEXUS_BRIDGE_RATE_WINDOW_SECONDS` | Sliding window in seconds for bridge rate limiting (`60`). |
 
+### Daemon and heal loop
+
+These are read by the ops scripts (`scripts/`), not by the `src/` modules — the
+[env-var guard](../tests/eval/test_docs_env_vars.py) scans both.
+
+| Variable | Effect |
+|---|---|
+| `NEXUS_DAEMON_KILL_SWITCH` | `1` stops the overnight daemon, `0` disarms the switch; unset means the marker file `.nexus_overnight_stop` governs (create it to stop between items). |
+| `NEXUS_DAEMON_BLACKOUTS` | Blackout windows for the daemon, e.g. `09:00-17:00,22:00-06:00` (default empty = run anytime). Wrap-around-midnight windows supported; invalid entries are skipped, not fatal. |
+| `NEXUS_HEAL_PYTEST_TIMEOUT` | Seconds the heal loop allows per pytest run (`900`). |
+| `NEXUS_API_KEY` | Key for the heal loop's primary LLM (falls back to `OPENAI_API_KEY`). Not the API server's auth map — that is `NEXUS_API_KEYS`. |
+
 ## See also
 
 - [Dual-Loop Architecture](dual-loop.md)
 - [Clean Architecture & Dependency Rule](clean-architecture.md)
 - [Memory System](memory.md)
 - [Backup & DR](backup-dr.md)
+- [Upgrade Spaces](upgrade-spaces.md)

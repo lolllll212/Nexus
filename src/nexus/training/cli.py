@@ -246,6 +246,23 @@ def main(argv=None):
     p_chat.add_argument("--max-tokens", type=int, default=8192, help="Max tokens")
     p_chat.add_argument("--few-shot", type=int, default=3, help="Number of few-shot examples")
 
+    p_lora = sub.add_parser("lora", help="Offline LoRA fine-tuning on consensus-approved work (Space 8)")
+    p_lora.add_argument("--output-dir", default="lora_out", help="Directory for the dataset and gate reports")
+    p_lora.add_argument(
+        "--baseline", type=float, default=0.0, help="Current model's golden-set pass rate (the swap gate)"
+    )
+    p_lora.add_argument(
+        "--min-pass-rate", type=float, default=0.0, help="Absolute floor; a candidate below it is blocked"
+    )
+    p_lora.add_argument(
+        "--consensus-state", default="", help="Consensus state file (default: rendezvous root)"
+    )
+    p_lora.add_argument(
+        "--run-eval",
+        action="store_true",
+        help="Run the golden-set eval now instead of reading an existing eval-report.json",
+    )
+
     import sys
 
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
@@ -263,8 +280,99 @@ def main(argv=None):
         "export": cmd_export,
         "import-seed": cmd_import_seed,
         "chat": cmd_chat,
+        "lora": cmd_lora,
     }
     cmds[args.command](args)
+
+
+def cmd_lora(args):
+    """Offline LoRA fine-tuning on consensus-approved work (Upgrade Space 8).
+
+    Builds preference pairs from the consensus state (approved=chosen,
+    rejected=rejected, judged pairs only), writes the JSONL training dataset,
+    and gates the model swap on the golden-set eval: a candidate whose pass
+    rate regresses below --baseline or --min-pass-rate is never swapped.
+
+    The GPU trainer itself is a follow-up adapter - this command produces the
+    dataset a real trainer would consume and enforces the swap gate.
+    """
+    from datetime import UTC, datetime
+
+    from nexus.application.training.lora_pipeline import LoRAPipeline, pairs_from_proposals
+
+    root = Path(__file__).resolve().parents[3]
+    state = Path(args.consensus_state) if args.consensus_state else root / "consensus_state.json"
+
+    pairs: list = []
+    if state.exists():
+        from nexus.infrastructure.adapters.swarm.consensus import ConsensusProtocol
+
+        proto = ConsensusProtocol(state)
+        pairs = pairs_from_proposals(proto.list_proposals())
+    else:
+        print(f"[lora] no consensus state at {state} - no pairs; run scripts/consensus.py first")
+
+    output = Path(args.output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+
+    def train(pairs, out_dir: str) -> bool:
+        dataset = output / "preference_pairs.jsonl"
+        dataset.write_text(
+            "\n".join(
+                json.dumps({"prompt": p.prompt, "chosen": p.chosen, "rejected": p.rejected}) for p in pairs
+            ),
+            encoding="utf-8",
+        )
+        print(f"[lora] dataset: {dataset} ({len(pairs)} judged pairs)")
+        return True
+
+    def evaluate(out_dir: str) -> float:
+        report = output / "eval-report.json"
+        if args.run_eval:
+            import subprocess as _sp
+            import sys as _sys
+
+            env_root = root / "src"
+            r = _sp.run(
+                [_sys.executable, "-m", "nexus", "eval", "--output", str(output)],
+                capture_output=True,
+                text=True,
+                cwd=str(root),
+                env={**__import__("os").environ, "PYTHONPATH": str(env_root)},
+            )
+            if r.returncode == 0 and report.exists():
+                return float(json.loads(report.read_text(encoding="utf-8")).get("pass_rate", 0.0))
+            print(
+                f"[lora] eval run failed (needs the local LLM up):\n{((r.stdout or '') + (r.stderr or ''))[-500:]}"
+            )
+            return 0.0
+        if report.exists():
+            return float(json.loads(report.read_text(encoding="utf-8")).get("pass_rate", 0.0))
+        print(f"[lora] no eval report at {report} - run `nexus eval` or pass --run-eval; candidate = 0.0")
+        return 0.0
+
+    def swap(out_dir: str) -> bool:
+        marker = output / "swap_approved.txt"
+        marker.write_text(f"swap gate passed at {datetime.now(UTC).isoformat()}\n", encoding="utf-8")
+        print("[lora] swap gate passed - point the local tier at the fine-tuned adapter (follow-up)")
+        return True
+
+    pipeline = LoRAPipeline(
+        pairs_source=lambda: pairs,
+        train=train,
+        evaluate=evaluate,
+        baseline_pass_rate=args.baseline,
+        swap_model=swap,
+        min_pass_rate=args.min_pass_rate,
+    )
+    result = pipeline.run(str(output))
+    print(
+        f"[lora] stopped: pairs={result.pairs} trained={result.trained} "
+        f"swapped={result.swapped} blocked={result.blocked_reason or 'nothing'}"
+    )
+    if result.eval_gate:
+        gate = result.eval_gate
+        print(f"[lora] gate: baseline={gate.baseline_pass_rate:.2f} candidate={gate.candidate_pass_rate:.2f}")
 
 
 if __name__ == "__main__":

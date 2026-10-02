@@ -98,6 +98,7 @@ Four systems for 24/7 autonomous operation (all state shared across worktrees vi
 - **`NEXUS_INFRA_BACKEND`** — `external` (default: Redis/Qdrant/Neo4j/OpenAI) or `memory` (fully in-process: `InMemoryEventBus`, `InMemoryEmbedder`, `InMemoryMemoryRepository`, `InMemoryConceptRepository`, `InMemoryShortTermMemory`, `InMemoryRateLimiter`).
 - **`NEXUS_QUOTA_*`** — `NEXUS_QUOTA_CHAT_PER_DAY`, `NEXUS_QUOTA_TOOL_GEN_PER_DAY`, `NEXUS_QUOTA_MEMORIES_PER_DAY` (0 = unlimited, daily window via `RateLimitQuota` over `RateLimiter`); `NEXUS_GOALS_MAX_ACTIVE` (active-goal ceiling, enforced in `CreateGoalUseCase`).
 - **Backups** — `nexus backup [--output-dir backups --retain 7 --tenant t1,t2]` snapshots each `nexus_memory` / `nexus_memory_{tenant}` collection (`POST /collections/{name}/snapshots`) and dumps Neo4j to `backups/neo4j-*.jsonl`; see `docs/backup-dr.md` + `src/nexus/infrastructure/backup/`.
+- **Upgrade spaces** — the multi-agent upgrade plan (10 spaces, dispatched as task-027..task-037) lives in `docs/plan-upgrade-spaces.json`; per-space docs with status and enable instructions: `docs/upgrade-spaces.md`. New `NEXUS_*` vars land documented in the same commit as the code that reads them (the env-var guard enforces it, scanning `src/` AND `scripts/`).
 
 ## Dependencies & Lockfiles
 
