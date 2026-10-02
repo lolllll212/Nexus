@@ -98,6 +98,7 @@ web_vendor/
 # opencode sessions
 .opencode/sessions/
 .opencode/storage/
+.opencode/tui.json
 
 # Agent state & queues (local only)
 nexus_state.json
