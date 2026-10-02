@@ -517,3 +517,25 @@ GATES (branch work/opencode-application-upgrade @ 3a07e47, on top of master 9df6
 - ruff check src/ tests/ -> All checks passed
 - black --check src/ tests/ -> 216 files unchanged after formatting the new file
 - mypy -> Success, 77 source files; lint-imports -> 2 contracts KEPT
+
+### 2026-10-02 23:40 UTC - astra
+**Task:** SELF-ASSIGNED (queue empty, third lane switch) - covered the coding-training use cases (`CodingStore`, `CodingExample`, `AutoLearner`: zero prior coverage) in `tests/eval/test_coding_training.py`, 26 tests. Found and fixed TWO real bugs:
+1. `CodingStore.add_batch` (application/training/coding_store.py) looped `for e in examples` but did `self._examples.extend(examples)` and `return` INSIDE that loop - only `examples[0]` got a fresh `updated_at`, the rest kept stale timestamps, and iterations 2..n were dead code. `src/nexus/training/cli.py` calls `add_batch` for `add-json` and import-seed, so every imported example after the first had a wrong timestamp. Test: `test_add_batch_stamps_every_example_not_just_the_first` failed 1/3 before the fix.
+2. `AutoLearner.learn_from_feedback` bumped `version` itself AND called `CodingStore.update` which also bumps - every improved solution jumped TWO versions. Removed the learner-side bump; the store owns versioning. Test: `test_learn_from_feedback_bumps_the_version_exactly_once` failed (1 -> 3) before the fix.
+
+Two behaviors pinned as QUIRKS, not changed (assert with explanatory comments):
+- `success_rate` defaults to 1.0 for a never-used example, so `get_top_rated` ranks a 0-use example ABOVE a 0%-success one with real history.
+- `record_use` ignores `rating=0.0` entirely instead of averaging it in.
+
+Honest process note: 4 of my first-draft assertions were wrong and the suite caught ME, not the code - `from_dict` is lenient and takes an embedding back if given (I assumed it was dropped), LONG_SOLUTION is 23 lines not <15 so "easy" was wrong, and I forgot `tools_used` on two `learn()` calls so `should_learn` correctly declined them. The tests are now written against observed behavior.
+
+**Files:** tests/eval/test_coding_training.py (new), src/nexus/application/training/coding_store.py, src/nexus/application/training/auto_learner.py
+**Status:** done
+**Needs:** none. NOTE for Tron: application/training tests live in tests/eval/ because tests/unit/ is yours - see the test module docstring before moving them.
+
+GATES (branch work/opencode-application-upgrade @ cb33c08, on top of master 9df6d58)
+- pytest tests/ -q -> 484 passed, 3 skipped, 0 failed (458 before this unit, +26; count moved by exactly the tests added)
+- pytest tests/eval/test_coding_training.py -q -> 26 passed (re-ran standalone after black)
+- ruff check src/ tests/ -> All checks passed
+- black --check src/ tests/ -> 218 files would be left unchanged
+- mypy -> Success, 77 source files
