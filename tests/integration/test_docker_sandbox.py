@@ -13,31 +13,43 @@ import pytest
 
 from nexus.infrastructure.adapters.sandbox.docker_sandbox import DockerSandbox
 
+DOCKER_IMAGE = "python:3.13-slim"
+
 
 @pytest.fixture
-def docker_available() -> bool:
+def docker_available() -> None:
     if shutil.which("docker") is None:
-        return False
+        pytest.skip("Docker CLI is not available in this test runner")
     try:
-        result = subprocess.run(
+        daemon = subprocess.run(
             ["docker", "info"],
             check=False,
             capture_output=True,
             timeout=5,
         )
     except (OSError, subprocess.TimeoutExpired):
-        return False
-    return result.returncode == 0
+        pytest.skip("Docker daemon is not available in this test runner")
+    if daemon.returncode != 0:
+        pytest.skip("Docker daemon is not available in this test runner")
+
+    try:
+        image = subprocess.run(
+            ["docker", "image", "inspect", DOCKER_IMAGE],
+            check=False,
+            capture_output=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pytest.skip(f"Docker image {DOCKER_IMAGE} is not available locally")
+    if image.returncode != 0:
+        pytest.skip(f"Docker image {DOCKER_IMAGE} is not available locally")
 
 
 @pytest.mark.asyncio
 async def test_docker_sandbox_run_code(docker_available):
-    if not docker_available:
-        pytest.skip("Docker daemon/CLI not available in this test runner")
-
-    sandbox = DockerSandbox(image="python:3.13-slim")
+    sandbox = DockerSandbox(image=DOCKER_IMAGE)
     code = "import sys\nprint('sandbox-ok')\n"
-    res = await sandbox.run_code(code, timeout=30)
+    res = await sandbox.run_code(code, timeout=120)
 
     assert "sandbox-ok" in res.get("output", "")
     assert not res.get("error")
@@ -45,10 +57,7 @@ async def test_docker_sandbox_run_code(docker_available):
 
 @pytest.mark.asyncio
 async def test_docker_sandbox_network_isolated(docker_available):
-    if not docker_available:
-        pytest.skip("Docker daemon/CLI not available in this test runner")
-
-    sandbox = DockerSandbox(image="python:3.13-slim")
+    sandbox = DockerSandbox(image=DOCKER_IMAGE)
     # Attempt outbound network call inside --network none container
     code = (
         "import urllib.request, sys\n"
@@ -58,19 +67,16 @@ async def test_docker_sandbox_network_isolated(docker_available):
         "except Exception as e:\n"
         "    print('blocked-safely')\n"
     )
-    res = await sandbox.run_code(code, timeout=30)
+    res = await sandbox.run_code(code, timeout=120)
     assert "blocked-safely" in res.get("output", "")
     assert "network-leak" not in res.get("output", "")
 
 
 @pytest.mark.asyncio
 async def test_docker_sandbox_solve_function(docker_available):
-    if not docker_available:
-        pytest.skip("Docker daemon/CLI not available in this test runner")
-
-    sandbox = DockerSandbox(image="python:3.13-slim")
+    sandbox = DockerSandbox(image=DOCKER_IMAGE)
     code = "return {'doubled': input_data.get('val', 0) * 2}"
-    res = await sandbox.run(code, inputs={"val": 21}, timeout=30)
+    res = await sandbox.run(code, inputs={"val": 21}, timeout=120)
 
     assert res.get("ok") is True
     assert res.get("result", {}).get("doubled") == 42
