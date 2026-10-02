@@ -1,16 +1,1 @@
-{
-  "mcpServers": {
-    "opencode": {
-      "type": "local",
-      "command": ["opencode", "serve"],
-      "enabled": true,
-      "environment": {}
-    },
-    "nexus": {
-      "type": "local",
-      "command": ["python", "scripts/nexus_mcp.py"],
-      "enabled": true,
-      "environment": {}
-    }
-  }
-}
+{"mcpServers": {"nexus": {"command": "python", "args": ["scripts/nexus_mcp.py"]}}}

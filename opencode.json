@@ -3,6 +3,14 @@
   "instructions": ["AGENTS.md", "docs/AGENT_COORDINATION.md"],
   "model": "google/gemini-3-pro-high",
   "small_model": "google/gemini-3-flash",
+  "mcp": {
+    "nexus": {
+      "type": "local",
+      "command": ["python", "scripts/nexus_mcp.py"],
+      "enabled": true,
+      "environment": {}
+    }
+  },
   "permission": {
     "bash": {
       "git status*": "allow",

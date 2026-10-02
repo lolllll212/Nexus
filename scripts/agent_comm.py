@@ -22,7 +22,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 sys.path.insert(0, str(REPO_ROOT / "src"))
-from nexus.domain.crdt import SwarmState  # noqa: E402
+from nexus.domain.crdt.swarm_state import (  # noqa: E402
+    LockBlockedError,
+    SwarmState,
+)
 
 
 def main_root() -> Path:
@@ -84,14 +87,15 @@ def load_state() -> dict:
     return state
 
 
-def save_state(state: dict) -> None:
-    crdt = SwarmState.from_nexus_state(state, tick=time.time())
-    if CRDT_FILE.exists():
-        try:
-            old_crdt = SwarmState.from_dict(json.loads(CRDT_FILE.read_text(encoding="utf-8")))
-            crdt = old_crdt.merge(crdt)
-        except Exception:
-            pass
+def save_state(state: dict, crdt: SwarmState | None = None) -> None:
+    if crdt is None:
+        crdt = SwarmState.from_nexus_state(state, tick=time.time())
+        if CRDT_FILE.exists():
+            try:
+                old_crdt = SwarmState.from_dict(json.loads(CRDT_FILE.read_text(encoding="utf-8")))
+                crdt = old_crdt.merge(crdt)
+            except Exception:
+                pass
     state["state_hash"] = crdt.state_hash()
     try:
         CRDT_FILE.write_text(json.dumps(crdt.to_dict(), indent=2), encoding="utf-8")
@@ -284,9 +288,166 @@ def cmd_crdt(args, state):
         st = t.status.value if t else "unknown"
         print(f"  [{tid}] status={st}")
     print()
-    print("Active Locks (OR-Set):")
+    print()
+    print("Active Locks (OR-Set with Lease Expiry):")
+    crdt.purge_expired_locks()
     for lk in sorted(crdt.active_locks.read()):
-        print(f"  {lk}")
+        st = crdt.lock_states.get(lk)
+        if st is not None:
+            rem = max(0.0, st.expires_at - time.time())
+            print(f"  {lk} (held by {st.agent}, lease remaining: {rem:.1f}s)")
+        else:
+            print(f"  {lk}")
+
+
+def _lock_file_path(file_path: str | Path) -> Path:
+    p = Path(file_path)
+    if not p.is_absolute():
+        p = main_root() / p
+    return Path(str(p) + ".lock")
+
+
+def acquire_file_lock(file_path: str, agent: str, ttl: float = 900.0) -> bool:
+    """Acquire a CRDT distributed lock with lease expiry and fallback .lock file.
+
+    Returns True if successfully acquired, False if blocked by another agent's active lease.
+    """
+    file_key = str(file_path).replace("\\", "/")
+    crdt = load_crdt()
+    try:
+        crdt.acquire_lock(file_key, agent=agent, ttl=ttl)
+    except LockBlockedError:
+        return False
+
+    lock_file = _lock_file_path(file_path)
+    try:
+        lock_file.parent.mkdir(parents=True, exist_ok=True)
+        lock_file.write_text(f"agent: {agent}\nacquired_at: {now()}\nttl: {ttl}\n", encoding="utf-8")
+    except OSError:
+        pass
+
+    state = load_state()
+    new_state = crdt.to_nexus_state()
+    new_state["messages"] = state.get("messages", [])
+    save_state(new_state, crdt=crdt)
+    log_activity(agent, "lock", f"{file_key} (ttl={ttl:.0f}s)")
+    return True
+
+
+def release_file_lock(file_path: str, agent: str | None = None) -> bool:
+    """Release a CRDT distributed lock and remove fallback .lock file."""
+    file_key = str(file_path).replace("\\", "/")
+    crdt = load_crdt()
+    crdt.release_lock(file_key)
+
+    lock_file = _lock_file_path(file_path)
+    if lock_file.exists():
+        try:
+            lock_file.unlink()
+        except OSError:
+            pass
+
+    state = load_state()
+    new_state = crdt.to_nexus_state()
+    new_state["messages"] = state.get("messages", [])
+    save_state(new_state, crdt=crdt)
+    if agent:
+        log_activity(agent, "unlock", file_key)
+    return True
+
+
+def is_file_locked(file_path: str, current_time: float | None = None) -> tuple[bool, str | None]:
+    """Check whether a file is locked via CRDT or fallback .lock file.
+
+    Returns (is_locked, holder_or_reason).
+    """
+    file_key = str(file_path).replace("\\", "/")
+    crdt = load_crdt()
+    crdt.purge_expired_locks(current_time=current_time)
+
+    if crdt.is_locked(file_key, current_time=current_time):
+        st = crdt.get_lock(file_key, current_time=current_time)
+        holder = st.agent if st else "unknown"
+        return True, holder
+
+    lf = _lock_file_path(file_path)
+    if lf.exists():
+        try:
+            content = lf.read_text(encoding="utf-8")
+            for line in content.splitlines():
+                if line.startswith("agent:"):
+                    return True, line.split(":", 1)[1].strip()
+            return True, "fallback-lockfile"
+        except OSError:
+            return True, "fallback-lockfile"
+
+    return False, None
+
+
+def cmd_lock(args, state):
+    agent = args.agent
+    file_path = args.file
+    ttl = getattr(args, "ttl", 900.0) or 900.0
+    file_key = str(file_path).replace("\\", "/")
+
+    crdt = load_crdt()
+    try:
+        crdt.acquire_lock(file_key, agent=agent, ttl=ttl)
+    except LockBlockedError as err:
+        print(f"[{agent}] LOCK BLOCKED: {err}")
+        sys.exit(1)
+
+    lock_file = _lock_file_path(file_path)
+    try:
+        lock_file.parent.mkdir(parents=True, exist_ok=True)
+        lock_file.write_text(f"agent: {agent}\nacquired_at: {now()}\nttl: {ttl}\n", encoding="utf-8")
+    except OSError:
+        pass
+
+    new_state = crdt.to_nexus_state()
+    new_state["messages"] = state.get("messages", [])
+    save_state(new_state, crdt=crdt)
+    log_activity(agent, "lock", f"{file_key} (ttl={ttl:.0f}s)")
+    print(f"[{agent}] acquired lock on {file_key} (lease: {ttl:.0f}s)")
+
+
+def cmd_unlock(args, state):
+    agent = args.agent
+    file_path = args.file
+    file_key = str(file_path).replace("\\", "/")
+
+    crdt = load_crdt()
+    crdt.release_lock(file_key)
+
+    lock_file = _lock_file_path(file_path)
+    if lock_file.exists():
+        try:
+            lock_file.unlink()
+        except OSError:
+            pass
+
+    new_state = crdt.to_nexus_state()
+    new_state["messages"] = state.get("messages", [])
+    save_state(new_state, crdt=crdt)
+    log_activity(agent, "unlock", file_key)
+    print(f"[{agent}] released lock on {file_key}")
+
+
+def cmd_locks(args, state):
+    crdt = load_crdt()
+    crdt.purge_expired_locks()
+    active_locks = sorted(list(crdt.active_locks.read()))
+    print(f"=== Active Swarm Locks ({len(active_locks)}) ===")
+    if not active_locks:
+        print("No active locks.")
+        return
+    for lk in active_locks:
+        st = crdt.lock_states.get(lk)
+        if st is not None:
+            rem = max(0.0, st.expires_at - time.time())
+            print(f"  {lk} | held by: {st.agent:8s} | remaining lease: {rem:.1f}s")
+        else:
+            print(f"  {lk} | held by: unknown")
 
 
 def cmd_verify(args, state):
@@ -543,6 +704,18 @@ def render_dashboard(state) -> str:
         for m in open_msgs[-5:]:
             lines.append(f"  [{m['id']}] {m['from']} [{m['kind']}] {m['text'][:55]}")
         lines.append("")
+    locks = state.get("locks", [])
+    lock_states = state.get("lock_states", {})
+    if locks:
+        lines.append(f"ACTIVE LOCKS ({len(locks)}):")
+        for lk in locks:
+            st = lock_states.get(lk)
+            if st:
+                rem = max(0.0, st.get("expires_at", 0) - time.time())
+                lines.append(f"  {lk} [{st.get('agent', '?')}] {rem:.0f}s left")
+            else:
+                lines.append(f"  {lk}")
+        lines.append("")
     lines.append("RECENT ACTIVITY:")
     for entry in read_activity(10):
         lines.append(
@@ -630,6 +803,17 @@ def main():
     p = sub.add_parser("crdt")
     p.add_argument("--merge-file", help="Path to state file to merge into local state")
 
+    p = sub.add_parser("lock")
+    p.add_argument("--agent", required=True, choices=["ceo", "astra", "tron", "xenom"])
+    p.add_argument("--file", required=True, help="File path to lock")
+    p.add_argument("--ttl", type=float, default=900.0, help="Lease duration in seconds (default 900)")
+
+    p = sub.add_parser("unlock")
+    p.add_argument("--agent", required=True, choices=["ceo", "astra", "tron", "xenom"])
+    p.add_argument("--file", required=True, help="File path to unlock")
+
+    sub.add_parser("locks")
+
     args = parser.parse_args()
     state = load_state()
 
@@ -650,6 +834,9 @@ def main():
         "status": cmd_status,
         "board": cmd_board,
         "crdt": cmd_crdt,
+        "lock": cmd_lock,
+        "unlock": cmd_unlock,
+        "locks": cmd_locks,
     }
     if args.command is None:
         parser.print_help()

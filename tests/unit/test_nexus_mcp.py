@@ -71,7 +71,7 @@ def test_mcp_subprocess_handshake_and_ping(mcp_server_process):
     assert resp.get("id") == 1
     result = resp.get("result", {})
     assert result.get("protocolVersion") == "2024-11-05"
-    assert result.get("serverInfo", {}).get("name") == "nexus-mcp"
+    assert result.get("serverInfo", {}).get("name") == "idle"
     assert result.get("serverInfo", {}).get("version") == "1.0.0"
     assert "tools" in result.get("capabilities", {})
     assert "resources" in result.get("capabilities", {})

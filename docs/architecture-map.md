@@ -64,6 +64,16 @@ the `Container` class. See [Ops configuration](#ops-configuration).
 | `ports/swarm.py` | `AgentRepository` | `InMemoryAgentRepository` | same |
 | `ports/swarm.py` | `SwarmRepository` | `InMemorySwarmRepository` | same |
 
+### Sandbox wiring and socket profile
+
+`ports/sandbox.py` binds `DockerSandbox` by default for secure, ephemeral container execution.
+In containerized environments (Docker Compose), the hardened Docker sandbox requires
+mounting `/var/run/docker.sock` via the explicit opt-in `docker-sandbox` profile
+(e.g., `docker compose --profile docker-sandbox up`).
+If `NEXUS_SANDBOX_BACKEND` is unset in a container without socket access, the DI composition root
+logs a LOUD warning and deliberately falls back to `SubprocessSandbox`.
+To silence the warning and explicitly select subprocess sandboxing, set `NEXUS_SANDBOX_BACKEND=subprocess`.
+
 Ports with **no** external variant (`memory` column = `external` column): the
 `memory` backend exists to remove Redis/Qdrant/Neo4j from local dev, CI, and
 evals, so anything that was already in-process stays in-process.

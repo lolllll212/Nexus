@@ -12,11 +12,93 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from typing import Any
 
 from nexus.domain.crdt.g_counter import GCounter
 from nexus.domain.crdt.lww_register import LWWRegister
 from nexus.domain.crdt.or_set import ORSet
+
+
+class LockError(RuntimeError):
+    """Base error for CRDT lock failures."""
+
+
+class LockBlockedError(LockError):
+    """Raised when acquiring a lock that is currently held with an active lease."""
+
+
+class LockState:
+    """CRDT-tracked lock state with lease expiry."""
+
+    def __init__(
+        self,
+        lock_id: str,
+        agent: str = "system",
+        acquired_at: float | None = None,
+        ttl: float = 900.0,
+    ) -> None:
+        self.lock_id: str = lock_id
+        self.agent: str = agent
+        self.acquired_at: float = acquired_at if acquired_at is not None else time.time()
+        self.ttl: float = float(ttl)
+
+    @property
+    def expires_at(self) -> float:
+        return self.acquired_at + self.ttl
+
+    def is_expired(self, current_time: float | None = None) -> bool:
+        now_ts = current_time if current_time is not None else time.time()
+        return now_ts >= self.expires_at
+
+    def merge(self, other: LockState) -> LockState:
+        """Merge two lock states using LWW on acquired_at."""
+        if other.acquired_at > self.acquired_at:
+            return LockState(other.lock_id, other.agent, other.acquired_at, other.ttl)
+        elif self.acquired_at > other.acquired_at:
+            return LockState(self.lock_id, self.agent, self.acquired_at, self.ttl)
+        else:
+            chosen_agent = max(self.agent, other.agent)
+            return LockState(self.lock_id, chosen_agent, self.acquired_at, max(self.ttl, other.ttl))
+
+    def canonical_repr(self) -> tuple[Any, ...]:
+        return (self.lock_id, self.agent, round(self.acquired_at, 3), round(self.ttl, 3))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "lock_id": self.lock_id,
+            "agent": self.agent,
+            "acquired_at": self.acquired_at,
+            "ttl": self.ttl,
+            "expires_at": self.expires_at,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any], lock_id: str | None = None) -> LockState:
+        lid = lock_id or data.get("lock_id") or data.get("file") or "unknown"
+        acq = data.get("acquired_at")
+        if isinstance(acq, (int, float)):
+            acq_float = float(acq)
+        elif isinstance(acq, str):
+            try:
+                from datetime import datetime
+
+                acq_float = datetime.fromisoformat(acq).timestamp()
+            except Exception:
+                try:
+                    acq_float = float(acq)
+                except Exception:
+                    acq_float = 0.0
+        else:
+            acq_float = 0.0
+
+        ttl_val = float(data.get("ttl", 900.0))
+        return cls(
+            lock_id=lid,
+            agent=data.get("agent", "system"),
+            acquired_at=acq_float,
+            ttl=ttl_val,
+        )
 
 
 class AgentState:
@@ -264,12 +346,14 @@ class SwarmState:
         tasks: dict[str, TaskState] | None = None,
         task_membership: ORSet[str] | None = None,
         active_locks: ORSet[str] | None = None,
+        lock_states: dict[str, LockState] | None = None,
     ) -> None:
         self.heartbeats: GCounter = heartbeats if heartbeats is not None else GCounter()
         self.agent_status: dict[str, AgentState] = dict(agent_status or {})
         self.tasks: dict[str, TaskState] = dict(tasks or {})
         self.task_membership: ORSet[str] = task_membership if task_membership is not None else ORSet()
         self.active_locks: ORSet[str] = active_locks if active_locks is not None else ORSet()
+        self.lock_states: dict[str, LockState] = dict(lock_states or {})
 
     def record_heartbeat(self, agent: str, tick: int | float = 1, timestamp: str | None = None) -> SwarmState:
         """Increment heartbeat counter and refresh agent active status."""
@@ -361,15 +445,77 @@ class SwarmState:
         self.task_membership.remove(task_id)
         return self
 
-    def acquire_lock(self, lock_id: str, tag: str | None = None) -> str:
-        """Acquire a lock in the OR-Set."""
-        return self.active_locks.add(lock_id, tag=tag)
+    def purge_expired_locks(self, current_time: float | None = None) -> set[str]:
+        """Auto-release any locks whose lease duration has elapsed."""
+        now_ts = current_time if current_time is not None else time.time()
+        active = self.active_locks.read()
+        expired: set[str] = set()
+        for lid in active:
+            st = self.lock_states.get(lid)
+            if st is not None and st.is_expired(now_ts):
+                expired.add(lid)
+        for lid in expired:
+            self.active_locks.remove(lid)
+            self.lock_states.pop(lid, None)
+        return expired
+
+    def is_locked(self, lock_id: str, current_time: float | None = None) -> bool:
+        """Return True if lock is currently held and not expired."""
+        now_ts = current_time if current_time is not None else time.time()
+        self.purge_expired_locks(current_time=now_ts)
+        return lock_id in self.active_locks
+
+    def get_lock(self, lock_id: str, current_time: float | None = None) -> LockState | None:
+        """Return active LockState if held and not expired, else None."""
+        now_ts = current_time if current_time is not None else time.time()
+        if not self.is_locked(lock_id, current_time=now_ts):
+            return None
+        return self.lock_states.get(lock_id)
+
+    def acquire_lock(
+        self,
+        lock_id: str,
+        tag: str | None = None,
+        agent: str = "system",
+        ttl: float | None = 900.0,
+        acquired_at: float | None = None,
+        current_time: float | None = None,
+    ) -> str:
+        """Acquire a lock in the OR-Set with lease duration (default ttl=900s).
+
+        If the lock is held by another agent with an active lease, raises LockBlockedError.
+        Expired leases auto-release before acquisition so a dead agent never blocks the swarm.
+        """
+        now_ts = current_time if current_time is not None else time.time()
+        self.purge_expired_locks(current_time=now_ts)
+
+        if lock_id in self.active_locks:
+            curr = self.lock_states.get(lock_id)
+            if curr is not None and not curr.is_expired(now_ts):
+                if curr.agent != agent and curr.agent != "system":
+                    rem = curr.expires_at - now_ts
+                    raise LockBlockedError(
+                        f"Lock '{lock_id}' is held by {curr.agent} (lease expires in {rem:.1f}s)"
+                    )
+
+        t = self.active_locks.add(lock_id, tag=tag)
+        acq = acquired_at if acquired_at is not None else now_ts
+        ttl_val = float(ttl) if ttl is not None else 900.0
+        self.lock_states[lock_id] = LockState(
+            lock_id=lock_id,
+            agent=agent,
+            acquired_at=acq,
+            ttl=ttl_val,
+        )
+        return t
 
     def release_lock(self, lock_id: str) -> set[str]:
         """Release a lock by tombstoning all observed tags."""
-        return self.active_locks.remove(lock_id)
+        tags = self.active_locks.remove(lock_id)
+        self.lock_states.pop(lock_id, None)
+        return tags
 
-    def merge(self, other: SwarmState) -> SwarmState:
+    def merge(self, other: SwarmState, current_time: float | None = None) -> SwarmState:
         """Commutative and idempotent state-based merge of two SwarmStates."""
         # Merge G-Counter heartbeats
         merged_heartbeats = self.heartbeats.merge(other.heartbeats)
@@ -404,13 +550,29 @@ class SwarmState:
         merged_membership = self.task_membership.merge(other.task_membership)
         merged_locks = self.active_locks.merge(other.active_locks)
 
-        return SwarmState(
+        # Merge Lock States
+        merged_lock_states: dict[str, LockState] = {}
+        all_lock_ids = set(self.lock_states.keys()) | set(other.lock_states.keys())
+        for lid in all_lock_ids:
+            l1 = self.lock_states.get(lid)
+            l2 = other.lock_states.get(lid)
+            if l1 is not None and l2 is not None:
+                merged_lock_states[lid] = l1.merge(l2)
+            elif l1 is not None:
+                merged_lock_states[lid] = LockState(l1.lock_id, l1.agent, l1.acquired_at, l1.ttl)
+            elif l2 is not None:
+                merged_lock_states[lid] = LockState(l2.lock_id, l2.agent, l2.acquired_at, l2.ttl)
+
+        res = SwarmState(
             heartbeats=merged_heartbeats,
             agent_status=merged_agents,
             tasks=merged_tasks,
             task_membership=merged_membership,
             active_locks=merged_locks,
+            lock_states=merged_lock_states,
         )
+        res.purge_expired_locks(current_time=current_time)
+        return res
 
     def state_hash(self) -> str:
         """Compute deterministic SHA-256 fingerprint of the current state.
@@ -440,6 +602,7 @@ class SwarmState:
             "tasks": {k: v.to_dict() for k, v in self.tasks.items()},
             "task_membership": self.task_membership.to_dict(),
             "active_locks": self.active_locks.to_dict(),
+            "lock_states": {k: v.to_dict() for k, v in self.lock_states.items()},
             "state_hash": self.state_hash(),
         }
 
@@ -451,24 +614,31 @@ class SwarmState:
         tasks = {k: TaskState.from_dict(v, task_id=k) for k, v in data.get("tasks", {}).items()}
         membership = ORSet.from_dict(data.get("task_membership", {}))
         locks = ORSet.from_dict(data.get("active_locks", {}))
+        l_states = {k: LockState.from_dict(v, lock_id=k) for k, v in data.get("lock_states", {}).items()}
         return cls(
             heartbeats=hb,
             agent_status=agents,
             tasks=tasks,
             task_membership=membership,
             active_locks=locks,
+            lock_states=l_states,
         )
 
     def to_nexus_state(self) -> dict[str, Any]:
         """Convert CRDT view to traditional nexus_state.json format."""
+        self.purge_expired_locks()
         active_tids = self.task_membership.read()
         task_queue = [self.tasks[tid].to_dict() for tid in sorted(active_tids) if tid in self.tasks]
         agents = {ag: st.to_dict() for ag, st in self.agent_status.items()}
-        locks = sorted(list(self.active_locks.read()))
+        active_lids = sorted(list(self.active_locks.read()))
+        lock_states_dict = {
+            lid: self.lock_states[lid].to_dict() for lid in active_lids if lid in self.lock_states
+        }
         return {
             "agents": agents,
             "task_queue": task_queue,
-            "locks": locks,
+            "locks": active_lids,
+            "lock_states": lock_states_dict,
             "crdt_hash": self.state_hash(),
         }
 
@@ -488,11 +658,22 @@ class SwarmState:
                 tasks[tid] = TaskState.from_dict(t, task_id=tid)
 
         locks = ORSet[str]()
+        lock_states: dict[str, LockState] = {}
+        raw_lock_states = data.get("lock_states", {})
         for lk in data.get("locks", []):
             if isinstance(lk, dict):
-                locks.add(lk.get("file", str(lk)))
+                lid = lk.get("lock_id") or lk.get("file") or str(lk)
+                locks.add(lid)
+                lock_states[lid] = LockState.from_dict(lk, lock_id=lid)
             else:
-                locks.add(str(lk))
+                lid = str(lk)
+                locks.add(lid)
+                if lid in raw_lock_states:
+                    lock_states[lid] = LockState.from_dict(raw_lock_states[lid], lock_id=lid)
+                else:
+                    lock_states[lid] = LockState(
+                        lock_id=lid, agent="system", acquired_at=time.time(), ttl=900.0
+                    )
 
         return cls(
             heartbeats=GCounter(),
@@ -500,4 +681,5 @@ class SwarmState:
             tasks=tasks,
             task_membership=membership,
             active_locks=locks,
+            lock_states=lock_states,
         )

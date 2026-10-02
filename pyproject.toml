@@ -26,6 +26,7 @@ dependencies = [
 
     # LLM adapters
     "openai>=1.12",
+    "aiohttp>=3.9",
 
     # Background workers (subconscious)
     "celery>=5.3",

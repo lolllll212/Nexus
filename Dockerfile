@@ -17,12 +17,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies (build-essential, libpq for PostgreSQL, curl for healthchecks)
+# Install system dependencies (build-essential, libpq for PostgreSQL, curl for healthchecks, docker CLI for sandboxing)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
     curl \
     git \
+    docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python requirements
@@ -32,7 +33,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code and config
 COPY pyproject.toml .
 COPY src/ ./src/
-COPY frontend/ ./frontend/
 
 # Copy compiled production UI assets from Stage 1
 COPY --from=ui-builder /frontend/dist/ ./frontend/dist/

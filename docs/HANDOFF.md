@@ -695,3 +695,59 @@ GATES (branch work/opencode-application-upgrade @ 8e5a561, on top of origin/mast
 **Status:** done
 **Next:** awaiting review
 **Needs:** none
+
+### 2026-10-02 07:57 UTC — ceo
+**Task:** TRON - PAIRING REQUEST: an agent (Xenom) is working in YOUR directory as part of the new MCP task (plan-002) - his server adapter consumes domain-side pieces that live in your lane (src/nexus/domain/). HELP HIM IN IT with the making of the MCP. Your half (task-040-plan-002, high priority): expose the tool registry and entity serialization as clean domain-side pieces the MCP server consumes - a ToolSchemaProvider port or equivalent in src/nexus/domain/ports/, JSON-schema export for tool definitions, domain entity serialization safe for MCP resources, ZERO infrastructure imports. Xenom's half (task-039-plan-002, high priority): the full MCP server (stdio + SSE transport) exposing tools list, memory query, consensus status, task queue, telemetry counters as MCP tools/resources, extending api/routes/mcp.py, registered in the DI container. Coordinate on this board - Xenom consumes your schemas directly, so agree the interface early. Your task-038 (CRDT locks with lease expiry) is still pending - do it first if not in flight, then the MCP support. Note: Xenom has been idle since task-029, Tron carried five of his tasks; this pairing rebalances the load.
+**Files:** docs/HANDOFF.md, docs/plan-mcp.json
+**Status:** done
+**Next:** awaiting review
+**Needs:** none
+
+### 2026-10-02 08:03 UTC — ceo
+**Task:** CORRECTION to my earlier pairing post - I got the directory observation wrong. The agent working in Tron's directory (src/nexus/domain/) is NOT Xenom - it is an UNNAMED agent, not in the roster (astra/tron/xenom/ceo), and it is NOT using agent_comm so it is invisible to the activity log and the dashboard. TRON: treat it as an unknown collaborator in your lane. Before every edit: (1) check for .lock files and git status --short for changes you did not make; (2) create your own .lock per coordination doc section 6 with your agent name and timestamp; (3) if you see edits that are not yours, note them on this board with the file and timestamp so we can identify the unnamed process. XENOM: the task-040 pairing (MCP domain support) still stands - Tron's domain half + your server half - but Xenom is NOT in Tron's directory; the unnamed process is. Pair on the INTERFACE (agree the ToolSchemaProvider contract on this board), not by co-locating. CEO NOTE: an unnamed process editing domain files with no agent_comm presence is a coordination gap the swarm cannot see. If the user has not started it, we need to identify it - unexplained writes to domain/ will be treated as contraband until identified.
+**Files:** docs/HANDOFF.md
+**Status:** blocked
+**Next:** in progress
+**Needs:** tron: lock your files and report any edits you did not make. xenom: agree the MCP domain interface on the board
+
+### 2026-10-02 08:19 UTC — ceo
+**Task:** MILESTONE: plan-001 is COMPLETE - 11/11 subtasks done and CEO-verified. All 10 upgrade spaces implemented in one session: semantic memory (hybrid cosine+TF-IDF), CRDTs (G-Counter/LWW-Register/OR-Set + merge-on-read state), bridge security (token auth, allowlist, rate limits), overnight daemon (15 tests: full cycle, kill-switch, blackout windows, budget-aware), machine reviewers (bandit mandatory), learned router, LoRA fine-tuning (13 tests, golden-set regression gate), Vite dashboard, OTel observability, containerized loop (bridge+heal+ceo compose). TASK-041 BLESSED - the user trusts astra, and her design is sound: standard MCP server (JSON-RPC 2.0 over stdio) at scripts/nexus_mcp.py, resources for shared rendezvous state, tools for the blackboard pattern, REUSING agent_comm/PlanningBoard/AgentMemoryStore/ConsensusProtocol logic without reimplementing, stdout = protocol channel only (contextlib.redirect_stdout wraps all reused prints), protocolVersion 2024-11-05, malformed JSON/unknown methods return JSON-RPC errors never crash. TRON: task-041 is CRITICAL priority - do it FIRST, before task-040 (the ToolSchemaProvider domain support pairs with task-039 and can follow). task-038 (CRDT locks) also pending - order: 041 first, then 038, then 040. ASTRA: your lane after Tron's nexus_mcp.py lands - wire .vscode/mcp.json + .agent/mcp_config.json so Copilot and Antigravity connect as MCP clients, plus docs.
+**Files:** docs/HANDOFF.md
+**Status:** done
+**Next:** awaiting review
+**Needs:** none
+
+### 2026-10-02 11:52 UTC — ceo
+**Task:** BRIDGE UP: the WebSocket IDE bridge is now serving on ws://127.0.0.1:8765 (pid 5860, port verified open, process stable). The vscode-nexus-queue extension will now receive REAL-TIME task_created events over the bridge instead of polling nexus_state.json on the fallback path. Extension verified in code: filters t.for === 'xenom' specifically (line 51), so dispatching tasks as for: xenom correctly reaches the Copilot window - Xenom IS Copilot per the roster. Trigger chain now: CEO dispatch -> bridge event -> extension notification + clipboard prompt -> Copilot. Fallback remains active if the bridge goes down again (file-watcher on nexus_state.json, 15s reconnect).
+**Files:** docs/HANDOFF.md
+**Status:** done
+**Next:** awaiting review
+**Needs:** none
+
+### 2026-10-02 13:05 UTC — ceo
+**Task:** MCP NOW WIRED IN ALL THREE APPS: (1) .vscode/mcp.json - nexus server, python scripts/nexus_mcp.py, enabled (Copilot); (2) .agent/mcp_config.json - same entry (Antigravity); (3) opencode.json - I added the missing mcp key with the nexus entry (the user asked how to turn it on) - config valid JSON, verified end-to-end: initialize handshake returns protocolVersion 2024-11-05, tools/list returns 18 tools. The server (scripts/nexus_mcp.py, 26.5KB, task-041 resolved with evidence) speaks standard JSON-RPC 2.0 over stdio with 18 tools: next_task, claim_task, resolve_task, heartbeat, progress, ask_ceo, check_inbox, plan_create/begin/step/finish/check_file, memory_put/query, consensus_propose/review/vote, git_status - plus resources for pending tasks, current state, plans, consensus, memory.
+**Files:** opencode.json, docs/HANDOFF.md
+**Status:** done
+**Next:** awaiting review
+**Needs:** none
+
+### 2026-10-02 13:41 UTC — ceo
+**Task:** MCP CONFIG FORMAT FIX - this is why Copilot and Antigravity were not discovering the server. Both config files were written in Claude Desktop's schema (mcpServers, type: local, command as an ARRAY, environment key). VS Code's official .vscode/mcp.json schema expects a top-level 'servers' key with type: stdio, command as a STRING plus args array, and env - an unknown mcpServers key is silently ignored, hence not discovered. Antigravity (Gemini-style mcpServers) accepts the mcpServers key but needs command as a string + args array. BOTH FILES FIXED: .vscode/mcp.json now {servers: {nexus: {type: stdio, command: python, args: [scripts/nexus_mcp.py], env: {}}}}; .agent/mcp_config.json now {mcpServers: {nexus: {command: python, args: [scripts/nexus_mcp.py]}}}. Both validated as JSON. NOTE: the malformed 'opencode' entries (opencode serve is HTTP, not stdio) were removed from both - they never worked in either schema. opencode.json keeps its own correct native mcp key (opencode's native format, command as array). VS Code: reload the window or Command Palette > MCP: List Servers to pick up the corrected server. Antigravity: restart the session to re-read .agent/mcp_config.json. Queue check: all 40+ tasks resolved including hardening pass 042-046 (xenom) - verification against acceptance criteria is next.
+**Files:** .vscode/mcp.json, .agent/mcp_config.json, docs/HANDOFF.md
+**Status:** done
+**Next:** awaiting review
+**Needs:** none
+
+### 2026-10-02 13:48 UTC — ceo
+**Task:** CONFIRMED BY USER: Antigravity can access the MCP now - the .agent/mcp_config.json format fix worked (mcpServers key kept, command as string + args array, Gemini-style schema). The user-trusted access path is live: Antigravity connects natively to scripts/nexus_mcp.py with 18 tools. VS Code (Copilot) status still unconfirmed - .vscode/mcp.json was fixed to the official servers/stdio schema; needs a window reload or Command Palette > MCP: List Servers to pick it up. Bridge still up (pid 5860, port 8765). NEXT: hardening tasks 042-046 (docker sandbox wiring, aiohttp, Neo4j constraints, Redis persistence, tool-registry dead code) are all resolved by xenom but unverified - verifying each against acceptance criteria is the CEO's next step.
+**Files:** docs/HANDOFF.md
+**Status:** done
+**Next:** awaiting review
+**Needs:** none
+
+### 2026-10-02 14:21 UTC — ceo
+**Task:** CONFIRMED BY USER: VS Code (Copilot) can now access the MCP server in a new session. ALL THREE APPS ARE CONNECTED: Antigravity (confirmed earlier), opencode (native mcp key, verified end-to-end), VS Code Copilot (confirmed now). The full swarm is MCP-native: every agent can call the 18 tools (next_task, claim/resolve, heartbeat, progress, ask_ceo, plan_*, memory_*, consensus_*, git_status) and read the 5 resources (tasks, state, plans, consensus, memory) natively - no copy-paste, no file polling dependency. XENOM IS AVAILABLE FOR WORK: task-047 (HOLO Docker-build strip + dead scaffolding removal) is dispatched to you - claim it when you poll.
+**Files:** docs/HANDOFF.md
+**Status:** done
+**Next:** awaiting review
+**Needs:** none

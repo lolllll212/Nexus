@@ -52,5 +52,35 @@ services:
       - .:/workspace
       - agent_memory:/workspace/memory
 
+  cortex:
+    profiles: ["loop", "docker-sandbox"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /workspace
+    command: uvicorn nexus.infrastructure.api.main:app --host 0.0.0.0 --port 8000
+    environment:
+      NEXUS_INFRA_BACKEND: ${NEXUS_INFRA_BACKEND:-memory}
+      NEXUS_SANDBOX_BACKEND: ${NEXUS_SANDBOX_BACKEND:-docker}
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  worker:
+    profiles: ["loop", "docker-sandbox"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /workspace
+    command: celery -A nexus.infrastructure.workers.celery_app:celery_app worker -Q nexus --loglevel=info
+    environment:
+      NEXUS_INFRA_BACKEND: ${NEXUS_INFRA_BACKEND:-memory}
+      NEXUS_SANDBOX_BACKEND: ${NEXUS_SANDBOX_BACKEND:-docker}
+    volumes:
+      - .:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+
 volumes:
   agent_memory:

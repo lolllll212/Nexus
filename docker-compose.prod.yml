@@ -63,6 +63,7 @@ services:
   # NEXUS Cortex (Conscious Engine + J.A.R.V.I.S. Production UI)
   # ─────────────────────────────────────────────────────────────────────────────
   nexus-cortex:
+    profiles: ["docker-sandbox"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -70,6 +71,8 @@ services:
     stop_grace_period: 30s
     command: uvicorn nexus.infrastructure.api.main:app --host 0.0.0.0 --port 8000 --workers 4 --proxy-headers --forwarded-allow-ips='*'
     ports: ["8000:8000"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     environment: &nexus_prod_env
       NEXUS_INFRA_BACKEND: ${NEXUS_INFRA_BACKEND:-external}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -112,12 +115,15 @@ services:
   # NEXUS Subcortex Workers (Deep Research, Synthesis, Tool Self-Healing)
   # ─────────────────────────────────────────────────────────────────────────────
   nexus-worker:
+    profiles: ["docker-sandbox"]
     build:
       context: .
       dockerfile: Dockerfile
     restart: always
     stop_grace_period: 60s
     command: celery -A nexus.infrastructure.workers.celery_app:celery_app worker -Q nexus --concurrency=4 --loglevel=info
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     environment: *nexus_prod_env
     deploy:
       resources:

@@ -102,6 +102,9 @@ class FakeContainer:
         self.working_memory = FakeShortTermMemory()
         self.synapse = SynapseConfig()
         self.tool_registry = FakeToolRegistry()
+        from nexus.infrastructure.adapters.mcp.server import MCPServerAdapter
+
+        self.mcp_server = MCPServerAdapter(container=self)
         self.deployer = None
         self.executor = FakeExecutor()
         self.column_registry = FakeCorticalColumnRegistry()

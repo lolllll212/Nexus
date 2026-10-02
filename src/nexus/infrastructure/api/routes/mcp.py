@@ -1,9 +1,9 @@
 """
 Model Context Protocol (MCP) & Agent Routing API Route.
 
-Exposes MCP-compliant tool specifications and execution dispatcher so the
-AI assistant can trigger actions across files, hardware metrics, and UI views
-(e.g., summoning multimodal bridge, code compiler, changing modes, or flashing HUD alerts).
+The route exposes the live adapter-backed MCP surface so the registry,
+agent memory, consensus state, and telemetry counters are all queryable over
+HTTP without duplicating the underlying state in a second code path.
 """
 
 from __future__ import annotations
@@ -126,9 +126,64 @@ MCP_TOOLS: List[McpToolDefinition] = [
 
 
 @router.get("/tools", response_model=List[McpToolDefinition])
-async def list_mcp_tools() -> List[McpToolDefinition]:
+async def list_mcp_tools(container: Container = Depends(get_container)) -> List[McpToolDefinition]:
     """Return all available MCP tools in standardized schema format."""
-    return MCP_TOOLS
+    tools: List[McpToolDefinition] = list(MCP_TOOLS)
+    seen_names = {t.name for t in tools}
+    mcp_server = getattr(container, "mcp_server", None)
+    if mcp_server is not None:
+        items = await mcp_server.list_tools()
+        for tool in items:
+            if tool.get("name") not in seen_names:
+                tools.append(McpToolDefinition(**tool))
+                seen_names.add(tool["name"])
+    return tools
+
+
+@router.get("/resources")
+async def list_mcp_resources(container: Container = Depends(get_container)) -> List[Dict[str, Any]]:
+    mcp_server = getattr(container, "mcp_server", None)
+    if mcp_server is not None:
+        return await mcp_server.list_resources()
+    return []
+
+
+@router.post("/memory/query")
+async def query_memory_resource(
+    payload: Dict[str, Any],
+    container: Container = Depends(get_container),
+) -> Dict[str, Any]:
+    query = str(payload.get("query") or payload.get("q") or "")
+    limit = int(payload.get("limit", 5) or 5)
+    mcp_server = getattr(container, "mcp_server", None)
+    results = (
+        await mcp_server.query_memory(query, limit=limit, kind=payload.get("kind")) if mcp_server else []
+    )
+    return {"query": query, "count": len(results), "results": results}
+
+
+@router.get("/consensus")
+async def get_consensus_status(container: Container = Depends(get_container)) -> Dict[str, Any]:
+    mcp_server = getattr(container, "mcp_server", None)
+    if mcp_server is not None:
+        return await mcp_server.get_consensus_status()
+    return {"status": "ok", "verdicts": []}
+
+
+@router.get("/tasks")
+async def get_task_queue(container: Container = Depends(get_container)) -> Dict[str, Any]:
+    mcp_server = getattr(container, "mcp_server", None)
+    if mcp_server is not None:
+        return await mcp_server.get_task_queue()
+    return {"tasks": []}
+
+
+@router.get("/telemetry")
+async def get_telemetry(container: Container = Depends(get_container)) -> Dict[str, Any]:
+    mcp_server = getattr(container, "mcp_server", None)
+    if mcp_server is not None:
+        return await mcp_server.get_telemetry()
+    return {"counters": {}}
 
 
 @router.post("/execute", response_model=McpExecuteResponse)
@@ -136,7 +191,7 @@ async def execute_mcp_tool(
     req: McpExecuteRequest,
     container: Container = Depends(get_container),
 ) -> McpExecuteResponse:
-    """Execute an MCP tool and return result plus structured UI action dispatch."""
+    """Execute a registered MCP tool or a built-in UI helper."""
     start_time = time.perf_counter()
     tool_name = req.tool
     params = req.parameters
@@ -169,17 +224,24 @@ async def execute_mcp_tool(
 
     elif tool_name == "execute_sandbox_code":
         code = params.get("code", "")
-        # Run safe evaluation or sandbox
         result = {"stdout": f"Executed code: {code[:40]}... (Status: 0 errors)", "exit_code": 0}
         ui_action = {"type": "OPEN_MODAL", "target": "code_compiler", "data": result}
 
     else:
-        # Check standard tool registry
-        registered_tool = await container.tool_registry.get(tool_name)
-        if registered_tool:
-            result = f"Tool '{tool_name}' invoked successfully."
+        mcp_server = getattr(container, "mcp_server", None)
+        if mcp_server is not None:
+            try:
+                payload = await mcp_server.call_tool(tool_name, params)
+                result = payload.get("result")
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
         else:
-            raise HTTPException(status_code=404, detail=f"MCP tool '{tool_name}' not found")
+            tool_reg = getattr(container, "tool_registry", None)
+            registered_tool = await tool_reg.get(tool_name) if tool_reg is not None else None
+            if registered_tool:
+                result = f"Tool '{tool_name}' invoked successfully."
+            else:
+                raise HTTPException(status_code=404, detail=f"MCP tool '{tool_name}' not found")
 
     elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
     return McpExecuteResponse(

@@ -12,6 +12,7 @@ means editing THIS file (or its config) - never the application layer.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 from dataclasses import dataclass, field
@@ -22,6 +23,8 @@ from dotenv import load_dotenv
 _root_env = Path(__file__).resolve().parents[4] / ".env"
 if _root_env.exists() and "pytest" not in sys.modules and "PYTEST_CURRENT_TEST" not in os.environ:
     load_dotenv(_root_env, override=False)
+
+logger = logging.getLogger(__name__)
 
 from nexus.application.autonomy.goals import (
     ApproveGoalUseCase,
@@ -205,6 +208,7 @@ class Container:
         self.config = config or Config()
         self._started = False
         self._shutdown = False
+        self._neo4j_schema_ready = False
 
         # ---- Security / observability (P1) ----
         self.secrets: SecretStore = self._build_secret_store()
@@ -233,6 +237,7 @@ class Container:
         self.concept_repo: ConceptRepository = self._build_concept_repo()
         self.working_memory: ShortTermMemory = self._build_working_memory()
         self.tool_registry: ToolRegistry = self._build_tool_registry()
+        self.mcp_server = self._build_mcp_server()
         self.deployer: DeploymentProvider | None = self._build_deployer()
         self.goal_repo: GoalRepository = self._build_goal_repo()
         self.autonomy_policy: AutonomyPolicy = self._build_autonomy_policy()
@@ -554,9 +559,28 @@ class Container:
 
     def _build_sandbox(self) -> Sandbox:
         if self.config.sandbox_backend != "subprocess":
+            backend_env = os.getenv("NEXUS_SANDBOX_BACKEND")
+            socket_available = Path("/var/run/docker.sock").exists()
+
+            if backend_env is None and not socket_available:
+                logger.warning(
+                    "================================================================================\n"
+                    "LOUD WARNING: Hardened Docker sandbox is the default backend, but\n"
+                    "/var/run/docker.sock is not accessible in this container and NEXUS_SANDBOX_BACKEND\n"
+                    "is unset. Deliberately falling back to SubprocessSandbox.\n"
+                    "To enable the hardened Docker sandbox in containers, activate the 'docker-sandbox'\n"
+                    "profile (e.g., docker compose --profile docker-sandbox up) to mount the socket.\n"
+                    "To silence this warning explicitly, set NEXUS_SANDBOX_BACKEND=subprocess.\n"
+                    "================================================================================"
+                )
+                from nexus.infrastructure.adapters.sandbox.subprocess_sandbox import SubprocessSandbox
+
+                return SubprocessSandbox()
+
             from nexus.infrastructure.adapters.sandbox.docker_sandbox import DockerSandbox
 
             return DockerSandbox()
+
         from nexus.infrastructure.adapters.sandbox.subprocess_sandbox import SubprocessSandbox
 
         return SubprocessSandbox()
@@ -610,6 +634,11 @@ class Container:
 
         return BuiltinToolRegistry(default_builtin_tools())
 
+    def _build_mcp_server(self):
+        from nexus.infrastructure.adapters.mcp.server import MCPServerAdapter
+
+        return MCPServerAdapter(container=self, workspace_root=str(Path(__file__).resolve().parents[4]))
+
     def _build_deployer(self) -> DeploymentProvider | None:
         platform = self.config.deploy_platform
         if platform == "railway":
@@ -661,11 +690,23 @@ class Container:
         return InMemoryCorticalColumnRegistry()
 
     def _build_policy_store(self) -> ActionPolicyStore:
+        if self.config.infra_backend != "memory":
+            from nexus.infrastructure.adapters.persistence.redis_action_policy_store import (
+                RedisActionPolicyStore,
+            )
+
+            return RedisActionPolicyStore(
+                redis_url=f"redis://{self.config.redis_host}:{self.config.redis_port}"
+            )
         from nexus.infrastructure.adapters.cognition import InMemoryActionPolicyStore
 
         return InMemoryActionPolicyStore()
 
     def _build_goal_repo(self) -> GoalRepository:
+        if self.config.infra_backend != "memory":
+            from nexus.infrastructure.adapters.persistence.redis_goal_repository import RedisGoalRepository
+
+            return RedisGoalRepository(redis_url=f"redis://{self.config.redis_host}:{self.config.redis_port}")
         from nexus.infrastructure.adapters.autonomy.goal_repository import InMemoryGoalRepository
 
         return InMemoryGoalRepository()
@@ -673,18 +714,38 @@ class Container:
     def _build_autonomy_policy(self) -> AutonomyPolicy:
         from nexus.infrastructure.adapters.autonomy.policy import DefaultAutonomyPolicy
 
-        return DefaultAutonomyPolicy(
+        policy = DefaultAutonomyPolicy(
             rate_limiter=self.rate_limiter,
             hourly_budget=self.config.autonomy_hourly_budget,
             allowlist=self.config.autonomy_allowlist,
         )
+        if self.config.infra_backend != "memory":
+            from nexus.infrastructure.adapters.persistence.redis_autonomy_policy import RedisAutonomyPolicy
+
+            return RedisAutonomyPolicy(
+                delegate=policy,
+                redis_url=f"redis://{self.config.redis_host}:{self.config.redis_port}",
+            )
+        return policy
 
     def _build_agent_repo(self) -> AgentRepository:
+        if self.config.infra_backend != "memory":
+            from nexus.infrastructure.adapters.persistence.redis_agent_repository import RedisAgentRepository
+
+            return RedisAgentRepository(
+                redis_url=f"redis://{self.config.redis_host}:{self.config.redis_port}"
+            )
         from nexus.infrastructure.adapters.swarm.repositories import InMemoryAgentRepository
 
         return InMemoryAgentRepository()
 
     def _build_swarm_repo(self) -> SwarmRepository:
+        if self.config.infra_backend != "memory":
+            from nexus.infrastructure.adapters.persistence.redis_swarm_repository import RedisSwarmRepository
+
+            return RedisSwarmRepository(
+                redis_url=f"redis://{self.config.redis_host}:{self.config.redis_port}"
+            )
         from nexus.infrastructure.adapters.swarm.repositories import InMemorySwarmRepository
 
         return InMemorySwarmRepository()
@@ -692,7 +753,18 @@ class Container:
     async def start(self) -> None:
         if self._started:
             return
-        self._started = True
+        ensure_constraints = getattr(self.concept_repo, "ensure_constraints", None)
+        if callable(ensure_constraints) and not self._neo4j_schema_ready:
+            from neo4j.exceptions import ServiceUnavailable
+
+            try:
+                await ensure_constraints()
+                self._neo4j_schema_ready = True
+            except ServiceUnavailable:
+                logger.warning(
+                    "Neo4j is unavailable during startup; graph persistence may lack schema protections",
+                    exc_info=True,
+                )
         await self.event_bus.start()
         await self.event_bus.subscribe(EventTopic.DREAM_COMPLETED, self._on_dream_completed)
         try:
@@ -701,6 +773,7 @@ class Container:
                 await self.memory_repo.ensure_collection(tenant_id=tenant_id)
         except Exception:
             pass  # Qdrant/Neo4j not available; in-memory mode
+        self._started = True
 
     async def _on_dream_completed(self, event: Event) -> None:
         """Record a completed dream cycle on the recent-activity feed."""
@@ -727,6 +800,16 @@ class Container:
             await self.concept_repo.close()
         if hasattr(self.working_memory, "close"):
             await self.working_memory.close()
+        for adapter in (
+            self.goal_repo,
+            self.policy_store,
+            self.autonomy_policy,
+            self.agent_repo,
+            self.swarm_repo,
+        ):
+            close = getattr(adapter, "close", None)
+            if callable(close):
+                await close()
 
 
 def _safe_eval(expr: str) -> float:

@@ -158,35 +158,11 @@ def resolve_confined_path(rel_or_abs_path: str | Path, must_exist: bool = False)
 
 TOOL_DEFS: list[dict[str, Any]] = [
     {
-        "id": "web_search",
-        "name": "web_search",
-        "description": "Search the web via DuckDuckGo and return top results.",
-        "input": {"query": {"type": "string"}},
-        "required": ["query"],
-        "output": {"results": {"type": "array"}},
-    },
-    {
         "id": "web_fetch",
         "name": "web_fetch",
         "description": "Fetch a URL and return its text content (up to max_chars).",
         "input": {"url": {"type": "string"}, "max_chars": {"type": "integer"}},
         "required": ["url"],
-    },
-    {
-        "id": "calculator",
-        "name": "calculator",
-        "description": "Evaluate a math expression safely.",
-        "input": {"expression": {"type": "string"}},
-        "required": ["expression"],
-        "output": {"result": {"type": "number"}},
-    },
-    {
-        "id": "run_python",
-        "name": "run_python",
-        "description": "Execute Python code in a sandbox and return stdout/stderr.",
-        "input": {"code": {"type": "string"}},
-        "required": ["code"],
-        "output": {"output": {"type": "string"}, "error": {"type": "string"}},
     },
     {
         "id": "run_shell",

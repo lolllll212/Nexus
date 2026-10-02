@@ -11,12 +11,14 @@ requesting tenant. A Neo4j database can also be allocated per tenant via the
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 from nexus.domain.entities.concept import Concept, SynapticConnection
 from nexus.domain.entities.memory import Memory, MemoryType
 from nexus.domain.ports.memory_repository import ConceptRepository
 from nexus.domain.value_objects.synapse import ConnectionType, SynapseConfig
+from nexus.infrastructure.adapters.persistence.neo4j_migration import apply_neo4j_migrations
 
 
 class Neo4jConceptRepository(ConceptRepository):
@@ -39,6 +41,27 @@ class Neo4jConceptRepository(ConceptRepository):
             self._driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
         self._database = database
         self._synapse = synapse or SynapseConfig()
+        self._schema_initialized = False
+        self._schema_lock = asyncio.Lock()
+        self._schema_migrations: list[str] = []
+
+    async def migrate(self) -> list[str]:
+        """Apply the idempotent schema migrations once per repository instance."""
+        return await self.ensure_constraints()
+
+    async def ensure_constraints(self) -> list[str]:
+        """Apply schema constraints and indexes once before repository use."""
+        if self._schema_initialized:
+            return list(self._schema_migrations)
+        async with self._schema_lock:
+            if self._schema_initialized:
+                return list(self._schema_migrations)
+            self._schema_migrations = await apply_neo4j_migrations(
+                self._driver,
+                database=self._database,
+            )
+            self._schema_initialized = True
+            return list(self._schema_migrations)
 
     async def close(self) -> None:
         await self._driver.close()

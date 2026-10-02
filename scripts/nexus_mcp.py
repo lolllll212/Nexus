@@ -42,7 +42,7 @@ from nexus.infrastructure.adapters.swarm.consensus import ConsensusProtocol  # n
 from nexus.infrastructure.adapters.swarm.planning import PlanningBoard  # noqa: E402
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_NAME = "nexus-mcp"
+SERVER_NAME = "idle"
 SERVER_VERSION = "1.0.0"
 
 
@@ -363,6 +363,32 @@ TOOLS_SPEC = [
         },
     },
     {
+        "name": "list_tasks",
+        "description": "List all tasks in the swarm queue with their status and assignee",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "enum": ["pending", "claimed", "resolved", "all"]},
+            },
+        },
+    },
+    {
+        "name": "agent_status",
+        "description": "Report agent liveness and current work across the swarm",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "list_plans",
+        "description": "List active plan records and progress for the plan-first gate",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"status": {"type": "string", "enum": ["draft", "in_progress", "done", "abandoned", "all"]}},
+        },
+    },
+    {
         "name": "git_status",
         "description": "Check current workspace git status",
         "inputSchema": {
@@ -592,6 +618,44 @@ def handle_tool_call(name: str, arguments: dict[str, Any]) -> str:
         if prop is None:
             return f"Error: unknown proposal {arguments.get('proposal_id', '')}"
         return f"Voted on {prop.id}: status={prop.status}, verdict={prop.verdict}"
+
+    if name == "list_tasks":
+        tasks = state.get("task_queue", [])
+        status_filter = arguments.get("status", "all")
+        if status_filter != "all":
+            tasks = [t for t in tasks if t.get("status") == status_filter]
+        if not tasks:
+            return "No tasks match the requested filter."
+        lines = [f"Task queue ({len(tasks)}):"]
+        for t in tasks:
+            assignee = t.get("claimed_by") or t.get("for") or "unassigned"
+            lines.append(
+                f"  [{t.get('id', 'unknown')}] {t.get('status', 'unknown')} | {t.get('description', '')[:80]} | claimed_by={assignee}"
+            )
+        return "\n".join(lines)
+
+    if name == "agent_status":
+        agents = state.get("agents", {})
+        if not agents:
+            return "No agents are currently registered."
+        lines = ["Agent status:"]
+        for agent, info in sorted(agents.items()):
+            task = info.get("current_task") or "-"
+            lines.append(f"  {agent}: status={info.get('status', 'unknown')} task={task}")
+        return "\n".join(lines)
+
+    if name == "list_plans":
+        board = _planning_board()
+        plans = board.list_plans()
+        status_filter = arguments.get("status", "all")
+        if status_filter != "all":
+            plans = [p for p in plans if p.status == status_filter]
+        if not plans:
+            return "No plans match the requested filter."
+        lines = [f"Plans ({len(plans)}):"]
+        for p in plans:
+            lines.append(f"  [{p.id}] {p.status} | {p.agent} | {p.progress()} | {p.title[:80]}")
+        return "\n".join(lines)
 
     if name == "git_status":
         r = subprocess.run(["git", "status", "--short"], capture_output=True, text=True, cwd=str(main_root()))
