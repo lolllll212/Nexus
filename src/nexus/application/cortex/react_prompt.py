@@ -41,7 +41,7 @@ TOOL_CALL: {"tool_id": "run_python", "params": {"code": "import ast; tree = ast.
 
 ### git_info
 Get git repository info: branch, last commit, status.
-TOOL_CALL: {"tool_id": "git_info", {"repo_path": "."}}
+TOOL_CALL: {"tool_id": "git_info", "params": {"repo_path": "."}}
 
 ### calculator
 Evaluate a math expression.
