@@ -27,6 +27,7 @@ class OpenAIProvider(StreamingLLMProvider):
         temperature: float = 0.7,
         base_url: str | None = None,
         default_max_tokens: int = 8192,
+        timeout: float | None = None,
     ) -> None:
         # Local servers (Ollama / LM Studio) don't check the key; accept any value.
         self._api_key = api_key or "local-no-key"
@@ -34,13 +35,19 @@ class OpenAIProvider(StreamingLLMProvider):
         self._temperature = temperature
         self._base_url = base_url
         self._default_max_tokens = default_max_tokens
+        # Optional per-instance timeout override; None keeps the local/remote
+        # heuristic below. Local LLM inference needs far more than a socket
+        # check - pass e.g. timeout=120 for quantized-model generation.
+        self._timeout_override = timeout
 
     def _client(self):
         from openai import AsyncOpenAI
 
         # Local endpoints use a 2.5s timeout/one retry; remote endpoints use 20s/two retries.
         is_local = bool(self._base_url and ("localhost" in self._base_url or "127.0.0.1" in self._base_url))
-        timeout = 2.5 if is_local else 20.0
+        timeout = (
+            self._timeout_override if self._timeout_override is not None else (2.5 if is_local else 20.0)
+        )
         max_retries = 1 if is_local else 2
 
         if self._base_url:

@@ -497,12 +497,29 @@ class Container:
             base_url = self.config.llm_base_url
             api_key = self.config.openai_api_key
 
-        return OpenAIProvider(
+        primary: LLMProvider = OpenAIProvider(
             api_key=api_key,
             model=self.config.llm_model,
             base_url=base_url,
             default_max_tokens=self.config.llm_max_tokens,
         )
+        if os.environ.get("NEXUS_MODEL_ROUTING", "").lower() in ("1", "true", "yes"):
+            from nexus.infrastructure.adapters.llm.routing_provider import (
+                RoutingProvider,
+                TokenBudgetMiddleware,
+                build_local_tier,
+            )
+
+            local_high, local_low = build_local_tier()
+            routed: LLMProvider = RoutingProvider(primary=primary, local_high=local_high, local_low=local_low)
+            ledger = Path(os.environ.get("NEXUS_TOKEN_BUDGET_LEDGER", "token_budget_ledger.json"))
+            return TokenBudgetMiddleware(
+                inner=routed,
+                fallback=local_low,
+                ledger_path=ledger,
+                daily_budget=int(os.environ.get("NEXUS_DAILY_TOKEN_BUDGET", "500000")),
+            )
+        return primary
 
     def _build_background_llm(self) -> LLMProvider:
         from nexus.infrastructure.adapters.llm.openai_provider import OpenAIProvider

@@ -40,6 +40,11 @@ class EventTopic(Enum):
     VALENCE_TAGGED = "cognition.valence_tagged"
     GRID_NAVIGATION = "cognition.grid_navigation"
     HEX_ZOOM = "cognition.hex_zoom"
+    AGENT_MEMORY_STORED = "agent_memory.stored"
+    CONSENSUS_PROPOSED = "consensus.proposed"
+    CONSENSUS_RESOLVED = "consensus.resolved"
+    HEAL_ITERATION = "heal.iteration"
+    MODEL_ROUTED = "model.routed"
 
 
 class EventPriority(Enum):

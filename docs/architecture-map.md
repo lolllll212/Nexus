@@ -200,7 +200,23 @@ mentions a variable the code never reads.
 | `NEXUS_PATTERN_INTERVAL_SECONDS` | Seconds between pattern-detection runs (`1800`). |
 | `NEXUS_PLUGINS_DIR` | Directory scanned by `PluginLoader` (`plugins`). |
 | `NEXUS_WORKSPACE_ROOT` | Root directory the file tools are confined to (`.`). |
-| `NEXUS_WEBHOOK_URL` | Resolved into `config.webhook_url`, and also readable from the secret store. **Plumbed but not consumed** — no outbound delivery reads it yet, so setting it changes nothing today. |
+| `NEXUS_WEBHOOK_URL` | Resolved into `config.webhook_url`, consumed by `scripts/notify.py` webhook delivery (daemon-thread, 5s socket timeout, 10s hard join). |
+
+### Multi-agent upgrade layer
+
+| Variable | Effect |
+|---|---|
+| `NEXUS_MODEL_ROUTING` | `1`/`true`/`yes` wraps the primary LLM in `RoutingProvider` + `TokenBudgetMiddleware` (complexity-based routing with local fallback). |
+| `NEXUS_LOCAL_BACKEND` | Local tier for the router: `ollama` (default), `lmstudio`/`openai-compatible` for an OpenAI-compatible server, or `none` to disable. |
+| `NEXUS_LMSTUDIO_URL` | Base URL of the LM Studio server when `NEXUS_LOCAL_BACKEND=lmstudio` (`http://127.0.0.1:1234/v1`). |
+| `NEXUS_LMSTUDIO_MODEL_HIGH` | LM Studio model for HIGH-complexity fallbacks (`qwen/qwen3.5-9b`). |
+| `NEXUS_LMSTUDIO_MODEL_LOW` | LM Studio model for LOW-complexity routine tasks (`deepseek-r1-distill-qwen-7b`). |
+| `NEXUS_LOCAL_TIMEOUT` | Seconds the local tier allows per completion (`120`) - local inference needs far more than a socket check. |
+| `NEXUS_OLLAMA_URL` | Base URL of the local Ollama server when `NEXUS_LOCAL_BACKEND=ollama` (`http://127.0.0.1:11434`). |
+| `NEXUS_LOCAL_MODEL_HIGH` | Ollama model for HIGH-complexity fallbacks (`qwen3.5:9b`). |
+| `NEXUS_LOCAL_MODEL_LOW` | Ollama model for LOW-complexity routine tasks (`qwen2.5-coder:7b-instruct`). |
+| `NEXUS_DAILY_TOKEN_BUDGET` | Per-agent daily token cap for the budget middleware (`500000`); over-budget traffic routes down to the local tier. |
+| `NEXUS_TOKEN_BUDGET_LEDGER` | Path of the per-day token spend ledger (`token_budget_ledger.json`), kept to the last 30 days. |
 
 ## See also
 

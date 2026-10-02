@@ -72,6 +72,15 @@ Tests use `tests/fakes/` (package, not file) — `FakeContainer` wires real use 
 - **Generated-tool validation** (`generate_tool.py:execute()`): Previously only checked `error is None`. Now validates actual output matches `expected_outputs`.
 - **Sandbox default**: `DockerSandbox` is now the production default. Set `NEXUS_SANDBOX_BACKEND=subprocess` to fall back to subprocess.
 
+## Multi-Agent Upgrade Layer
+
+Four systems for 24/7 autonomous operation (all state shared across worktrees via the main-repo rendezvous):
+
+1. **Content-addressable memory** (`scripts/memory_comm.py`, store: `src/nexus/infrastructure/adapters/persistence/agent_memory_store.py`). Append summaries/diffs once, pull only what's relevant by TF-IDF. `put --agent <you> --kind report --text "..." --tags ci,docker` (idempotent by content), `query --q "docker ci red"`, `diff --from-id --to-id`, `latest`, `show --id`. Never re-paste full history between loops.
+2. **Headless IDE bridge** (`scripts/ide_bridge.py`, adapter: `src/nexus/infrastructure/adapters/eventbus/websocket_event_bus.py`). WebSocket bus on `ws://127.0.0.1:8765`: push events (new tasks, consensus verdicts) + headless workspace ops (`open`/`run`/`edit` via `code` CLI). The VS Code extension (`vscode-nexus-queue/extension.js`) connects to it and falls back to file polling when the bridge is down.
+3. **Model routing + token budget** (`src/nexus/infrastructure/adapters/llm/routing_provider.py`). `NEXUS_MODEL_ROUTING=1` wraps the primary LLM: HIGH-complexity → primary, LOW-complexity (lint, boilerplate, test stubs) → local tier via `NEXUS_LOCAL_BACKEND` (`ollama` at `NEXUS_OLLAMA_URL`, or `lmstudio` — the OpenAI-compatible server at `NEXUS_LMSTUDIO_URL`, default `http://127.0.0.1:1234/v1`, models `qwen3.5-9b` / `qwen2.5-coder-7b-instruct` / `deepseek-coder-6.7b-instruct`), with fallback in both directions and a per-agent daily token cap (`NEXUS_DAILY_TOKEN_BUDGET`) that forces over-budget traffic local.
+4. **Consensus + self-healing** (`scripts/consensus.py`, `scripts/heal_loop.py`, core: `src/nexus/infrastructure/adapters/swarm/consensus.py`). No patch is written to disk without consensus: propose → review (astra/tron/xenom, `request_changes` blocks) → CEO deciding vote. The heal loop runs pytest, pipes ONLY the traceback + relevant source slices to the router as a targeted patch instruction, and files the result as a consensus draft. Verdict rules are deterministic and order-independent.
+
 ## Ops — Tier 3 additions
 
 - **`nexus eval`** — golden-set eval vs the live LLM. Config via `NEXUS_EVAL_BASE_URL` (fallback `NEXUS_LLM_BASE_URL`), `NEXUS_EVAL_MODEL` (`qwen2.5-coder-7b-instruct`), `NEXUS_EVAL_API_KEY` (`local-no-key`), `NEXUS_EVAL_MIN_PASS_RATE` (0.0); `python -m nexus.eval --output … --min-pass-rate …`.
