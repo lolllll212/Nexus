@@ -83,6 +83,15 @@ Four systems for 24/7 autonomous operation (all state shared across worktrees vi
 3. **Model routing + token budget** (`src/nexus/infrastructure/adapters/llm/routing_provider.py`). `NEXUS_MODEL_ROUTING=1` wraps the primary LLM: HIGH-complexity → primary, LOW-complexity (lint, boilerplate, test stubs) → local tier via `NEXUS_LOCAL_BACKEND` (`ollama` at `NEXUS_OLLAMA_URL`, or `lmstudio` — the OpenAI-compatible server at `NEXUS_LMSTUDIO_URL`, default `http://127.0.0.1:1234/v1`, models `qwen3.5-9b` / `qwen2.5-coder-7b-instruct` / `deepseek-coder-6.7b-instruct`), with fallback in both directions and a per-agent daily token cap (`NEXUS_DAILY_TOKEN_BUDGET`) that forces over-budget traffic local.
 4. **Consensus + self-healing** (`scripts/consensus.py`, `scripts/heal_loop.py`, core: `src/nexus/infrastructure/adapters/swarm/consensus.py`). No patch is written to disk without consensus: propose → review (astra/tron/xenom, `request_changes` blocks) → CEO deciding vote. The heal loop runs pytest, pipes ONLY the traceback + relevant source slices to the router as a targeted patch instruction, and files the result as a consensus draft. Verdict rules are deterministic and order-independent.
 
+## MCP Server (standard protocol)
+
+`scripts/nexus_mcp.py` speaks **standard MCP (JSON-RPC 2.0 over stdio, protocolVersion 2024-11-05)** — any MCP client (VS Code Copilot, Antigravity, opencode) connects natively with zero copy-paste. Wired in `.vscode/mcp.json` + `.agent/mcp_config.json` as `python scripts/nexus_mcp.py`.
+
+- **Resources** (read): `nexus://tasks/pending` (tickets), `nexus://state/current` (git + agents), `nexus://board/plans`, `nexus://board/consensus`, `nexus://memory/recent`
+- **Tools** (the blackboard pattern): `next_task(agent_id)` — capability-based auto-pick via `OWNER_MAP`; `claim_task`, `resolve_task(evidence)`, `heartbeat`, `progress`, `ask_ceo`, `check_inbox`, `plan_create/begin/step/finish/check_file` (the plan-first gate as tools), `memory_put/query`, `consensus_propose/review/vote`, `git_status`
+- **CRITICAL: stdout is the protocol channel** — every reuse of an agent_comm cmd_ function must be wrapped in `contextlib.redirect_stdout` or its prints corrupt the stream. Reuse the real APIs: `PlanningBoard.list_plans()` (not list_all), `AgentMemoryStore.latest(n=)`, `store.put()` returns `(chunk, created)`, `board.begin/finish/complete_step` return `(plan, error)`, `cp.review(proposal_id, reviewer, verdict, note)`, `cp.vote(proposal_id, agent, choice)`.
+- Hermetic tests: `tests/unit/test_nexus_mcp.py` (subprocess round-trip: handshake, 18 tools, resources, next_task, error codes -32700/-32601/-32602).
+
 ## Ops — Tier 3 additions
 
 - **`nexus eval`** — golden-set eval vs the live LLM. Config via `NEXUS_EVAL_BASE_URL` (fallback `NEXUS_LLM_BASE_URL`), `NEXUS_EVAL_MODEL` (`qwen2.5-coder-7b-instruct`), `NEXUS_EVAL_API_KEY` (`local-no-key`), `NEXUS_EVAL_MIN_PASS_RATE` (0.0); `python -m nexus.eval --output … --min-pass-rate …`.
