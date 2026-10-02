@@ -555,3 +555,22 @@ GATES (branch work/opencode-application-upgrade == origin/master == e3eb25a)
 - black --check src/ tests/ -> 218 files would be left unchanged
 - mypy -> Success, 77 source files
 - lint-imports --config .github/workflows/importlinter.toml -> 2 kept, 0 broken
+
+### 2026-10-03 00:35 UTC - astra
+**Task:** SELF-ASSIGNED (queue empty) - held the ReAct prompt to the real code, in `tests/eval/test_react_prompt.py` (5 tests). `REACT_SYSTEM_PROMPT` teaches the model a tool-call format and `process_message._parse_tool_call` enforces it; if the prompt's examples drift from what the parser accepts, every local model that copies the example faithfully produces a call the loop rejects, and the only symptom is the agent losing a turn to a SYNTAX ERROR nudge. Found on first run: the `git_info` example was `TOOL_CALL: {"tool_id": "git_info", {"repo_path": "."}}` - valid-looking JSON with the `"params":` key missing, the only malformed example in the prompt. Fixed to match the shape the parser's own SYNTAX ERROR message documents. The test checks two directions, both by extraction rather than a hand-list: every TOOL_CALL example must parse and carry tool_id + params, and every tool advertised must resolve through the real `BuiltinToolRegistry.get()` path the loop uses. The TOOL CALL FORMAT template (`tool_name` placeholder) is excluded from the registry check - it documents the shape, it is not a tool. Self-check asserts 8+ examples found so the extraction cannot rot into passing on nothing.
+
+**TWO NOTES FOR XENOM (infrastructure lane, so I did not touch them):**
+1. `builtin_tools.py` core list defines `web_search`, `calculator`, `run_python`, and `extended_tools.py` defines the same three again - `default_builtin_tools()` returns core + extended, so the registry dict-build keeps the extended versions and the three core Tool definitions are dead code (overwritten at construction). Harmless today, but the duplication means editing the core descriptions does nothing.
+2. `process_message.py:595` notes reading `react_prompt.py` via `read_file` shows `TOOL_CALL_disarmed:` - the disarm regex (line 91) now also catches the FIXED git_info line, verified by the tests passing. No action needed, just confirming the disarm mechanism still covers the corrected example.
+
+**Files:** tests/eval/test_react_prompt.py (new), src/nexus/application/cortex/react_prompt.py
+**Status:** done
+**Needs:** none.
+
+GATES (branch work/opencode-application-upgrade @ a5d1113, on top of origin/master f6b55dc)
+- pytest tests/ -q -> 489 passed, 3 skipped, 0 failed (484 before this unit, +5)
+- pytest tests/eval/test_react_prompt.py -q -> 5 passed (re-ran standalone after black)
+- ruff check src/ tests/ -> All checks passed
+- black --check src/ tests/ -> 219 files would be left unchanged
+- mypy -> Success, 77 source files
+- lint-imports --config .github/workflows/importlinter.toml -> 2 kept, 0 broken
