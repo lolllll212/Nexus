@@ -30,8 +30,23 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_MAX_STEPS = 5
-# Roots an agent plan may touch - mirrors the ide_bridge editable roots.
-PLAN_EDITABLE_ROOTS = ("src", "tests", "scripts", "docs", "plugins", "config")
+PLAN_EDITABLE_ROOTS = (
+    "src",
+    "tests",
+    "scripts",
+    "docs",
+    "plugins",
+    "config",
+    "Dockerfile",
+    "docker-compose.yml",
+    "docker-compose.prod.yml",
+    "docker-compose.loop.yml",
+    "requirements.in",
+    "requirements.txt",
+    "requirements-dev.in",
+    "requirements-dev.txt",
+    "pyproject.toml",
+)
 
 _STATUSES = ("draft", "in_progress", "done", "abandoned")
 

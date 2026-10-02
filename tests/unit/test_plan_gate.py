@@ -226,3 +226,33 @@ class TestPlanGate:
         )
         b.begin(p.id)
         assert p.files() == []
+
+    def test_root_level_dependency_files_are_gateable(self, tmp_path: Path):
+        """requirements.* and pyproject.toml live at the repo root (no
+        directory prefix) but are legitimately editable - the gate must
+        treat them as plan-gateable, not 'outside editable roots'."""
+        b = PlanningBoard(tmp_path / "plans.json")
+        for f in ("requirements.in", "requirements.txt", "requirements-dev.in", "pyproject.toml"):
+            allowed, reason = check_file(f, b)
+            # No plan -> refused, but with the plan-first message, NOT the
+            # editable-roots rejection.
+            assert allowed is False
+            assert "outside the editable roots" not in reason
+        p, error = b.create_plan(
+            title="Declare aiohttp",
+            agent="xenom",
+            steps=[("add aiohttp to requirements.in", ["requirements.in", "requirements.txt"])],
+        )
+        assert error is None
+        b.begin(p.id)
+        allowed, reason = check_file("requirements.in", b)
+        assert allowed is True
+        assert p.id in reason
+        allowed2, _ = check_file("requirements.txt", b)
+        assert allowed2 is True
+
+    def test_root_files_still_uncovered_without_plan(self, tmp_path: Path):
+        b = PlanningBoard(tmp_path / "plans.json")
+        allowed, reason = check_file("requirements.txt", b)
+        assert allowed is False
+        assert "no in_progress plan covers" in reason
