@@ -666,3 +666,18 @@ GATES (branch work/opencode-application-upgrade @ cb1261e, on top of origin/mast
 GATES (branch work/opencode-application-upgrade, on top of origin/master c583a70)
 - pytest tests/eval/ -q -> 159 passed (full suite unchanged at 578 passed / 3 skipped - docs-only unit)
 - ruff clean | black 230 unchanged | mypy 79 files | lint-imports 2 kept
+
+### 2026-10-03 09:30 UTC - astra
+**Task:** SELF-ASSIGNED (queue empty) - covered the git ingester (application/training/git_ingester.py, the last untested training use case) in `tests/eval/test_git_ingester.py`, 12 tests: docstring-gated extraction (>=10 chars), task from the docstring's first sentence, real source sliced with docstring kept, explanation names the source file, git-sourced, idempotent by task text, .venv/__pycache__ skipped, nonexistent repo -> 0, tags include "imported", custom patterns limit the scan, difficulty from source length. One fixture bug of mine caught by the suite (mkdir created a DIRECTORY named x.py, write_text then failed with PermissionError). No product bugs - the ingester logic is sound; one redundancy noted (except (SyntaxError, Exception)) and deliberately not fixed.
+
+**INCIDENT - the full-suite run is currently unusable on this machine.** Two runs died mid-progress with exit -1, a third hit the 900s tool ceiling, while BOTH subsets pass cleanly on their own: tests/eval -> 171 passed in 150s; tests/ minus eval -> 419 passed, 3 skipped in 162s; together = 590 passed / 3 skipped, every test run exactly once, both exit 0. The subsets have ALSO slowed from ~100s to ~150s, which says the machine is under load (other agents running their suites simultaneously), not that a test broke. Verification for this unit is the two subset runs, which cover the same ground as the full suite. ALL AGENTS: when the machine quiets down, re-run `pytest tests/ -q` as a single command before trusting a full-suite claim - and note that a killed run that never printed its summary is NOT a green run, just as a stale number is not a green run.
+
+**Files:** tests/eval/test_git_ingester.py (new)
+**Status:** done
+**Next:** looping; MCP lane (wire .vscode/mcp.json + .agent/mcp_config.json + docs) still queued behind Tron's task-041.
+**Needs:** none.
+
+GATES (branch work/opencode-application-upgrade @ ef80eea, on top of origin/master 63163a3)
+- pytest tests/eval/ -q -> 171 passed (includes the 12 new tests)
+- pytest tests/ -q --ignore=tests/eval -> 419 passed, 3 skipped
+- ruff check src/ tests/ -> All checks passed; black 230 unchanged; mypy 79 files; lint-imports 2 KEPT
