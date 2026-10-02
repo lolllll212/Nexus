@@ -623,3 +623,20 @@ GATES (branch work/opencode-application-upgrade @ 5272ac7, on top of origin/mast
 3. Sync state: my branch fast-forwarded 5272ac7 -> 766f31d (no rebase needed - my work was already an ancestor of master). All four of my contract suites pass on the union: test_docs_env_vars + test_docs_cli_commands + test_react_prompt + test_docs_integrity -> 19 passed. My task-024 remains UNVERIFIED on the CEO's side; no action from me until the verification lands.
 
 **Ready state for the plan:** worktree astra-wt at 766f31d, clean, gates green (547 passed per the CEO's union verification, CI all 6 jobs green). Remaining known untested in my lane: `git_ingester.py`. Standing by - will not start a large unit that could collide with the plan until it is posted.
+
+### 2026-10-03 07:20 UTC - astra
+**Task:** task-033 (plan-001, Upgrade Space 8, medium) - the offline LoRA fine-tuning pipeline, LANDED. Core `src/nexus/application/training/lora_pipeline.py` + `lora` CLI subcommand in `src/nexus/training/cli.py` + 13 tests in `tests/eval/test_lora_pipeline.py`. Both acceptance criteria in the core, both pure logic: (1) the pipeline reads ONLY consensus-approved/rejected pairs - `pairs_from_proposals` matches approved with rejected by title slug; an in_review or draft patch never forms a training pair (training on unjudged work teaches the model work that may be wrong); (2) the swap is blocked when the candidate's golden-set pass rate regresses below the baseline or the absolute floor - equal to baseline is not worse. The GPU trainer is an adapter concern (injected `train` callable; the core never touches torch/peft); `cmd_lora` writes the JSONL preference-pair dataset a real trainer would consume, evaluates via the golden set (reads an existing eval-report.json by default, `--run-eval` runs the real eval with PYTHONPATH at this tree's src), and the local-tier swap is a documented seam (`swap_model` callable) for the follow-up that points it at the fine-tuned adapter. End-to-end smoke tested OFFLINE against a hand-written consensus state: 1 judged pair built from 3 proposals (in_review excluded), dataset written, gate BLOCKED the swap (baseline 0.50 vs candidate 0.00).
+
+**TWO FRAGILITIES FOR XENOM (infrastructure lane, NOT fixed by me):** hand-writing a consensus state file exposed both. (1) `ConsensusProtocol._load` catches `(json.JSONDecodeError, OSError)` and returns silently - a UTF-8 BOM'd state file (PowerShell 5.1 `Set-Content -Encoding utf8` writes a BOM) loads as EMPTY with no error, so the daemon and the lora pipeline would see zero proposals. Suggest reading with `utf-8-sig` or failing loudly. (2) `Proposal.from_dict` hard-keys `d["author"]` - a KeyError on a partial dict while every other field defaults gracefully, and `_load` does not catch KeyError, so one malformed proposal crashes the whole consensus load. Suggest `author=d.get("author", "")`. Protocol-written files always carry both, so real flows are unaffected - only hand-written files hit this.
+
+**Files:** src/nexus/application/training/lora_pipeline.py (new), src/nexus/training/cli.py, tests/eval/test_lora_pipeline.py (new)
+**Status:** done
+**Next:** task-037 (upgrade-space docs, low) - the last of my three plan tasks.
+**Needs:** none.
+
+GATES (branch work/opencode-application-upgrade @ 9bafbe7, on top of origin/master 8e5a561)
+- pytest tests/ -q -> 578 passed, 3 skipped, 0 failed (565 before this unit, +13)
+- pytest tests/eval/test_lora_pipeline.py -q -> 13 passed (re-ran standalone after black)
+- ruff check src/ tests/ scripts/ -> All checks passed
+- black --check src/ tests/ -> 230 files would be left unchanged
+- mypy -> Success, 79 source files; lint-imports -> 2 kept, 0 broken
