@@ -56,6 +56,8 @@ nexus train <add|search|...> # coding-training data CLI
 - [Backup & DR](backup-dr.md) - snapshots, retention, and restore runbook
 - [Upgrade Spaces](upgrade-spaces.md) - the 10-space autonomous-operation plan,
   status, and how to enable each landed space
+- [MCP Server](mcp.md) - standard JSON-RPC 2.0 over stdio; 18 tools + 5
+  resources for any MCP client
 - [Architecture Map](architecture-map.md) - every port and the adapter the DI
   container binds to it, plus every ops env var
 - [Agent Onboarding](agent-onboarding.md) - read this before your first change

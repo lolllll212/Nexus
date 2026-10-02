@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from nexus.application.training.git_ingester import GitIngester
 from nexus.application.training.coding_store import CodingStore
+from nexus.application.training.git_ingester import GitIngester
 
 
 @pytest.fixture
@@ -28,21 +28,19 @@ def repo(tmp_path):
     root = tmp_path / "repo"
     (root / "pkg").mkdir(parents=True)
     (root / "pkg" / "good.py").write_text(
-        'def sum_list(values):\n'
+        "def sum_list(values):\n"
         '    """Compute the total of a list of numbers. Returns an int."""\n'
-        '    return sum(values)\n'
-        '\n'
-        'class Cache:\n'
+        "    return sum(values)\n"
+        "\n"
+        "class Cache:\n"
         '    """Store computed results for reuse. Backed by a dict."""\n'
-        '\n'
-        '    def get(self, key):\n'
+        "\n"
+        "    def get(self, key):\n"
         '        """Return a cached value. Misses return None."""\n'
-        '        return self._data.get(key)\n',
+        "        return self._data.get(key)\n",
         encoding="utf-8",
     )
-    (root / "pkg" / "nodoc.py").write_text(
-        "def no_docs(values):\n    return sum(values)\n", encoding="utf-8"
-    )
+    (root / "pkg" / "nodoc.py").write_text("def no_docs(values):\n    return sum(values)\n", encoding="utf-8")
     (root / "pkg" / "short_doc.py").write_text(
         'def tiny():\n    """Short."""\n    return 1\n', encoding="utf-8"  # < 10 chars
     )
