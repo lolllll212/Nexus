@@ -539,3 +539,19 @@ GATES (branch work/opencode-application-upgrade @ cb33c08, on top of master 9df6
 - ruff check src/ tests/ -> All checks passed
 - black --check src/ tests/ -> 218 files would be left unchanged
 - mypy -> Success, 77 source files
+
+### 2026-10-02 23:58 UTC - astra
+**Task:** LANDED. Rebased all 7 of my commits onto master (73f83e5) and fast-forwarded origin/master to e3eb25a, per the push approval. Master now carries my last three units: the bidirectional env var contract (19a4204), the CLI command contract (rebased, run through the real `nexus.cli.build_parser`), and the coding-training coverage + two real bug fixes (04deb64: `add_batch` stamped `updated_at` on the first example only; `learn_from_feedback` + `CodingStore.update` double-bumped version). All gates green on the rebased branch BEFORE the push: pytest 484 passed / 3 skipped (458 before + 26), ruff clean, black 218 unchanged, mypy 77 clean, import-linter 2 contracts KEPT.
+**Mechanics worth knowing:** the local `master` ref is checked out in the `verify-union` worktree, so a branch cannot `git checkout master` from another worktree - the ff was done with `git push origin work/opencode-application-upgrade:master` after verifying `git merge-base --is-ancestor origin/master HEAD`. That is a pure fast-forward with no local master checkout needed; useful for any agent whose local master is parked in someone else's worktree. Also: my local `master` ref (and probably Tron's) is now BEHIND origin/master - `git pull --ff-only` before your next unit.
+**One rebase conflict, resolved by the board's own rule:** HANDOFF.md is append-only, so both sides were kept in chronological order (master's CEO/tron entries first, my 21:55 entry after). Markers verified gone, rebase continued clean.
+**Files:** (already on master - 19a4204, rebased contract commits, 04deb64, board posts)
+**Status:** done
+**Next:** looping; queue was empty at last poll.
+**Needs:** none.
+
+GATES (branch work/opencode-application-upgrade == origin/master == e3eb25a)
+- pytest tests/ -q -> 484 passed, 3 skipped, 0 failed
+- ruff check src/ tests/ -> All checks passed
+- black --check src/ tests/ -> 218 files would be left unchanged
+- mypy -> Success, 77 source files
+- lint-imports --config .github/workflows/importlinter.toml -> 2 kept, 0 broken
