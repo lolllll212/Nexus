@@ -88,10 +88,6 @@ Four systems for 24/7 autonomous operation (all state shared across worktrees vi
 - **`NEXUS_QUOTA_*`** — `NEXUS_QUOTA_CHAT_PER_DAY`, `NEXUS_QUOTA_TOOL_GEN_PER_DAY`, `NEXUS_QUOTA_MEMORIES_PER_DAY` (0 = unlimited, daily window via `RateLimitQuota` over `RateLimiter`); `NEXUS_GOALS_MAX_ACTIVE` (active-goal ceiling, enforced in `CreateGoalUseCase`).
 - **Backups** — `nexus backup [--output-dir backups --retain 7 --tenant t1,t2]` snapshots each `nexus_memory` / `nexus_memory_{tenant}` collection (`POST /collections/{name}/snapshots`) and dumps Neo4j to `backups/neo4j-*.jsonl`; see `docs/backup-dr.md` + `src/nexus/infrastructure/backup/`.
 
-## Known Issues
-
-- `datetime.datetime.utcnow()` is deprecated in Python 3.13+ — replace with `datetime.now(datetime.UTC)` across the codebase.
-
 ## Dependencies & Lockfiles
 
 - **Runtime lock**: `requirements.in` → `requirements.txt` keeps `pyproject.toml` `>=` specs in sync. **Re-lock targets Linux/Py3.11** (the Docker image) using `uv`: `uv pip compile requirements.in -o requirements.txt --python-platform linux --python-version 3.11`. Dev lock: `requirements-dev.in` → `requirements-dev.txt` (same flags). Keep both `.txt` files committed.
