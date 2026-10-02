@@ -55,6 +55,7 @@ class CompressionUseCase:
     ) -> CompressionResult:
         result = CompressionResult(0, 0, 0)
         result.episodes_processed = len(episodes)
+        distilled: list[Memory] = []
 
         # Batch the episodes to keep each LLM call within token budget
         for i in range(0, len(episodes), batch_size):
@@ -71,6 +72,9 @@ class CompressionUseCase:
                     ),
                 )
             except Exception:
+                # This batch's episodes must NOT be marked consolidated: their
+                # content was never distilled, and flagging them done would lose
+                # it on cold storage. Leave them for a later dream cycle.
                 continue
 
             for fact in structured.get("facts", []):
@@ -83,8 +87,12 @@ class CompressionUseCase:
                 await self._memory_repo.store(semantic, tenant_id=tenant_id)
                 result.semantic_fragments_created += 1
 
-        # Flag originals as consolidated (cold storage decision is an adapter concern)
-        for episode in episodes:
+            distilled.extend(batch)
+
+        # Flag only the episodes that actually distilled (cold storage decision is
+        # an adapter concern). Episodes from failed batches stay un-flagged so the
+        # next dream cycle retries them.
+        for episode in distilled:
             episode.consolidated = True
-        result.raw_transcripts_stored = len(episodes)
+        result.raw_transcripts_stored = len(distilled)
         return result
