@@ -54,6 +54,8 @@ nexus train <add|search|...> # coding-training data CLI
 - [Autonomous Goals](autonomous-goals.md) - P2 budget/approval/audit guardrails
 - [Swarm](swarm.md) - P4 multi-agent leader/worker orchestration
 - [Backup & DR](backup-dr.md) - snapshots, retention, and restore runbook
+- [Upgrade Spaces](upgrade-spaces.md) - the 10-space autonomous-operation plan,
+  status, and how to enable each landed space
 - [Architecture Map](architecture-map.md) - every port and the adapter the DI
   container binds to it, plus every ops env var
 - [Agent Onboarding](agent-onboarding.md) - read this before your first change

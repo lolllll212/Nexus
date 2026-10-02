@@ -24,6 +24,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC = REPO_ROOT / "src"
+SCRIPTS = REPO_ROOT / "scripts"
 DOCS = REPO_ROOT / "docs"
 
 # HANDOFF.md is an append-only board quoting other agents' messages, so it is a
@@ -49,8 +50,11 @@ ENV_MENTION = re.compile(r"\bNEXUS_[A-Z0-9_]*[A-Z0-9]\b")
 
 
 def _src_files() -> list[Path]:
-    found = sorted(SRC.rglob("*.py"))
-    assert found, f"no python under {SRC} - the glob is wrong, not the codebase"
+    """src/ plus the ops scripts - the daemon's knobs live in scripts/, and an
+    env var read by an ops script is exactly as undocumented as one read by a
+    module."""
+    found = sorted(SRC.rglob("*.py")) + sorted(SCRIPTS.glob("*.py"))
+    assert found, f"no python under {SRC} or {SCRIPTS} - the glob is wrong, not the codebase"
     return found
 
 
