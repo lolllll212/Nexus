@@ -217,6 +217,10 @@ mentions a variable the code never reads.
 | `NEXUS_LOCAL_MODEL_LOW` | Ollama model for LOW-complexity routine tasks (`qwen2.5-coder:7b-instruct`). |
 | `NEXUS_DAILY_TOKEN_BUDGET` | Per-agent daily token cap for the budget middleware (`500000`); over-budget traffic routes down to the local tier. |
 | `NEXUS_TOKEN_BUDGET_LEDGER` | Path of the per-day token spend ledger (`token_budget_ledger.json`), kept to the last 30 days. |
+| `NEXUS_BRIDGE_TOKEN` | Shared secret required before a WebSocket client may speak on the headless IDE bridge. |
+| `NEXUS_BRIDGE_ALLOWLIST` | Comma-separated op allowlist for the bridge; default is `ping,open`, with `run` and `edit` added only when the env explicitly includes them. |
+| `NEXUS_BRIDGE_RATE_LIMIT` | Maximum allowed bridge commands per op within the rate window (`10`). |
+| `NEXUS_BRIDGE_RATE_WINDOW_SECONDS` | Sliding window in seconds for bridge rate limiting (`60`). |
 
 ## See also
 

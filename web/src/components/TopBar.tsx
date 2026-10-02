@@ -57,7 +57,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 }) => {
   const modes: { id: OperatingMode; label: string; icon: any }[] = [
     { id: 'HUD', label: 'HUD (FUI)', icon: Sparkles },
-    { id: 'DASHBOARD', label: 'ANALYTICS', icon: BarChart3 },
+    { id: 'DASHBOARD', label: 'SWARM DASHBOARD', icon: BarChart3 },
     { id: 'GRAPH', label: 'GRAPH', icon: Share2 },
     { id: 'RESEARCH', label: 'RESEARCH', icon: Search },
     { id: 'WORKFLOW', label: 'WORKFLOW', icon: Zap },

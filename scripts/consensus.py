@@ -73,9 +73,32 @@ def cmd_propose(args) -> None:
         draft=draft,
         files=files,
         created_at=datetime.now(UTC).isoformat(),
+        auto_review=not getattr(args, "skip_auto_review", False),
     )
     print(f"proposed: {p.id} [{p.status}]")
+    if p.reviews:
+        for r_name, r_info in sorted(p.reviews.items()):
+            print(f"  review [{r_name}]: {r_info.get('verdict')} - {r_info.get('note')}")
+    if p.evidence:
+        print("  evidence:")
+        for ev_k, ev_v in sorted(p.evidence.items()):
+            print(
+                f"    {ev_k}: {'clean' if ev_v.get('clean') else 'flagged'} - {ev_v.get('output', '')[:70]}"
+            )
+    if p.verdict_reason:
+        print(f"  verdict reason: {p.verdict_reason}")
     print(f"  next: python scripts/consensus.py review --id {p.id} --agent astra --verdict approve")
+
+
+def cmd_auto_review(args) -> None:
+    p = protocol().run_automated_reviewers(args.id)
+    if p is None:
+        print(f"error: unknown proposal {args.id}", file=sys.stderr)
+        sys.exit(1)
+    print(f"auto-reviewed: {p.id} [{p.status}] - {p.verdict_reason or p.status}")
+    if p.reviews:
+        for r_name, r_info in sorted(p.reviews.items()):
+            print(f"  review [{r_name}]: {r_info.get('verdict')} - {r_info.get('note')}")
 
 
 def cmd_review(args) -> None:
@@ -116,6 +139,7 @@ def cmd_show(args) -> None:
     print(f"id: {p.id} | status: {p.status} | author: {p.author} | files: {', '.join(p.files) or '-'}")
     print(f"reviews: {p.reviews or '-'}")
     print(f"votes: {p.votes or '-'}")
+    print(f"evidence: {p.evidence or '-'}")
     print(f"reason: {p.verdict_reason or '-'}")
     print("---")
     print(p.draft)
@@ -168,10 +192,14 @@ def main() -> None:
     p.add_argument("--draft", default="")
     p.add_argument("--file", default="", help="read the draft (unified diff) from a file")
     p.add_argument("--files", default="", help="comma-separated files the patch touches")
+    p.add_argument("--skip-auto-review", action="store_true", help="skip automated reviewer pass")
+
+    p = sub.add_parser("auto-review", help="re-run automated reviewers on a proposal")
+    p.add_argument("--id", required=True)
 
     p = sub.add_parser("review", help="review a proposal")
     p.add_argument("--id", required=True)
-    p.add_argument("--agent", required=True, choices=["astra", "tron", "xenom"])
+    p.add_argument("--agent", required=True, choices=["astra", "tron", "xenom", "bandit", "tests-required"])
     p.add_argument("--verdict", required=True, choices=["approve", "request_changes"])
     p.add_argument("--note", default="")
 
@@ -195,6 +223,7 @@ def main() -> None:
     args = parser.parse_args()
     {
         "propose": cmd_propose,
+        "auto-review": cmd_auto_review,
         "review": cmd_review,
         "vote": cmd_vote,
         "verdict": cmd_verdict,

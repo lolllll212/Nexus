@@ -106,3 +106,13 @@ agent_activity.jsonl
 vscode-nexus-queue/
 .agents/
 .claude/
+
+# Multi-agent coordination runtime state (shared via main worktree, never committed)
+agent_memory.json
+consensus_state.json
+planning_state.json
+nexus_crdt.json
+token_budget_ledger.json
+board.txt
+inbox.txt
+status.txt

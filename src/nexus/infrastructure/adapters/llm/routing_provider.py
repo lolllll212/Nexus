@@ -17,6 +17,7 @@ NEXUS running 24/7 without dead-ending when a provider quota is exhausted.
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -182,6 +183,211 @@ def build_local_tier(
     return high, low
 
 
+class LearnedClassifier:
+    """Online logistic-regression classifier for prompt complexity and routing.
+
+    Trained on route logs + accepted-answer feedback from the eval harness.
+    Persists learned weights across restarts. Pure Python (zero dependencies).
+    """
+
+    DEFAULT_LEARNING_RATE = 0.1
+
+    def __init__(
+        self,
+        weights_path: Path | str | None = None,
+        learning_rate: float = DEFAULT_LEARNING_RATE,
+        threshold: float = 0.5,
+    ) -> None:
+        self.weights_path = Path(weights_path) if weights_path else None
+        self.learning_rate = learning_rate
+        self.threshold = threshold
+        self.weights: dict[str, float] = {}
+        self.bias: float = 0.0
+        self.samples_seen: int = 0
+        if self.weights_path and self.weights_path.exists():
+            self.load(self.weights_path)
+
+    @staticmethod
+    def extract_features(text: str) -> dict[str, float]:
+        if not text:
+            return {"length": 0.0, "high_signals": 0.0, "code_markers": 0.0}
+
+        length_feat = min(len(text) / (LOW_COMPLEXITY_MAX_CHARS * 2), 5.0)
+        high_signals = float(len(_HIGH_SIGNALS.findall(text)))
+        code_markers = float(len(_CODE_MARKERS.findall(text)))
+
+        features: dict[str, float] = {
+            "length": length_feat,
+            "high_signals": high_signals,
+            "code_markers": code_markers,
+        }
+
+        lowered = text.lower()
+        key_terms = [
+            "crdt",
+            "refactor",
+            "security",
+            "concurrency",
+            "architecture",
+            "lint",
+            "typo",
+            "formatting",
+            "doc",
+            "rename",
+            "fix",
+            "explain",
+            "eval",
+            "prove",
+            "database",
+            "docker",
+        ]
+        for term in key_terms:
+            if term in lowered:
+                features[f"kw_{term}"] = 1.0
+
+        return features
+
+    def predict_proba(self, text: str) -> float:
+        """Return probability of HIGH complexity (1.0 = HIGH, 0.0 = LOW)."""
+        feats = self.extract_features(text)
+        score = self.bias + sum(v * self.weights.get(k, 0.0) for k, v in feats.items())
+        clamped_score = max(-20.0, min(20.0, score))
+        learned_prob = 1.0 / (1.0 + math.exp(-clamped_score))
+
+        if self.samples_seen < 5:
+            # Cold-start blend with heuristic
+            heuristic_high = 1.0 if classify_complexity(text) is Complexity.HIGH else 0.0
+            weight = self.samples_seen / 5.0
+            return (1.0 - weight) * heuristic_high + weight * learned_prob
+        return learned_prob
+
+    def predict(self, text: str) -> Complexity:
+        prob = self.predict_proba(text)
+        return Complexity.HIGH if prob >= self.threshold else Complexity.LOW
+
+    def update(self, text: str, target: float | Complexity | int, quality: float | None = None) -> float:
+        """Online gradient update on a labeled outcome or eval feedback.
+
+        target: 1.0 / Complexity.HIGH for high complexity, 0.0 / Complexity.LOW for low.
+        quality: optional quality metric in [0.0, 1.0] from eval harness.
+        """
+        if isinstance(target, Complexity):
+            y = 1.0 if target is Complexity.HIGH else 0.0
+        else:
+            y = float(target)
+
+        loss_weight = 1.0 if quality is None else max(0.1, min(1.0, quality))
+
+        feats = self.extract_features(text)
+        score = self.bias + sum(v * self.weights.get(k, 0.0) for k, v in feats.items())
+        clamped_score = max(-20.0, min(20.0, score))
+        pred = 1.0 / (1.0 + math.exp(-clamped_score))
+
+        error = (y - pred) * loss_weight
+        lr = self.learning_rate / math.sqrt(1.0 + self.samples_seen * 0.05)
+
+        for k, v in feats.items():
+            self.weights[k] = self.weights.get(k, 0.0) + lr * error * v
+        self.bias += lr * error
+        self.samples_seen += 1
+
+        if self.weights_path:
+            self.save(self.weights_path)
+
+        return pred
+
+    def save(self, path: Path | str) -> None:
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        data = {
+            "weights": self.weights,
+            "bias": self.bias,
+            "samples_seen": self.samples_seen,
+            "threshold": self.threshold,
+            "learning_rate": self.learning_rate,
+        }
+        p.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    def load(self, path: Path | str) -> None:
+        p = Path(path)
+        if not p.exists():
+            return
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            self.weights = dict(data.get("weights", {}))
+            self.bias = float(data.get("bias", 0.0))
+            self.samples_seen = int(data.get("samples_seen", 0))
+            self.threshold = float(data.get("threshold", self.threshold))
+            self.learning_rate = float(data.get("learning_rate", self.learning_rate))
+        except (OSError, json.JSONDecodeError):
+            pass
+
+
+class LearnedRouter:
+    """Cost-aware and speculative router combining learned classifier with latency/cost metrics."""
+
+    def __init__(
+        self,
+        classifier: LearnedClassifier | None = None,
+        weights_path: Path | str | None = None,
+        cost_aware: bool = True,
+        latency_weight: float = 0.2,
+        cost_weight: float = 0.3,
+        speculative: bool = True,
+    ) -> None:
+        self.classifier = classifier or LearnedClassifier(weights_path=weights_path)
+        self.cost_aware = cost_aware
+        self.latency_weight = latency_weight
+        self.cost_weight = cost_weight
+        self.speculative = speculative
+        self.stats: dict[str, int] = {"primary": 0, "local": 0, "speculative_hits": 0}
+
+    def route_decision(self, text: str) -> tuple[Complexity, dict[str, float]]:
+        prob_high = self.classifier.predict_proba(text)
+
+        q_primary = 0.95
+        l_primary = 1.2
+        c_primary = 1.0
+
+        q_local = max(0.05, 0.95 * (1.0 - prob_high))
+        l_local = 0.25
+        c_local = 0.05
+
+        u_primary = q_primary - (self.cost_weight * c_primary) - (self.latency_weight * l_primary)
+        u_local = q_local - (self.cost_weight * c_local) - (self.latency_weight * l_local)
+
+        if self.cost_aware:
+            complexity = Complexity.LOW if u_local >= u_primary else Complexity.HIGH
+        else:
+            complexity = Complexity.HIGH if prob_high >= self.classifier.threshold else Complexity.LOW
+
+        metrics = {
+            "prob_high": prob_high,
+            "q_local": q_local,
+            "q_primary": q_primary,
+            "u_local": u_local,
+            "u_primary": u_primary,
+        }
+        return complexity, metrics
+
+    def record_outcome(
+        self,
+        prompt: str,
+        route: str,
+        accepted: bool,
+        latency: float = 0.0,
+        quality: float | None = None,
+    ) -> None:
+        if route in ("local", "local-fallback", "local-speculative"):
+            target = Complexity.LOW if accepted else Complexity.HIGH
+        elif route == "primary":
+            target = Complexity.HIGH if accepted else Complexity.LOW
+        else:
+            target = Complexity.HIGH if not accepted else Complexity.LOW
+
+        self.classifier.update(prompt, target=target, quality=quality)
+
+
 class RoutingProvider(LLMProvider):
     """Routes between a premium primary and the local tier (Ollama or LM Studio).
 
@@ -205,6 +411,10 @@ class RoutingProvider(LLMProvider):
         local_high_model: str = DEFAULT_LOCAL_HIGH,
         local_low_model: str = DEFAULT_LOCAL_LOW,
         force_route: Complexity | None = None,
+        learned_router: LearnedRouter | None = None,
+        weights_path: Path | str | None = None,
+        cost_aware: bool = False,
+        speculative: bool = False,
     ) -> None:
         self.primary = primary
         self.local = local
@@ -213,7 +423,13 @@ class RoutingProvider(LLMProvider):
         self.local_high_model = local_high_model
         self.local_low_model = local_low_model
         self.force_route = force_route
-        self.route_log: list[dict[str, str]] = []
+        self.weights_path = Path(weights_path) if weights_path else None
+        self.learned_router = learned_router or (
+            LearnedRouter(weights_path=self.weights_path, cost_aware=cost_aware, speculative=speculative)
+            if (self.weights_path or cost_aware or speculative)
+            else None
+        )
+        self.route_log: list[dict[str, Any]] = []
 
     def _pick_local(self, complexity: Complexity) -> LLMProvider | None:
         if complexity is Complexity.HIGH and self.local_high is not None:
@@ -227,6 +443,39 @@ class RoutingProvider(LLMProvider):
             return OllamaProvider(base_url=self.local.base_url, model=model, timeout=self.local.timeout)
         return self.local
 
+    def record_feedback(
+        self,
+        prompt: str,
+        route: str,
+        accepted: bool,
+        latency: float = 0.0,
+        quality: float | None = None,
+    ) -> None:
+        """Feed eval harness or consensus outcome back into the learned router."""
+        if self.learned_router is None:
+            self.learned_router = LearnedRouter(weights_path=self.weights_path)
+        self.learned_router.record_outcome(
+            prompt=prompt,
+            route=route,
+            accepted=accepted,
+            latency=latency,
+            quality=quality,
+        )
+
+    def train_from_route_log(self, accepted_outcomes: dict[int, bool] | None = None) -> int:
+        """Train weights from history of route_log + accepted outcomes."""
+        if not self.learned_router:
+            self.learned_router = LearnedRouter(weights_path=self.weights_path)
+        count = 0
+        for i, entry in enumerate(self.route_log):
+            prompt = str(entry.get("prompt", "") or "")
+            route = str(entry.get("route", "primary") or "")
+            accepted = accepted_outcomes.get(i, True) if accepted_outcomes else True
+            if prompt:
+                self.record_feedback(prompt, route, accepted)
+                count += 1
+        return count
+
     async def complete(
         self,
         messages: list[dict[str, str]],
@@ -235,7 +484,13 @@ class RoutingProvider(LLMProvider):
         tools: list[dict] | None = None,
     ) -> str:
         full_text = "\n".join(m.get("content", "") for m in messages)
-        complexity = self.force_route or classify_complexity(full_text)
+        if self.force_route:
+            complexity = self.force_route
+        elif self.learned_router:
+            complexity, _ = self.learned_router.route_decision(full_text)
+        else:
+            complexity = classify_complexity(full_text)
+
         route = "local" if complexity is Complexity.LOW else "primary"
 
         async def _try(provider: LLMProvider) -> str:
@@ -248,26 +503,73 @@ class RoutingProvider(LLMProvider):
             except Exception:
                 return ""
 
+        # Speculative short-circuit: if speculative enabled and complexity is HIGH,
+        # try the fast local model first. If it yields a viable non-error answer, short-circuit!
+        if (
+            self.learned_router
+            and self.learned_router.speculative
+            and complexity is Complexity.HIGH
+            and self._pick_local(Complexity.HIGH) is not None
+        ):
+            local_spec = self._pick_local(Complexity.HIGH)
+            if local_spec is not None:
+                spec_reply = await _try(local_spec)
+                if spec_reply and len(spec_reply.strip()) > 2 and not spec_reply.strip().startswith("Error"):
+                    self.learned_router.stats["speculative_hits"] += 1
+                    self.route_log.append(
+                        {
+                            "route": "local-speculative",
+                            "complexity": complexity.value,
+                            "prompt": full_text,
+                            "speculative": True,
+                        }
+                    )
+                    return spec_reply
+
         reply = ""
         if route == "local":
             local = self._pick_local(complexity)
             if local is not None:
                 reply = await _try(local)
                 if reply:
-                    self.route_log.append({"route": "local", "complexity": complexity.value})
+                    self.route_log.append(
+                        {
+                            "route": "local",
+                            "complexity": complexity.value,
+                            "prompt": full_text,
+                        }
+                    )
                     return reply
                 route = "primary-fallback"
         reply = await _try(self.primary)
         if reply:
-            self.route_log.append({"route": "primary", "complexity": complexity.value})
+            self.route_log.append(
+                {
+                    "route": "primary",
+                    "complexity": complexity.value,
+                    "prompt": full_text,
+                }
+            )
             return reply
         local = self._pick_local(complexity)
         if local is not None:
             reply = await _try(local)
             if reply:
-                self.route_log.append({"route": "local-fallback", "complexity": complexity.value})
+                self.route_log.append(
+                    {
+                        "route": "local-fallback",
+                        "complexity": complexity.value,
+                        "prompt": full_text,
+                    }
+                )
                 return reply
-        self.route_log.append({"route": "none", "complexity": complexity.value})
+        self.route_log.append(
+            {
+                "route": "none",
+                "complexity": complexity.value,
+                "prompt": full_text,
+            }
+        )
         return ""
 
     async def extract_structured(

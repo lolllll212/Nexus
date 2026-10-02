@@ -68,6 +68,18 @@ async def generate_prometheus_metrics(container: Container) -> str:
     for key, val in REQUEST_COUNTERS.items():
         lines.append(f'nexus_requests_total{{module="{key}"}} {val}')
 
+    # Space 9: Agent-layer observability (routes, heal, consensus, token spend)
+    try:
+        from nexus.infrastructure.adapters.observability.agent_telemetry import get_global_agent_telemetry
+
+        telemetry = get_global_agent_telemetry()
+        agent_rendered = telemetry.render_prometheus()
+        if agent_rendered:
+            lines.append("")
+            lines.append(agent_rendered.strip())
+    except Exception:
+        pass
+
     lines.append("")
     lines.append(f"# Nexus backend mode: {backend}")
     return "\n".join(lines) + "\n"

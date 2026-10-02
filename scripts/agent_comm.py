@@ -21,6 +21,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+sys.path.insert(0, str(REPO_ROOT / "src"))
+from nexus.domain.crdt import SwarmState  # noqa: E402
+
 
 def main_root() -> Path:
     # Every worktree shares ONE coordination state, kept in the main
@@ -45,17 +48,55 @@ def main_root() -> Path:
 
 
 STATE_FILE = main_root() / "nexus_state.json"
+CRDT_FILE = main_root() / "nexus_crdt.json"
 HANDOFF_FILE = main_root() / "docs" / "HANDOFF.md"
 ACTIVITY_LOG = main_root() / "agent_activity.jsonl"
 
 
-def load_state() -> dict:
+def load_crdt() -> SwarmState:
+    """Load and synchronize CRDT state via merge-on-read."""
+    raw: dict = {}
     if STATE_FILE.exists():
-        return json.loads(STATE_FILE.read_text(encoding="utf-8"))
-    return {"agents": {}, "task_queue": [], "locks": [], "messages": []}
+        try:
+            raw = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            raw = {}
+    base_state = SwarmState.from_nexus_state(raw, tick=time.time())
+    if CRDT_FILE.exists():
+        try:
+            crdt_data = json.loads(CRDT_FILE.read_text(encoding="utf-8"))
+            saved_crdt = SwarmState.from_dict(crdt_data)
+            return saved_crdt.merge(base_state)
+        except Exception:
+            pass
+    return base_state
+
+
+def load_state() -> dict:
+    state = {"agents": {}, "task_queue": [], "locks": [], "messages": []}
+    if STATE_FILE.exists():
+        try:
+            state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    crdt = load_crdt()
+    state["state_hash"] = crdt.state_hash()
+    return state
 
 
 def save_state(state: dict) -> None:
+    crdt = SwarmState.from_nexus_state(state, tick=time.time())
+    if CRDT_FILE.exists():
+        try:
+            old_crdt = SwarmState.from_dict(json.loads(CRDT_FILE.read_text(encoding="utf-8")))
+            crdt = old_crdt.merge(crdt)
+        except Exception:
+            pass
+    state["state_hash"] = crdt.state_hash()
+    try:
+        CRDT_FILE.write_text(json.dumps(crdt.to_dict(), indent=2), encoding="utf-8")
+    except Exception:
+        pass
     STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 
@@ -90,6 +131,13 @@ def cmd_heartbeat(args, state):
     state["agents"][agent]["last_heartbeat"] = now()
     if state["agents"][agent].get("status") == "idle":
         state["agents"][agent]["status"] = "active"
+    crdt = load_crdt()
+    crdt.record_heartbeat(agent, tick=time.time(), timestamp=now())
+    try:
+        CRDT_FILE.write_text(json.dumps(crdt.to_dict(), indent=2), encoding="utf-8")
+    except Exception:
+        pass
+    state["state_hash"] = crdt.state_hash()
     save_state(state)
     log_activity(agent, "heartbeat")
     print(f"[{agent}] heartbeat OK")
@@ -178,6 +226,8 @@ def heartbeat_age(hb: str | None) -> str:
 
 
 def cmd_status(args, state):
+    state_hash = state.get("state_hash") or load_crdt().state_hash()
+    print(f"=== Swarm Status (CRDT state_hash: {state_hash}) ===")
     print("=== Agent Status ===")
     for name, info in state["agents"].items():
         hb = heartbeat_age(info.get("last_heartbeat"))
@@ -202,6 +252,41 @@ def cmd_status(args, state):
     print("=== Active Locks ===")
     for lock in state["locks"]:
         print(f"  {lock['file']} -> {lock['agent']} (since {lock['since']})")
+
+
+def cmd_crdt(args, state):
+    crdt = load_crdt()
+    if getattr(args, "merge_file", None):
+        path = Path(args.merge_file)
+        if not path.exists():
+            print(f"File not found: {path}")
+            sys.exit(1)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if "heartbeats" in data:
+            other = SwarmState.from_dict(data)
+        else:
+            other = SwarmState.from_nexus_state(data, tick=time.time())
+        crdt = crdt.merge(other)
+        merged_state = crdt.to_nexus_state()
+        merged_state["messages"] = state.get("messages", [])
+        save_state(merged_state)
+        print(f"Merged successfully. New state_hash: {crdt.state_hash()}")
+        return
+
+    print(f"=== Swarm CRDT State (state_hash: {crdt.state_hash()}) ===")
+    print("Heartbeats (G-Counter):")
+    for ag, count in sorted(crdt.heartbeats.counts.items()):
+        print(f"  {ag:12s}: {count}")
+    print()
+    print("Active Tasks (OR-Set):")
+    for tid in sorted(crdt.task_membership.read()):
+        t = crdt.tasks.get(tid)
+        st = t.status.value if t else "unknown"
+        print(f"  [{tid}] status={st}")
+    print()
+    print("Active Locks (OR-Set):")
+    for lk in sorted(crdt.active_locks.read()):
+        print(f"  {lk}")
 
 
 def cmd_verify(args, state):
@@ -542,6 +627,9 @@ def main():
     sub.add_parser("status")
     sub.add_parser("board")
 
+    p = sub.add_parser("crdt")
+    p.add_argument("--merge-file", help="Path to state file to merge into local state")
+
     args = parser.parse_args()
     state = load_state()
 
@@ -561,6 +649,7 @@ def main():
         "reply": cmd_reply,
         "status": cmd_status,
         "board": cmd_board,
+        "crdt": cmd_crdt,
     }
     if args.command is None:
         parser.print_help()

@@ -45,8 +45,12 @@ def main_root() -> Path:
 
 def store():
     from nexus.infrastructure.adapters.persistence.agent_memory_store import AgentMemoryStore
+    from nexus.infrastructure.di.container import Container
 
-    return AgentMemoryStore(main_root() / "agent_memory.json")
+    try:
+        return AgentMemoryStore(main_root() / "agent_memory.json", embedder=Container().embedder)
+    except Exception:
+        return AgentMemoryStore(main_root() / "agent_memory.json")
 
 
 def cmd_put(args) -> None:
@@ -79,7 +83,7 @@ def cmd_put(args) -> None:
 
 
 def cmd_query(args) -> None:
-    results = store().query(args.q, k=args.k, kind=args.kind, agent=args.agent)
+    results = store().query(args.q, k=args.k, kind=args.kind, agent=args.agent, alpha=args.alpha)
     if not results:
         print("no matches")
         return
@@ -134,11 +138,14 @@ def main() -> None:
     p.add_argument("--tags", default="")
     p.add_argument("--refs", default="", help="comma-separated chunk ids this corrects/extends")
 
-    p = sub.add_parser("query", help="top-k relevant chunks (TF-IDF)")
+    p = sub.add_parser("query", help="top-k relevant chunks (hybrid semantic + TF-IDF)")
     p.add_argument("--q", required=True)
     p.add_argument("--k", type=int, default=5)
     p.add_argument("--kind", default=None)
     p.add_argument("--agent", default=None)
+    p.add_argument(
+        "--alpha", type=float, default=0.7, help="semantic weight in hybrid score (0.0 = TF-IDF only)"
+    )
 
     p = sub.add_parser("show", help="print a full chunk")
     p.add_argument("--id", required=True)

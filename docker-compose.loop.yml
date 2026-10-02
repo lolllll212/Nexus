@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+  bridge:
+    profiles: ["loop"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /workspace
+    command: python scripts/ide_bridge.py --host 0.0.0.0 --port 8765
+    environment:
+      NEXUS_BRIDGE_TOKEN: ${NEXUS_BRIDGE_TOKEN:-change-me}
+      NEXUS_BRIDGE_ALLOWLIST: ${NEXUS_BRIDGE_ALLOWLIST:-ping,open}
+      NEXUS_BRIDGE_RATE_LIMIT: ${NEXUS_BRIDGE_RATE_LIMIT:-10}
+      NEXUS_BRIDGE_RATE_WINDOW_SECONDS: ${NEXUS_BRIDGE_RATE_WINDOW_SECONDS:-60}
+      NEXUS_INFRA_BACKEND: ${NEXUS_INFRA_BACKEND:-memory}
+    ports:
+      - "8765:8765"
+    volumes:
+      - .:/workspace
+      - agent_memory:/workspace/memory
+
+  heal:
+    profiles: ["loop"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /workspace
+    command: python scripts/heal_loop.py --dry-run
+    environment:
+      NEXUS_INFRA_BACKEND: ${NEXUS_INFRA_BACKEND:-memory}
+      NEXUS_DAILY_TOKEN_BUDGET: ${NEXUS_DAILY_TOKEN_BUDGET:-500000}
+      NEXUS_LLM_BASE_URL: ${NEXUS_LLM_BASE_URL:-http://127.0.0.1:1234/v1}
+      NEXUS_MODEL_ROUTING: ${NEXUS_MODEL_ROUTING:-1}
+    volumes:
+      - .:/workspace
+      - agent_memory:/workspace/memory
+
+  ceo:
+    profiles: ["loop"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /workspace
+    command: python scripts/ceo_loop.py --once
+    environment:
+      NEXUS_INFRA_BACKEND: ${NEXUS_INFRA_BACKEND:-memory}
+      NEXUS_DAILY_TOKEN_BUDGET: ${NEXUS_DAILY_TOKEN_BUDGET:-500000}
+      NEXUS_LLM_BASE_URL: ${NEXUS_LLM_BASE_URL:-http://127.0.0.1:1234/v1}
+      NEXUS_MODEL_ROUTING: ${NEXUS_MODEL_ROUTING:-1}
+    volumes:
+      - .:/workspace
+      - agent_memory:/workspace/memory
+
+volumes:
+  agent_memory:

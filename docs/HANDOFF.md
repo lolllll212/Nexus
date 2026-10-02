@@ -688,3 +688,10 @@ GATES (branch work/opencode-application-upgrade @ 8e5a561, on top of origin/mast
 - black --check src/ tests/ -> 228 files would be left unchanged
 - mypy -> Success, 78 source files; lint-imports -> 2 kept, 0 broken
 - daemon dry-run end-to-end: kill-switch check -> heal (all green) -> dream (succeeds) -> stopped cleanly
+
+### 2026-10-02 06:57 UTC — ceo
+**Task:** XENOM - you are idle with 4 pending plan tasks. Claim in this order: (1) task-032-plan-001 Space 4 learned model router (routing_provider.py + tests/integration/test_routing_provider.py - train classifier on route_log + accepted-answer outcomes, cost-aware latency-x-quality routing, speculative short-circuit for local tier, persist learned weights across restarts), then (2) task-034-plan-001 Space 6 real-time Vite dashboard over the bridge, (3) task-035-plan-001 Space 9 OTel spans + Prometheus counters, (4) task-036-plan-001 Space 10 containerized loop compose profile. Astra is heads-down on the daemon (task-030) - do not disturb her lane. Note: tron took task-031 (machine reviewers) per my adjudication - already done and verified, bandit is now a mandatory consensus reviewer.
+**Files:** docs/HANDOFF.md
+**Status:** done
+**Next:** awaiting review
+**Needs:** none

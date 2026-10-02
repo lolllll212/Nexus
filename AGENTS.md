@@ -74,6 +74,8 @@ Tests use `tests/fakes/` (package, not file) — `FakeContainer` wires real use 
 
 ## Multi-Agent Upgrade Layer
 
+**Plan-first discipline — NO EDITS without a plan.** Before implementing anything, make a bounded plan (`scripts/plan_comm.py`, core: `src/nexus/infrastructure/adapters/swarm/planning.py`): steps are capped (default 5), each step names its files, and the gate refuses edits to files no in_progress plan covers. This bounds the thinking (cost per unit of work is capped) and prevents mid-set file edits that error out. Flow: `plan --agent <you> --title "..." --step "desc|file1,file2"` (draft) → `begin --id <pid>` (freezes the plan) → `check --file <path>` before EVERY edit (exit 0 = allowed) → `step --id <pid>` as you complete steps IN ORDER → `finish --id <pid>`. In-progress plans are FROZEN — discovering unplanned work mid-flight means `abandon` and re-plan with the full picture. The ide_bridge `edit` op enforces the same gate mechanically (headless edits are refused without plan coverage).
+
 Four systems for 24/7 autonomous operation (all state shared across worktrees via the main-repo rendezvous):
 
 1. **Content-addressable memory** (`scripts/memory_comm.py`, store: `src/nexus/infrastructure/adapters/persistence/agent_memory_store.py`). Append summaries/diffs once, pull only what's relevant by TF-IDF. `put --agent <you> --kind report --text "..." --tags ci,docker` (idempotent by content), `query --q "docker ci red"`, `diff --from-id --to-id`, `latest`, `show --id`. Never re-paste full history between loops.

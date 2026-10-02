@@ -212,6 +212,7 @@ class Container:
         self.authenticator: Authenticator = self._build_authenticator()
         self.tracer: Tracer = self._build_tracer()
         self.metrics: Metrics = self._build_metrics()
+        self.agent_telemetry = self._build_agent_telemetry()
         self.rate_limiter: RateLimiter = self._build_rate_limiter()
         self.quota: QuotaService = self._build_quota()
 
@@ -482,6 +483,11 @@ class Container:
             base_url=self.config.nim_base_url,
             default_max_tokens=self.config.llm_max_tokens,
         )
+
+    def _build_agent_telemetry(self):
+        from nexus.infrastructure.adapters.observability.agent_telemetry import AgentTelemetry
+
+        return AgentTelemetry(metrics=self.metrics, tracer=self.tracer)
 
     def _build_llm(self) -> LLMProvider:
         if self.config.llm_provider in ("nvidia", "nim"):

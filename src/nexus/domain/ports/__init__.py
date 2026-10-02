@@ -13,6 +13,7 @@ from nexus.domain.ports.execution import ToolExecutor
 from nexus.domain.ports.llm_provider import EmbeddingProvider, LLMProvider, StreamingLLMProvider
 from nexus.domain.ports.memory_repository import ConceptRepository, MemoryRepository, ShortTermMemory
 from nexus.domain.ports.sandbox import Sandbox
+from nexus.domain.ports.swarm_state import SwarmStatePort
 from nexus.domain.ports.tool_registry import ToolRegistry
 
 __all__ = [
@@ -28,6 +29,7 @@ __all__ = [
     "Sandbox",
     "ShortTermMemory",
     "StreamingLLMProvider",
+    "SwarmStatePort",
     "ToolExecutor",
     "ToolRegistry",
 ]

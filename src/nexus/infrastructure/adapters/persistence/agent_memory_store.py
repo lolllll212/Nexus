@@ -13,10 +13,13 @@ Conflux laws honored here:
 
 from __future__ import annotations
 
+import asyncio
 import difflib
 import hashlib
 import json
+import math
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -49,6 +52,7 @@ class Chunk:
     id: str = ""
     tick: int = 0
     created_at: str = ""
+    embedding: list[float] = field(default_factory=list)
 
     def body(self) -> dict[str, Any]:
         return {
@@ -72,6 +76,7 @@ class Chunk:
             "tags": sorted(self.tags),
             "refs": sorted(self.refs),
             "created_at": self.created_at,
+            "embedding": list(self.embedding),
         }
 
     @classmethod
@@ -85,6 +90,7 @@ class Chunk:
             id=d["id"],
             tick=d.get("tick", 0),
             created_at=d.get("created_at", ""),
+            embedding=list(d.get("embedding", [])),
         )
 
 
@@ -109,11 +115,53 @@ class AgentMemoryStore:
     are idempotent by content hash.
     """
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, embedder: Any | None = None, alpha: float = 0.7) -> None:
         self.path = Path(path)
         self._chunks: dict[str, Chunk] = {}
         self._tick = 0
+        self._embedder = embedder
+        self._alpha = alpha
         self._load()
+
+    @staticmethod
+    def _cosine_similarity(a: list[float], b: list[float]) -> float:
+        if not a or not b:
+            return 0.0
+        length = min(len(a), len(b))
+        if length == 0:
+            return 0.0
+        dot = sum(x * y for x, y in zip(a[:length], b[:length]))
+        norm_a = math.sqrt(sum(x * x for x in a[:length])) or 1.0
+        norm_b = math.sqrt(sum(y * y for y in b[:length])) or 1.0
+        if norm_a == 0.0 or norm_b == 0.0:
+            return 0.0
+        return dot / (norm_a * norm_b)
+
+    def _run_embedder_sync(self, text: str) -> list[float]:
+        return asyncio.run(self._embedder.embed(text))
+
+    def _embed_text(self, text: str) -> list[float]:
+        if self._embedder is None:
+            return []
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(self._embedder.embed(text))
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(self._run_embedder_sync, text).result()
+
+    def _normalized_embedding(self, chunk: Chunk) -> list[float]:
+        if chunk.embedding:
+            return chunk.embedding
+        if not self._embedder:
+            return []
+        try:
+            chunk.embedding = self._embed_text(chunk.text)
+        except Exception:
+            chunk.embedding = []
+        return chunk.embedding
 
     def _load(self) -> None:
         if not self.path.exists():
@@ -155,6 +203,11 @@ class AgentMemoryStore:
         self._tick += 1
         chunk.tick = self._tick
         chunk.created_at = created_at
+        if self._embedder is not None:
+            try:
+                chunk.embedding = self._embed_text(chunk.text)
+            except Exception:
+                chunk.embedding = []
         self._chunks[chunk.id] = chunk
         self._save()
         return chunk, True
@@ -175,11 +228,13 @@ class AgentMemoryStore:
         k: int = 5,
         kind: str | None = None,
         agent: str | None = None,
+        alpha: float | None = None,
     ) -> list[tuple[Chunk, float]]:
-        """Top-k chunks by TF-IDF cosine similarity to the query.
+        """Top-k chunks via hybrid semantic + TF-IDF scoring.
 
-        Pure-python scoring (no numpy), deterministic: equal scores break by
-        (tick, id) canonical ordering.
+        With an active `EmbeddingProvider`, scores combine semantic cosine and TF-IDF
+        similarity. When the embedder is unavailable or fails, the method falls back
+        to plain TF-IDF scoring to preserve deterministic retrieval.
         """
         candidates = [
             c
@@ -188,27 +243,47 @@ class AgentMemoryStore:
         ]
         if not candidates:
             return []
+        if alpha is None:
+            alpha = self._alpha
+        alpha = max(0.0, min(1.0, float(alpha)))
+
         df = self._df(candidates)
         n_docs = len(candidates)
         q_tf = _term_freq(tokenize(q))
 
         def _idf(t: str) -> float:
-            import math
-
             return math.log((n_docs + 1) / (df.get(t, 0) + 1)) + 1.0
 
         q_vec = {t: f * _idf(t) for t, f in q_tf.items()}
         q_norm = sum(v * v for v in q_vec.values()) ** 0.5 or 1.0
 
-        scored: list[tuple[Chunk, float]] = []
+        tfidf_scores: dict[str, float] = {}
         for c in candidates:
             c_tf = _term_freq(tokenize(c.text))
             c_vec = {t: f * _idf(t) for t, f in c_tf.items()}
             dot = sum(q_vec.get(t, 0.0) * v for t, v in c_vec.items())
             c_norm = sum(v * v for v in c_vec.values()) ** 0.5 or 1.0
-            score = dot / (q_norm * c_norm)
-            if score > 0.0:
-                scored.append((c, score))
+            score = dot / (q_norm * c_norm) if q_norm and c_norm else 0.0
+            tfidf_scores[c.id] = score
+
+        if self._embedder is not None:
+            query_embedding = []
+            try:
+                query_embedding = self._embed_text(q)
+            except Exception:
+                query_embedding = []
+            if query_embedding:
+                hybrid: list[tuple[Chunk, float]] = []
+                for c in candidates:
+                    chunk_embedding = self._normalized_embedding(c)
+                    semantic_score = self._cosine_similarity(query_embedding, chunk_embedding)
+                    tfidf = tfidf_scores.get(c.id, 0.0)
+                    score = alpha * semantic_score + (1.0 - alpha) * tfidf
+                    hybrid.append((c, score))
+                hybrid.sort(key=lambda pair: (-pair[1], pair[0].tick, pair[0].id))
+                return hybrid[:k]
+
+        scored = [(c, tfidf_scores.get(c.id, 0.0)) for c in candidates if tfidf_scores.get(c.id, 0.0) > 0.0]
         scored.sort(key=lambda pair: (-pair[1], pair[0].tick, pair[0].id))
         return scored[:k]
 

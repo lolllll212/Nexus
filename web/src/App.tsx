@@ -35,6 +35,7 @@ import { CodeCompilerModal } from './components/CodeCompilerModal';
 import { ConversationalStream } from './components/ConversationalStream';
 import { JarvisModal } from './components/JarvisModal';
 import { AnalyticsDashboardView } from './components/AnalyticsDashboardView';
+import { SwarmDashboardView } from './components/SwarmDashboardView';
 import { MobileCompactCockpit } from './components/MobileCompactCockpit';
 import { playHudClick, playChime, playSuccessChime } from './utils/soundEffects';
 import { speakWithStatus, stopAnySpeaking } from './utils/voiceManager';
@@ -43,6 +44,7 @@ import { nexusChatStream, nexusJson } from './api';
 export const App: React.FC = () => {
   // Operating Modes: 'GRAPH' | 'RESEARCH' | 'WORKFLOW' | 'ARCHITECTURE' | 'VIDEO'
   const [currentMode, setCurrentMode] = useState<OperatingMode>('GRAPH');
+  const [dashboardSubView, setDashboardSubView] = useState<'swarm' | 'system'>('swarm');
 
   // Explicit Agent Status State: 'idle' | 'listening' | 'thinking' | 'speaking'
   const [agentStatus, setAgentStatus] = useState<AgentStatus>('idle');
@@ -594,11 +596,28 @@ export const App: React.FC = () => {
         )}
 
         {currentMode === 'DASHBOARD' && (
-          <AnalyticsDashboardView
-            agentStatus={agentStatus}
-            onOpenClaudeStudio={() => setIsClaudeStudioOpen(true)}
-            onOpenMultimodalBridge={() => setIsMultimodalBridgeOpen(true)}
-          />
+          dashboardSubView === 'swarm' ? (
+            <SwarmDashboardView
+              agentStatus={agentStatus}
+              onOpenClaudeStudio={() => setIsClaudeStudioOpen(true)}
+              onOpenMultimodalBridge={() => setIsMultimodalBridgeOpen(true)}
+              onToggleAnalyticsMode={() => setDashboardSubView('system')}
+            />
+          ) : (
+            <div className="relative w-full h-full">
+              <button
+                onClick={() => setDashboardSubView('swarm')}
+                className="absolute top-4 right-6 z-20 px-3 py-1.5 rounded-xl bg-cyan-950/90 border border-cyan-400/50 text-cyan-300 hover:text-white text-xs font-bold transition-all shadow-[0_0_12px_rgba(0,240,255,0.3)] cursor-pointer"
+              >
+                ← BACK TO SWARM COCKPIT
+              </button>
+              <AnalyticsDashboardView
+                agentStatus={agentStatus}
+                onOpenClaudeStudio={() => setIsClaudeStudioOpen(true)}
+                onOpenMultimodalBridge={() => setIsMultimodalBridgeOpen(true)}
+              />
+            </div>
+          )
         )}
 
         {currentMode === 'GRAPH' && (
