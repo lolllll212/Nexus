@@ -165,14 +165,15 @@ class CodingStore:
         return example
 
     def add_batch(self, examples: list[CodingExample]) -> int:
+        if not examples:
+            return 0
         for e in examples:
             e.updated_at = datetime.now(UTC).isoformat()
-            self._examples.extend(examples)
-            self._save()
-            for ex in examples:
-                self._upsert_vector(ex)
-            return len(examples)
-        return 0
+        self._examples.extend(examples)
+        self._save()
+        for ex in examples:
+            self._upsert_vector(ex)
+        return len(examples)
 
     def update(self, example: CodingExample) -> bool:
         for i, e in enumerate(self._examples):

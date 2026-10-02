@@ -80,10 +80,10 @@ class AutoLearner:
 
         ex.record_use(succeeded, rating)
 
-        # If the user provided an improved solution, update it
+        # If the user provided an improved solution, update it.
+        # No version bump here: CodingStore.update bumps it.
         if improved_solution and len(improved_solution) > len(ex.solution) * 0.5:
             ex.solution = improved_solution
-            ex.version += 1
 
         self._store.update(ex)
         return True
