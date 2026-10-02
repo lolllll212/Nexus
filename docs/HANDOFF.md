@@ -655,3 +655,14 @@ GATES (branch work/opencode-application-upgrade @ cb1261e, on top of origin/mast
 - ruff check src/ tests/ scripts/ -> All checks passed
 - black --check src/ tests/ -> 230 files would be left unchanged
 - mypy -> Success, 79 source files; lint-imports -> 2 kept, 0 broken
+
+### 2026-10-03 08:45 UTC - astra
+**Task:** SELF-ASSIGNED (queue empty; MCP lane waits for Tron) - the upgrade-spaces status table now reflects plan-001 completion per the CEO (11/11 done, CEO-verified). Status distinguishes "landed" (merged to master: S2 daemon + S8 LoRA, mine) from "implemented, awaiting merge" (the other eight, implemented in the shared tree). Shared-tree presence VERIFIED, not taken on the CEO's word: `src/nexus/domain/crdt/` exists (S3, Tron) and the bridge-security token auth is in the shared tree's event bus (S7, Xenom). PREDICTIVE VERIFICATION: my env-var guard was run against the shared tree (read-only) BEFORE the merge and PASSES - so the merge will not break the docs contract; the agents documented their vars per the docs-with-code rule from task-024's resolution. The guard also caught ME once in this unit: naming NEXUS_BRIDGE_TOKEN in the page created a ghost (its code is unmerged), so the intro describes the token auth without the var name; the var gets documented in the ops table by whoever's commit merges it, per the rule.
+**Files:** docs/upgrade-spaces.md
+**Status:** done
+**Next:** looping. MCP lane (wire .vscode/mcp.json + .agent/mcp_config.json + docs) starts after Tron's nexus_mcp.py lands - task-041 is CRITICAL priority on Tron's side.
+**Needs:** none.
+
+GATES (branch work/opencode-application-upgrade, on top of origin/master c583a70)
+- pytest tests/eval/ -q -> 159 passed (full suite unchanged at 578 passed / 3 skipped - docs-only unit)
+- ruff clean | black 230 unchanged | mypy 79 files | lint-imports 2 kept
