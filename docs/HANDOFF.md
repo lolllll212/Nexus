@@ -640,3 +640,18 @@ GATES (branch work/opencode-application-upgrade @ 9bafbe7, on top of origin/mast
 - ruff check src/ tests/ scripts/ -> All checks passed
 - black --check src/ tests/ -> 230 files would be left unchanged
 - mypy -> Success, 79 source files; lint-imports -> 2 kept, 0 broken
+
+### 2026-10-03 08:05 UTC - astra
+**Task:** task-037 (plan-001, upgrade-space docs, LOW) - RESOLVED, all three parts LANDED. (1) `docs/upgrade-spaces.md` records all ten spaces with the MEASURED status on master, not the plan's intent: 2 landed (Space 2 overnight daemon, Space 8 LoRA pipeline - both mine), 8 not landed with their owners; Space 7 (bridge security) called out as the one real security gap - the WebSocket bridge has no shared-token auth today. Status per space so the page cannot over-claim; each landed space documents its env vars and how to enable it. `docs/plan-upgrade-spaces.json` committed here too - it existed ONLY as an untracked file in the shared tree, and it is the plan of record for all 11 subtasks; if that tree resets, the plan was gone. (2) The env-var guard now scans `scripts/` as well as `src/`, BOTH directions - the landed daemon introduced NEXUS_DAEMON_KILL_SWITCH + NEXUS_DAEMON_BLACKOUTS in `scripts/overnight_daemon.py`, and an env var read by an ops script is exactly as undocumented as one read by a module. The extension failed on first run and named 4 undocumented vars, all real: NEXUS_API_KEY (the heal loop's primary-LLM key, one letter away from the API server's NEXUS_API_KEYS auth map), NEXUS_HEAL_PYTEST_TIMEOUT, and the two daemon vars - all four now in a "Daemon and heal loop" ops-table group with a note that the guard scans both trees. (3) index.md links the new page (orphan check requires it); AGENTS.md Ops section points at the plan + docs page with the docs-with-code rule restated. The CLI-command contract parses the two new documented commands against the real parsers (`python scripts/overnight_daemon.py --dry-run`, `python -m nexus.training.cli lora --baseline 0.8 --run-eval` - lora flags verified against the module source).
+
+**Files:** docs/upgrade-spaces.md (new), docs/plan-upgrade-spaces.json (new - plan of record), docs/index.md, docs/architecture-map.md, AGENTS.md, tests/eval/test_docs_env_vars.py
+**Status:** done
+**Next:** my three plan tasks (task-030, task-033, task-037) are all done. Looping; will poll for CEO work.
+**Needs:** none.
+
+GATES (branch work/opencode-application-upgrade @ cb1261e, on top of origin/master 4702dea)
+- pytest tests/ -q -> 578 passed, 3 skipped, 0 failed
+- doc contracts: test_docs_integrity + test_docs_env_vars + test_docs_cli_commands + test_architecture_map -> 32 passed (all three task ACs: no dead links/anchors, every env var documented, guard passes)
+- ruff check src/ tests/ scripts/ -> All checks passed
+- black --check src/ tests/ -> 230 files would be left unchanged
+- mypy -> Success, 79 source files; lint-imports -> 2 kept, 0 broken
