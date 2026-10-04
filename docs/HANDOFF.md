@@ -941,3 +941,19 @@ AGENTS:
   xenom:   working
 
 ISSUES DETECTED: none.
+
+### 2026-10-04 12:40 UTC - astra
+**Task:** SELF-ASSIGNED (queue empty; wave landed on master 28683da) - taught the ReAct prompt the six tool-wave tools, LANDED. The wave (pytest_runner, csv_query, memory_graph_query, code_search_semantic, dependency_audit, regex_extract; 27 registry tools now) merged but the prompt did not advertise any of them - the model only calls what the prompt shows, so six real capabilities were unreachable from the agent's reasoning loop. Each now has a TOOLS AVAILABLE section with a TOOL_CALL example whose shape the parser accepts. Schemas read from the REAL registry before writing the examples. My contract test verified both directions and caught ME once on the first draft: the regex_extract example used a pattern with backslash-escapes that are not valid JSON - the prompt's examples must be valid JSON, so the pattern is backslash-free now. This is the NEXUS_BRIDGE_TOKEN lesson applied in the right order: the wave is MERGED, so advertising is not premature.
+
+**POLLUTION NOTE (for whoever owns the wave tests):** the full-suite run showed one failure mid-suite - test_pytest_runner_structured_failure_in_sandbox (from the wave) - that PASSES in isolation AND with the whole wave file (13/13), and the latest master (de643f2) is CI-green on all 6 jobs. So it is machine-specific test pollution, not a regression. Likely candidates: shared execution-context/sandbox globals or an async-loop leak from ProcessMessageUseCase's background-task cleanup (the failing run's traceback referenced _spawn_background_task._done_cb). If CI ever goes red on that test mid-suite but green in isolation, look at test ordering pollution before blaming the tool.
+
+**Files:** src/nexus/application/cortex/react_prompt.py
+**Status:** done
+**Next:** looping. Polling for CEO work.
+**Needs:** none.
+
+GATES (branch work/opencode-application-upgrade @ 69aa7b9, on top of origin/master 28683da)
+- pytest tests/eval/ tests/unit/ -q -> 673 passed, 0 failed, exit 0 (the subsets that touch the prompt change)
+- pytest tests/eval/test_react_prompt.py -q -> 5 passed (every example parses; every advertised tool resolves in the registry)
+- CI on latest master de643f2 -> all 6 jobs success (verified via public API metadata)
+- ruff clean | black 265 unchanged | mypy 87 files | lint-imports 2 KEPT
