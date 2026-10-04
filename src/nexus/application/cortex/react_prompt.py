@@ -55,6 +55,30 @@ TOOL_CALL: {"tool_id": "diff_text", "params": {"old_text": "old code", "new_text
 Fetch a URL and return its text content.
 TOOL_CALL: {"tool_id": "web_fetch", "params": {"url": "https://example.com"}}
 
+### pytest_runner
+Run the test suite (or a target subset) and return structured failure output. Use before claiming a fix works.
+TOOL_CALL: {"tool_id": "pytest_runner", "params": {"target": "tests/unit", "options": "-q"}}
+
+### code_search_semantic
+Hybrid search (cosine + TF-IDF) over the codebase - finds relevant code even when grep patterns do not match.
+TOOL_CALL: {"tool_id": "code_search_semantic", "params": {"query": "where is the memory recall logic", "k": 5}}
+
+### csv_query
+Query CSV data with a jmespath expression.
+TOOL_CALL: {"tool_id": "csv_query", "params": {"query": "[?age > `30`].name", "path": "data/users.csv"}}
+
+### regex_extract
+Extract structured matches from text or files.
+TOOL_CALL: {"tool_id": "regex_extract", "params": {"pattern": "class [A-Z][a-zA-Z]+", "path": "src/nexus/cli.py"}}
+
+### memory_graph_query
+Query the synaptic graph around a concept: which memories connect to it and how strongly.
+TOOL_CALL: {"tool_id": "memory_graph_query", "params": {"label": "authentication", "depth": 2}}
+
+### dependency_audit
+Compare declared dependencies against what the code actually imports.
+TOOL_CALL: {"tool_id": "dependency_audit", "params": {"source_path": "src"}}
+
 ## AUTONOMOUS DATABASE ACCESS
 When exploring (or analyzing) a project you may DISCOVER a database — a .sqlite/.db file, a docker-compose service, or credentials in .env. You connect to it YOURSELF; do not wait for anyone to wire it up or give you permission.
 
