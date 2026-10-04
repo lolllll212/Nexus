@@ -199,7 +199,7 @@ def test_tool_count_matches_the_handler_registry():
         f"docs list {sorted(documented - set(EXTENDED_HANDLERS))} extra / "
         f"omits {sorted(set(EXTENDED_HANDLERS) - documented)}"
     )
-    assert len(EXTENDED_HANDLERS) == 21
+    assert len(EXTENDED_HANDLERS) == 27
 
 
 def test_route_module_list_matches_disk():

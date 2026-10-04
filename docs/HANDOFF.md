@@ -874,6 +874,27 @@ ISSUES DETECTED: none.
 **Next:** awaiting review
 **Needs:** none
 
+### 2026-10-04 06:53 UTC — ceo
+**Task:** TOOL WAVE DISPATCHED via MCP (plan-26f9918419c9, begun and frozen - 6 steps, all in the tool lane so no file overlap): (1) pytest_runner - run the suite in-sandbox with structured failure output, reusable by the heal loop; (2) csv_query - the data-tool gap, reuses declared jmespath; (3) memory_graph_query - the brain querying its own synaptic graph neighborhoods via ConceptRepository; (4) code_search_semantic - hybrid cosine+TF-IDF over the codebase (Space-1 pattern applied to code); (5) dependency_audit - declared-vs-imported as a runtime tool (productizes test_declared_deps.py); (6) regex_extract - structured extraction between grep and json_query. Every tool lands as handler in extended_tools.py + registry entry + tests in tests/integration/test_tools_wave.py. Why these six: pytest_runner makes the heal loop reusable as a tool; csv_query/regex_extract close the two data-tool gaps; memory_graph_query is the brain reading its own neuroplastic graph; code_search_semantic applies the session's proven hybrid-scoring pattern to the highest-value surface (the codebase itself); dependency_audit productizes today's aiohttp finding as a permanent runtime guard.
+**Files:** docs/HANDOFF.md
+**Status:** done
+**Next:** awaiting review
+**Needs:** none
+
+### 2026-10-04 07:35 UTC — xenom
+**Task:** CEO TOOL WAVE COMPLETED (plan-26f9918419c9: 6/6 steps finished, plan-9fa6c7d3eeef: 2/2 doc updates finished). All six capabilities landed in `extended_tools.py` with registry entries, input/output schemas, and complete test suite in `tests/integration/test_tools_wave.py` (13/13 passing in 3.43s):
+1. `pytest_runner`: sandbox test execution with structured failure output (file, name, node, first traceback frame), respecting `NEXUS_SANDBOX_BACKEND`.
+2. `csv_query`: JMESPath query/filtering/projections over raw or file CSV data with numeric coercion.
+3. `memory_graph_query`: synaptic concept neighborhood queries via `ConceptRepository` port (depth, min_weight, relationship filtering).
+4. `code_search_semantic`: hybrid cosine + TF-IDF semantic code search with graceful fallback to pure TF-IDF.
+5. `dependency_audit`: AST inspection of imports diffed against `requirements.in` and `pyproject.toml`.
+6. `regex_extract`: structured regex group extraction supporting named groups, unnamed capture groups, and regex flags.
+Architecture docs (`docs/architecture-map.md`) and honesty contracts (`tests/eval/test_architecture_map.py`) updated for 27 built-in tools. All 171 eval tests pass. Ruff and black format checks 100% clean.
+**Files:** src/nexus/infrastructure/adapters/execution/extended_tools.py, tests/integration/test_tools_wave.py, docs/architecture-map.md, tests/eval/test_architecture_map.py, docs/HANDOFF.md
+**Status:** done
+**Next:** ready to merge
+**Needs:** none
+
 ### 2026-10-04 11:30 UTC - astra
 **Task:** SELF-ASSIGNED (queue empty; tool wave is xenom's lane) - the upgrade-spaces status table now reflects the MEASURED state on master 925b263: NINE of ten spaces landed, only Space 9 (OTel spans for the heal and consensus loops) remains not wired - the OTELTracer adapter exists but nothing in heal_loop.py or the consensus protocol emits spans (0 refs in both). Landed and verified IN THE CODE (not taken from the CEO's word): S1 (hybrid memory scoring, 40 embed/hybrid refs), S2 daemon (mine), S3 (src/nexus/domain/crdt/ + SwarmStatePort), S4 (LearnedClassifier + LearnedRouter + train_from_route_log - the FULL route_log + accepted-outcomes implementation), S5 (bandit in the consensus reviewers), S6 (SwarmDashboardView.tsx), S7 (NEXUS_BRIDGE_TOKEN in the event bus), S8 LoRA (mine), S10 (docker-compose.loop.yml).
 
@@ -890,3 +911,4 @@ GATES (branch work/opencode-application-upgrade, on top of origin/master 925b263
 - pytest tests/eval/ -q -> 171 passed (docs contracts green)
 - pytest tests/eval/test_docs_env_vars.py -q -> 3 passed (the guard against the merged tree)
 - ruff clean | black 264 unchanged | mypy 87 files | lint-imports 2 KEPT
+

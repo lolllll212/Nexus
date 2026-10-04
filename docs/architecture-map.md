@@ -124,7 +124,7 @@ evals, so anything that was already in-process stays in-process.
 | `synapse.py` | `SynapseConfig`, `ConnectionType` |
 | `valence.py` | `ValenceTag` |
 
-## Built-in tools (21)
+## Built-in tools (27)
 
 Registered by `BuiltinToolRegistry(default_builtin_tools())`; handlers live in
 `infrastructure/adapters/execution/extended_tools.py`.
@@ -133,7 +133,8 @@ Registered by `BuiltinToolRegistry(default_builtin_tools())`; handlers live in
 `write_file`, `list_directory`, `json_query`, `json_transform`,
 `current_datetime`, `diff_text`, `hash_text`, `base64_encode`, `git_info`,
 `http_request`, `grep`, `system_info`, `find_databases`, `query_database`,
-`process_multimodal_media`.
+`process_multimodal_media`, `pytest_runner`, `csv_query`, `memory_graph_query`,
+`code_search_semantic`, `dependency_audit`, `regex_extract`.
 
 Two of these exist specifically so the ReAct prompt can tell the agent to act
 on its own: `find_databases` scans a tree for `.sqlite`/`.db` files and

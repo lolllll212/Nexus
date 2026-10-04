@@ -12,6 +12,7 @@ Usage:
 
 import argparse
 import json
+import math
 import subprocess
 import sys
 import time
@@ -69,9 +70,18 @@ def load_crdt() -> SwarmState:
         try:
             crdt_data = json.loads(CRDT_FILE.read_text(encoding="utf-8"))
             saved_crdt = SwarmState.from_dict(crdt_data)
-            return saved_crdt.merge(base_state)
-        except Exception:
-            pass
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            saved_crdt = None
+        if saved_crdt is not None:
+            lock_ids = saved_crdt.active_locks.read() | base_state.active_locks.read()
+            merged = saved_crdt.merge(base_state)
+            if lock_ids - merged.active_locks.read():
+                _persist_crdt(merged, raw)
+            return merged
+    lock_ids = base_state.active_locks.read()
+    base_state.purge_expired_locks()
+    if lock_ids - base_state.active_locks.read():
+        _persist_crdt(base_state, raw)
     return base_state
 
 
@@ -84,7 +94,25 @@ def load_state() -> dict:
             pass
     crdt = load_crdt()
     state["state_hash"] = crdt.state_hash()
+    state["locks"] = sorted(crdt.active_locks.read())
+    state["lock_states"] = {
+        lock_id: lock.to_dict() for lock_id, lock in crdt.lock_states.items() if lock_id in crdt.active_locks
+    }
     return state
+
+
+def _persist_crdt(crdt: SwarmState, state: dict | None = None) -> None:
+    """Persist a CRDT snapshot while retaining the non-CRDT message board."""
+    if state is None:
+        state = {}
+        if STATE_FILE.exists():
+            try:
+                state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                state = {}
+    snapshot = crdt.to_nexus_state()
+    snapshot["messages"] = state.get("messages", [])
+    save_state(snapshot, crdt=crdt)
 
 
 def save_state(state: dict, crdt: SwarmState | None = None) -> None:
@@ -307,50 +335,97 @@ def _lock_file_path(file_path: str | Path) -> Path:
     return Path(str(p) + ".lock")
 
 
+def _lock_key(file_path: str | Path) -> str:
+    return str(file_path).replace("\\", "/").removeprefix("./")
+
+
+def _fallback_lock_status(lock_file: Path, current_time: float | None = None) -> tuple[bool, str | None]:
+    """Read a legacy lockfile, expiring it when its lease metadata is present."""
+    try:
+        content = lock_file.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return False, None
+
+    fields: dict[str, str] = {}
+    for line in content.splitlines():
+        key, separator, value = line.partition(":")
+        if separator:
+            fields[key.strip().lower()] = value.strip()
+    holder = fields.get("agent") or "fallback-lockfile"
+    acquired = fields.get("acquired_at") or fields.get("timestamp") or fields.get("since")
+    ttl_raw = fields.get("ttl")
+    if acquired:
+        try:
+            try:
+                acquired_at = float(acquired)
+            except ValueError:
+                acquired_at = datetime.fromisoformat(acquired.replace("Z", "+00:00")).timestamp()
+            ttl = float(ttl_raw) if ttl_raw else 900.0
+            if math.isfinite(acquired_at) and math.isfinite(ttl) and ttl > 0:
+                now_ts = current_time if current_time is not None else time.time()
+                if now_ts >= acquired_at + ttl:
+                    lock_file.unlink(missing_ok=True)
+                    return False, None
+        except ValueError:
+            # An unreadable legacy lease remains active rather than becoming
+            # an unsafe opportunity for another agent to take the file.
+            pass
+    return True, holder
+
+
 def acquire_file_lock(file_path: str, agent: str, ttl: float = 900.0) -> bool:
     """Acquire a CRDT distributed lock with lease expiry and fallback .lock file.
 
     Returns True if successfully acquired, False if blocked by another agent's active lease.
     """
-    file_key = str(file_path).replace("\\", "/")
+    if not agent:
+        raise ValueError("agent must be a non-empty identifier")
+    if not math.isfinite(ttl) or ttl <= 0:
+        raise ValueError("lock ttl must be a finite positive number")
+    file_key = _lock_key(file_path)
     crdt = load_crdt()
+    lock = crdt.get_lock(file_key)
+    lock_file = _lock_file_path(file_path)
+    if lock is None:
+        fallback_locked, fallback_holder = _fallback_lock_status(lock_file)
+        if fallback_locked and fallback_holder != agent:
+            return False
     try:
         crdt.acquire_lock(file_key, agent=agent, ttl=ttl)
     except LockBlockedError:
         return False
 
-    lock_file = _lock_file_path(file_path)
-    try:
-        lock_file.parent.mkdir(parents=True, exist_ok=True)
-        lock_file.write_text(f"agent: {agent}\nacquired_at: {now()}\nttl: {ttl}\n", encoding="utf-8")
-    except OSError:
-        pass
-
-    state = load_state()
-    new_state = crdt.to_nexus_state()
-    new_state["messages"] = state.get("messages", [])
-    save_state(new_state, crdt=crdt)
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
+    lock = crdt.get_lock(file_key)
+    if lock is None:
+        raise RuntimeError(f"CRDT lock '{file_key}' disappeared immediately after acquisition")
+    lock_file.write_text(
+        f"agent: {agent}\nacquired_at: {lock.acquired_at}\nttl: {lock.ttl}\n",
+        encoding="utf-8",
+    )
+    _persist_crdt(crdt)
     log_activity(agent, "lock", f"{file_key} (ttl={ttl:.0f}s)")
     return True
 
 
 def release_file_lock(file_path: str, agent: str | None = None) -> bool:
     """Release a CRDT distributed lock and remove fallback .lock file."""
-    file_key = str(file_path).replace("\\", "/")
+    file_key = _lock_key(file_path)
     crdt = load_crdt()
-    crdt.release_lock(file_key)
-
     lock_file = _lock_file_path(file_path)
-    if lock_file.exists():
-        try:
-            lock_file.unlink()
-        except OSError:
-            pass
+    lock = crdt.get_lock(file_key)
+    fallback_locked, fallback_holder = _fallback_lock_status(lock_file)
+    if lock is None and not fallback_locked:
+        return False
+    if agent and lock is not None and lock.agent != agent:
+        return False
+    if agent and lock is None and fallback_locked and fallback_holder != agent:
+        return False
 
-    state = load_state()
-    new_state = crdt.to_nexus_state()
-    new_state["messages"] = state.get("messages", [])
-    save_state(new_state, crdt=crdt)
+    if lock is not None:
+        crdt.release_lock(file_key)
+    lock_file.unlink(missing_ok=True)
+    _persist_crdt(crdt)
     if agent:
         log_activity(agent, "unlock", file_key)
     return True
@@ -361,81 +436,46 @@ def is_file_locked(file_path: str, current_time: float | None = None) -> tuple[b
 
     Returns (is_locked, holder_or_reason).
     """
-    file_key = str(file_path).replace("\\", "/")
+    file_key = _lock_key(file_path)
     crdt = load_crdt()
-    crdt.purge_expired_locks(current_time=current_time)
-
-    if crdt.is_locked(file_key, current_time=current_time):
-        st = crdt.get_lock(file_key, current_time=current_time)
-        holder = st.agent if st else "unknown"
-        return True, holder
-
-    lf = _lock_file_path(file_path)
-    if lf.exists():
-        try:
-            content = lf.read_text(encoding="utf-8")
-            for line in content.splitlines():
-                if line.startswith("agent:"):
-                    return True, line.split(":", 1)[1].strip()
-            return True, "fallback-lockfile"
-        except OSError:
-            return True, "fallback-lockfile"
-
-    return False, None
+    before = crdt.active_locks.read()
+    locked = crdt.is_locked(file_key, current_time=current_time)
+    if before != crdt.active_locks.read():
+        _persist_crdt(crdt)
+    if locked:
+        lock = crdt.get_lock(file_key, current_time=current_time)
+        return True, lock.agent if lock else "unknown"
+    return _fallback_lock_status(_lock_file_path(file_path), current_time=current_time)
 
 
 def cmd_lock(args, state):
     agent = args.agent
     file_path = args.file
-    ttl = getattr(args, "ttl", 900.0) or 900.0
-    file_key = str(file_path).replace("\\", "/")
-
-    crdt = load_crdt()
-    try:
-        crdt.acquire_lock(file_key, agent=agent, ttl=ttl)
-    except LockBlockedError as err:
-        print(f"[{agent}] LOCK BLOCKED: {err}")
+    ttl = getattr(args, "ttl", 900.0)
+    if not acquire_file_lock(file_path, agent=agent, ttl=ttl):
+        _, holder = is_file_locked(file_path)
+        print(f"[{agent}] LOCK BLOCKED: {file_path} is held by {holder or 'another agent'}")
         sys.exit(1)
-
-    lock_file = _lock_file_path(file_path)
-    try:
-        lock_file.parent.mkdir(parents=True, exist_ok=True)
-        lock_file.write_text(f"agent: {agent}\nacquired_at: {now()}\nttl: {ttl}\n", encoding="utf-8")
-    except OSError:
-        pass
-
-    new_state = crdt.to_nexus_state()
-    new_state["messages"] = state.get("messages", [])
-    save_state(new_state, crdt=crdt)
-    log_activity(agent, "lock", f"{file_key} (ttl={ttl:.0f}s)")
+    file_key = _lock_key(file_path)
     print(f"[{agent}] acquired lock on {file_key} (lease: {ttl:.0f}s)")
 
 
 def cmd_unlock(args, state):
     agent = args.agent
     file_path = args.file
-    file_key = str(file_path).replace("\\", "/")
-
-    crdt = load_crdt()
-    crdt.release_lock(file_key)
-
-    lock_file = _lock_file_path(file_path)
-    if lock_file.exists():
-        try:
-            lock_file.unlink()
-        except OSError:
-            pass
-
-    new_state = crdt.to_nexus_state()
-    new_state["messages"] = state.get("messages", [])
-    save_state(new_state, crdt=crdt)
-    log_activity(agent, "unlock", file_key)
+    file_key = _lock_key(file_path)
+    if not release_file_lock(file_path, agent=agent):
+        print(f"[{agent}] cannot release lock on {file_key}: not held by this agent")
+        sys.exit(1)
     print(f"[{agent}] released lock on {file_key}")
 
 
 def cmd_locks(args, state):
     crdt = load_crdt()
+    active_before = crdt.active_locks.read()
     crdt.purge_expired_locks()
+    if active_before != crdt.active_locks.read():
+        _persist_crdt(crdt)
     active_locks = sorted(list(crdt.active_locks.read()))
     print(f"=== Active Swarm Locks ({len(active_locks)}) ===")
     if not active_locks:

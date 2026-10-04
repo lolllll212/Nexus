@@ -120,7 +120,17 @@ pytest tests/ -q
 
 ## 6. Locking a file
 
-When an agent needs a file another agent is mid-way through, create `.<file>.lock` (e.g. `src/nexus/domain/ports.py.lock`) containing your agent name and timestamp. Delete it when done. Always check for `.lock` files before editing.
+Use `agent_comm.py` to coordinate file locks across worktrees:
+
+```bash
+python scripts/agent_comm.py locks
+python scripts/agent_comm.py lock --agent xenom --file src/nexus/domain/ports.py --ttl 900
+python scripts/agent_comm.py unlock --agent xenom --file src/nexus/domain/ports.py
+```
+
+The shared CRDT lock board (`nexus_crdt.json`, mirrored in `nexus_state.json`) is authoritative. Locks have a 900-second default lease; pass `--ttl` to choose another positive duration. Expired leases are purged when state is read or merged, so a stopped agent cannot block a file indefinitely. Only the current holder can unlock a live lock.
+
+For compatibility with older agents, each lock also writes `src/nexus/domain/ports.py.lock` with the holder and lease metadata. A live legacy `.lock` file without CRDT state is still respected. Legacy files with a timestamp but no TTL receive the 900-second default; files with no parseable timestamp are treated as active until removed manually. Always check `agent_comm.py locks` before editing and release your lock when finished.
 
 ## 7. Definition of done
 

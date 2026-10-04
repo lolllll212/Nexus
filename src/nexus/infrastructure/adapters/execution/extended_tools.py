@@ -13,6 +13,7 @@ import json
 import os
 import platform
 import re
+import sys
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
@@ -96,10 +97,46 @@ def set_default_sandbox(sandbox: Any) -> None:
 def get_default_sandbox() -> Any:
     global _DEFAULT_SANDBOX
     if _DEFAULT_SANDBOX is None:
-        from nexus.infrastructure.adapters.sandbox.docker_sandbox import DockerSandbox
+        backend = os.getenv("NEXUS_SANDBOX_BACKEND", "docker").lower()
+        if backend == "subprocess":
+            from nexus.infrastructure.adapters.sandbox.subprocess_sandbox import SubprocessSandbox
 
-        _DEFAULT_SANDBOX = DockerSandbox()
+            _DEFAULT_SANDBOX = SubprocessSandbox()
+        else:
+            from nexus.infrastructure.adapters.sandbox.docker_sandbox import DockerSandbox
+
+            _DEFAULT_SANDBOX = DockerSandbox()
     return _DEFAULT_SANDBOX
+
+
+_CONCEPT_REPOSITORY: Any = None
+
+
+def set_concept_repository(repo: Any) -> None:
+    global _CONCEPT_REPOSITORY
+    _CONCEPT_REPOSITORY = repo
+
+
+def get_concept_repository() -> Any:
+    global _CONCEPT_REPOSITORY
+    if _CONCEPT_REPOSITORY is None:
+        from nexus.infrastructure.adapters.inmemory.concept_repository import InMemoryConceptRepository
+
+        _CONCEPT_REPOSITORY = InMemoryConceptRepository()
+    return _CONCEPT_REPOSITORY
+
+
+_EMBEDDER: Any = None
+
+
+def set_embedder(embedder: Any) -> None:
+    global _EMBEDDER
+    _EMBEDDER = embedder
+
+
+def get_embedder() -> Any:
+    global _EMBEDDER
+    return _EMBEDDER
 
 
 def get_workspace_root() -> Path:
@@ -327,6 +364,113 @@ TOOL_DEFS: list[dict[str, Any]] = [
             "ocr_extracted_text": {"type": "array"},
             "keyframes": {"type": "array"},
             "answer": {"type": "string"},
+        },
+    },
+    {
+        "id": "pytest_runner",
+        "name": "pytest_runner",
+        "description": "Run the test suite inside the sandbox with structured failure output (test file, test name, first traceback frame). Respects NEXUS_SANDBOX_BACKEND.",
+        "input": {
+            "target": {"type": "string"},
+            "options": {"type": "string"},
+            "timeout": {"type": "integer"},
+            "files": {"type": "object"},
+        },
+        "output": {
+            "passed": {"type": "integer"},
+            "failed": {"type": "integer"},
+            "skipped": {"type": "integer"},
+            "total_failed": {"type": "integer"},
+            "returncode": {"type": "integer"},
+            "failures": {"type": "array"},
+            "summary": {"type": "string"},
+            "output": {"type": "string"},
+        },
+    },
+    {
+        "id": "csv_query",
+        "name": "csv_query",
+        "description": "Query, filter, project, and aggregate CSV data using a JMESPath expression.",
+        "input": {
+            "query": {"type": "string"},
+            "data": {"type": "string"},
+            "path": {"type": "string"},
+            "delimiter": {"type": "string"},
+        },
+        "required": ["query"],
+        "output": {
+            "result": {"type": "any"},
+            "count": {"type": "integer"},
+            "columns": {"type": "array"},
+        },
+    },
+    {
+        "id": "memory_graph_query",
+        "name": "memory_graph_query",
+        "description": "Query concept neighborhoods and synaptic connections in the brain's concept graph via the ConceptRepository port.",
+        "input": {
+            "concept_id": {"type": "string"},
+            "label": {"type": "string"},
+            "relationship_type": {"type": "string"},
+            "depth": {"type": "integer"},
+            "min_weight": {"type": "number"},
+            "tenant_id": {"type": "string"},
+        },
+        "output": {
+            "concept": {"type": "object"},
+            "neighbors": {"type": "array"},
+            "connections": {"type": "array"},
+            "memories": {"type": "array"},
+        },
+    },
+    {
+        "id": "code_search_semantic",
+        "name": "code_search_semantic",
+        "description": "Hybrid semantic search over the codebase (alpha*cosine + (1-alpha)*TF-IDF), with automatic fallback to TF-IDF when embedder is unavailable.",
+        "input": {
+            "query": {"type": "string"},
+            "path": {"type": "string"},
+            "k": {"type": "integer"},
+            "alpha": {"type": "number"},
+            "extensions": {"type": "array"},
+        },
+        "required": ["query"],
+        "output": {
+            "results": {"type": "array"},
+            "total_matches": {"type": "integer"},
+        },
+    },
+    {
+        "id": "dependency_audit",
+        "name": "dependency_audit",
+        "description": "Scan a Python source tree for external third-party imports and diff against declared dependencies in requirements.in and pyproject.toml.",
+        "input": {
+            "source_path": {"type": "string"},
+            "requirements_path": {"type": "string"},
+            "pyproject_path": {"type": "string"},
+        },
+        "output": {
+            "clean": {"type": "boolean"},
+            "undeclared": {"type": "array"},
+            "declared": {"type": "array"},
+            "imported": {"type": "array"},
+        },
+    },
+    {
+        "id": "regex_extract",
+        "name": "regex_extract",
+        "description": "Structured extraction from unstructured text via regex with named or unnamed capture groups. Supports flags (ignorecase, multiline, dotall).",
+        "input": {
+            "pattern": {"type": "string"},
+            "text": {"type": "string"},
+            "path": {"type": "string"},
+            "flags": {"type": "string"},
+        },
+        "required": ["pattern"],
+        "output": {
+            "matches": {"type": "array"},
+            "total_matches": {"type": "integer"},
+            "named_groups": {"type": "boolean"},
         },
     },
 ]
@@ -1121,6 +1265,565 @@ async def _process_multimodal_media(params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def _pytest_runner(params: dict[str, Any]) -> dict[str, Any]:
+    target = params.get("target", "tests/")
+    options = params.get("options", "-q --tb=short")
+    timeout = int(params.get("timeout", 120))
+    files = params.get("files")
+
+    sandbox = get_default_sandbox()
+
+    if files and isinstance(files, dict):
+        res = await sandbox.run_project(
+            files,
+            test_command=f"python -m pytest {target} {options}",
+            timeout=timeout,
+        )
+        raw_output = (res.get("output", "") + "\n" + res.get("error", "")).strip()
+        returncode = res.get("returncode", 0 if not res.get("error") else 1)
+    else:
+        cmd = [sys.executable, "-m", "pytest", *target.split(), *options.split()]
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=str(get_workspace_root()),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            out_str = stdout.decode(errors="replace")
+            err_str = stderr.decode(errors="replace")
+            raw_output = (out_str + ("\n" + err_str if err_str else "")).strip()
+            returncode = proc.returncode or 0
+        except TimeoutError:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            return {
+                "passed": 0,
+                "failed": 0,
+                "skipped": 0,
+                "total_failed": 1,
+                "returncode": -1,
+                "failures": [
+                    {"file": target, "name": "timeout", "node": target, "error": f"Timeout after {timeout}s"}
+                ],
+                "summary": f"Pytest timed out after {timeout}s",
+                "output": "",
+            }
+        except Exception as e:
+            return {
+                "passed": 0,
+                "failed": 0,
+                "skipped": 0,
+                "total_failed": 1,
+                "returncode": -1,
+                "failures": [{"file": target, "name": "error", "node": target, "error": str(e)}],
+                "summary": f"Failed to execute pytest: {e}",
+                "output": "",
+            }
+
+    counts = {"passed": 0, "failed": 0, "skipped": 0}
+    for key, pattern in (
+        ("passed", r"(\d+)\s+passed"),
+        ("failed", r"(\d+)\s+failed"),
+        ("skipped", r"(\d+)\s+skipped"),
+    ):
+        found = re.findall(pattern, raw_output)
+        if found:
+            counts[key] = int(found[-1])
+
+    failures = []
+    fail_re = re.compile(r"^FAILED\s+([^\s:]+)::([^\s]+)(?:\s+-\s+(.*))?", re.MULTILINE)
+    for m in fail_re.finditer(raw_output):
+        f_file = m.group(1).replace("\\", "/")
+        f_name = m.group(2)
+        f_reason = m.group(3) or ""
+        first_frame = f_reason
+        if not first_frame:
+            e_match = re.search(r"E\s{3,}(.*)", raw_output)
+            if e_match:
+                first_frame = e_match.group(1).strip()
+        failures.append(
+            {
+                "file": f_file,
+                "name": f_name,
+                "node": f"{f_file}::{f_name}",
+                "error": first_frame or "Test failed",
+            }
+        )
+
+    total_failed = counts["failed"]
+    if returncode != 0 and total_failed == 0 and not counts["passed"]:
+        total_failed = 1
+
+    summary_match = re.search(r"(=+\s+.*?\s+=+)$", raw_output, re.MULTILINE)
+    summary = (
+        summary_match.group(1)
+        if summary_match
+        else f"{counts['passed']} passed, {total_failed} failed, {counts['skipped']} skipped"
+    )
+
+    return {
+        "passed": counts["passed"],
+        "failed": counts["failed"],
+        "skipped": counts["skipped"],
+        "total_failed": total_failed,
+        "returncode": returncode,
+        "failures": failures,
+        "summary": summary,
+        "output": raw_output[:10000],
+    }
+
+
+async def _csv_query(params: dict[str, Any]) -> dict[str, Any]:
+    import csv
+    import io
+
+    import jmespath
+
+    query = params.get("query", "").strip()
+    if not query:
+        raise ValueError("Missing required parameter: query")
+
+    data = params.get("data")
+    path_param = params.get("path")
+    delimiter = params.get("delimiter", ",")
+
+    if not data and path_param:
+        path, err = resolve_confined_path(path_param, must_exist=True)
+        if not path:
+            return {"error": err, "result": None, "count": 0, "columns": []}
+        data = path.read_text(encoding="utf-8", errors="replace")
+
+    if data is None:
+        return {
+            "error": "Either 'data' or 'path' must be provided",
+            "result": None,
+            "count": 0,
+            "columns": [],
+        }
+
+    try:
+        reader = csv.DictReader(io.StringIO(data), delimiter=delimiter)
+        columns = list(reader.fieldnames or [])
+        rows = []
+        for r in reader:
+            parsed_row = {}
+            for k, v in r.items():
+                if v is None:
+                    parsed_row[k] = None
+                    continue
+                v_clean = v.strip()
+                if v_clean.isdigit():
+                    try:
+                        parsed_row[k] = int(v_clean)
+                    except ValueError:
+                        parsed_row[k] = v
+                else:
+                    try:
+                        parsed_row[k] = float(v_clean)
+                    except ValueError:
+                        parsed_row[k] = v
+            rows.append(parsed_row)
+
+        res = jmespath.search(query, rows)
+        count = len(res) if isinstance(res, list) else 1
+        return {"result": res, "count": count, "columns": columns}
+    except Exception as e:
+        return {"error": str(e), "result": None, "count": 0, "columns": []}
+
+
+async def _memory_graph_query(params: dict[str, Any]) -> dict[str, Any]:
+    concept_id = params.get("concept_id")
+    label = params.get("label")
+    rel_type = params.get("relationship_type")
+    depth = min(3, max(1, int(params.get("depth", 1))))
+    min_weight = float(params.get("min_weight", 0.0))
+    tenant_id = params.get("tenant_id") or get_execution_context().get("tenant_id", "default")
+
+    repo = get_concept_repository()
+
+    concept = None
+    if concept_id:
+        concept = await repo.get(concept_id, tenant_id=tenant_id)
+    elif label:
+        matches = await repo.find_by_label(label, limit=1, tenant_id=tenant_id)
+        if matches:
+            concept = matches[0]
+
+    if not concept:
+        return {
+            "concept": None,
+            "neighbors": [],
+            "connections": [],
+            "memories": [],
+            "error": f"Concept not found (id='{concept_id}', label='{label}')",
+        }
+
+    memories = []
+    try:
+        raw_mems = await repo.get_memories(concept.id, tenant_id=tenant_id)
+        memories = [m.to_dict() if hasattr(m, "to_dict") else {"id": getattr(m, "id", "")} for m in raw_mems]
+    except Exception:
+        memories = []
+
+    visited_concepts = {concept.id}
+    collected_connections = []
+    current_ids = {concept.id}
+
+    for _ in range(depth):
+        next_ids = set()
+        for cid in current_ids:
+            conns = await repo.get_connections(cid, min_weight=min_weight, tenant_id=tenant_id)
+            for c in conns:
+                c_type_str = str(
+                    c.connection_type.value if hasattr(c.connection_type, "value") else c.connection_type
+                )
+                if rel_type and c_type_str.lower() != rel_type.lower():
+                    continue
+
+                conn_dict = {
+                    "source_id": c.source_id,
+                    "target_id": c.target_id,
+                    "type": c_type_str,
+                    "weight": c.weight,
+                }
+                collected_connections.append(conn_dict)
+                other_id = c.target_id if c.source_id == cid else c.source_id
+                if other_id not in visited_concepts:
+                    visited_concepts.add(other_id)
+                    next_ids.add(other_id)
+        current_ids = next_ids
+        if not current_ids:
+            break
+
+    neighbors = []
+    for nid in visited_concepts:
+        if nid == concept.id:
+            continue
+        n_concept = await repo.get(nid, tenant_id=tenant_id)
+        if n_concept:
+            neighbors.append(
+                {
+                    "id": n_concept.id,
+                    "label": n_concept.label,
+                    "type": n_concept.concept_type,
+                    "properties": n_concept.properties,
+                }
+            )
+
+    return {
+        "concept": {
+            "id": concept.id,
+            "label": concept.label,
+            "type": concept.concept_type,
+            "properties": concept.properties,
+        },
+        "neighbors": neighbors,
+        "connections": collected_connections,
+        "memories": memories,
+    }
+
+
+async def _code_search_semantic(params: dict[str, Any]) -> dict[str, Any]:
+    import math
+
+    query = params.get("query", "").strip()
+    if not query:
+        raise ValueError("Missing required parameter: query")
+
+    search_path_str = params.get("path", ".")
+    k = max(1, int(params.get("k", 5)))
+    alpha = max(0.0, min(1.0, float(params.get("alpha", 0.7))))
+    extensions = params.get("extensions") or [".py", ".md", ".json", ".txt"]
+
+    search_dir, err = resolve_confined_path(search_path_str, must_exist=True)
+    if not search_dir:
+        return {"results": [], "total_matches": 0, "error": err}
+
+    q_tokens = [t for t in re.findall(r"[a-z0-9_]{2,}", query.lower())]
+    if not q_tokens:
+        return {"results": [], "total_matches": 0}
+
+    chunks: list[dict[str, Any]] = []
+    candidates = []
+    if search_dir.is_file():
+        candidates.append(search_dir)
+    else:
+        for root, dirs, files in os.walk(search_dir):
+            dirs[:] = [
+                d
+                for d in dirs
+                if not d.startswith(".") and d not in ("__pycache__", "node_modules", ".venv", "venv")
+            ]
+            for f in files:
+                p = Path(root) / f
+                if any(f.endswith(ext) for ext in extensions) and not is_denylisted_path(p):
+                    candidates.append(p)
+                    if len(candidates) >= 500:
+                        break
+            if len(candidates) >= 500:
+                break
+
+    for p in candidates:
+        try:
+            content = p.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        rel_p = (
+            str(p.relative_to(get_workspace_root())).replace("\\", "/")
+            if p.is_relative_to(get_workspace_root())
+            else str(p)
+        )
+        lines = content.splitlines()
+        chunk_size = 40
+        for i in range(0, max(1, len(lines)), 30):
+            block = lines[i : i + chunk_size]
+            if not block:
+                continue
+            block_text = "\n".join(block)
+            b_tokens = [t for t in re.findall(r"[a-z0-9_]{2,}", block_text.lower())]
+            if not b_tokens:
+                continue
+            chunks.append(
+                {
+                    "file": rel_p,
+                    "line": i + 1,
+                    "text": block_text,
+                    "tokens": b_tokens,
+                }
+            )
+
+    if not chunks:
+        return {"results": [], "total_matches": 0}
+
+    n_docs = len(chunks)
+    df: dict[str, int] = {}
+    for c in chunks:
+        for t in set(c["tokens"]):
+            df[t] = df.get(t, 0) + 1
+
+    q_counts: dict[str, int] = {}
+    for t in q_tokens:
+        q_counts[t] = q_counts.get(t, 0) + 1
+    q_len = len(q_tokens) or 1
+    q_tf = {t: cnt / q_len for t, cnt in q_counts.items()}
+    q_vec = {t: tf * (math.log((n_docs + 1) / (df.get(t, 0) + 1)) + 1.0) for t, tf in q_tf.items()}
+    q_norm = sum(v * v for v in q_vec.values()) ** 0.5 or 1.0
+
+    embedder = get_embedder()
+    q_emb = None
+    if embedder is not None and alpha > 0.0:
+        try:
+            if hasattr(embedder, "embed_text"):
+                q_emb = embedder.embed_text(query)
+            elif hasattr(embedder, "embed"):
+                res = embedder.embed(query)
+                if asyncio.iscoroutine(res):
+                    res = await res
+                q_emb = res
+        except Exception:
+            q_emb = None
+
+    scored = []
+    for c in chunks:
+        c_tokens = c["tokens"]
+        c_counts: dict[str, int] = {}
+        for t in c_tokens:
+            c_counts[t] = c_counts.get(t, 0) + 1
+        c_len = len(c_tokens) or 1
+        c_vec = {
+            t: (cnt / c_len) * (math.log((n_docs + 1) / (df.get(t, 0) + 1)) + 1.0)
+            for t, cnt in c_counts.items()
+            if t in q_vec
+        }
+        dot = sum(q_vec[t] * c_vec[t] for t in c_vec)
+        c_norm = sum(v * v for v in c_vec.values()) ** 0.5 or 1.0
+        tfidf_score = dot / (q_norm * c_norm) if (q_norm * c_norm) > 0 else 0.0
+
+        cos_score = 0.0
+        if q_emb:
+            try:
+                c_emb = (
+                    embedder.embed_text(c["text"][:300])
+                    if hasattr(embedder, "embed_text")
+                    else embedder.embed(c["text"][:300])
+                )
+                if asyncio.iscoroutine(c_emb):
+                    c_emb = await c_emb
+                if c_emb and len(c_emb) == len(q_emb):
+                    dot_c = sum(x * y for x, y in zip(q_emb, c_emb))
+                    na = sum(x * x for x in q_emb) ** 0.5 or 1.0
+                    nb = sum(y * y for y in c_emb) ** 0.5 or 1.0
+                    cos_score = max(0.0, min(1.0, dot_c / (na * nb)))
+            except Exception:
+                cos_score = 0.0
+
+        final_score = (alpha * cos_score + (1.0 - alpha) * tfidf_score) if q_emb else tfidf_score
+        if final_score > 0.0:
+            scored.append(
+                {
+                    "file": c["file"],
+                    "line": c["line"],
+                    "score": round(final_score, 4),
+                    "snippet": c["text"][:300],
+                }
+            )
+
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    top_matches = scored[:k]
+    return {
+        "results": top_matches,
+        "total_matches": len(top_matches),
+    }
+
+
+async def _dependency_audit(params: dict[str, Any]) -> dict[str, Any]:
+    import ast
+    import tomllib
+
+    src_str = params.get("source_path", "src")
+    req_str = params.get("requirements_path", "requirements.in")
+    proj_str = params.get("pyproject_path", "pyproject.toml")
+
+    src_dir, err1 = resolve_confined_path(src_str, must_exist=True)
+    if not src_dir:
+        return {"clean": False, "undeclared": [], "declared": [], "imported": [], "error": err1}
+
+    declared: set[str] = set()
+
+    req_file, _ = resolve_confined_path(req_str)
+    if req_file and req_file.exists():
+        for line in req_file.read_text(encoding="utf-8", errors="replace").splitlines():
+            line_s = line.strip()
+            if line_s and not line_s.startswith("#"):
+                pkg = re.split(r"[<>=!~\[]", line_s, maxsplit=1)[0].lower().replace("_", "-")
+                declared.add(pkg)
+
+    proj_file, _ = resolve_confined_path(proj_str)
+    if proj_file and proj_file.exists():
+        try:
+            data = tomllib.loads(proj_file.read_text(encoding="utf-8", errors="replace"))
+            deps = data.get("project", {}).get("dependencies", [])
+            for dep in deps:
+                pkg = re.split(r"[<>=!~\[]", dep, maxsplit=1)[0].lower().replace("_", "-")
+                declared.add(pkg)
+        except Exception:
+            pass
+
+    ALIASES = {
+        "yaml": "pyyaml",
+        "dotenv": "python-dotenv",
+        "jwt": "pyjwt",
+        "bs4": "beautifulsoup4",
+        "cv2": "opencv-python",
+        "dateutil": "python-dateutil",
+        "opentelemetry": "opentelemetry-api",
+        "qdrant_client": "qdrant-client",
+        "neo4j": "neo4j",
+    }
+
+    imported: set[str] = set()
+    py_files = [src_dir] if src_dir.is_file() else list(src_dir.rglob("*.py"))
+    stdlib_modules = set(sys.stdlib_module_names)
+
+    for pf in py_files:
+        if is_denylisted_path(pf):
+            continue
+        try:
+            tree = ast.parse(pf.read_text(encoding="utf-8", errors="replace"), filename=str(pf))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        top = alias.name.split(".")[0]
+                        imported.add(top)
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    top = node.module.split(".")[0]
+                    imported.add(top)
+        except Exception:
+            continue
+
+    external_imported = imported - stdlib_modules - {"nexus"}
+    normalized_imported = {ALIASES.get(mod, mod.lower().replace("_", "-")) for mod in external_imported}
+    undeclared = {pkg for pkg in normalized_imported if pkg not in declared}
+
+    return {
+        "clean": len(undeclared) == 0,
+        "undeclared": sorted(list(undeclared)),
+        "declared": sorted(list(declared)),
+        "imported": sorted(list(normalized_imported)),
+    }
+
+
+async def _regex_extract(params: dict[str, Any]) -> dict[str, Any]:
+    pattern = params.get("pattern", "").strip()
+    if not pattern:
+        raise ValueError("Missing required parameter: pattern")
+
+    text = params.get("text")
+    path_param = params.get("path")
+    flags_val = params.get("flags", "")
+
+    if text is None and path_param:
+        path, err = resolve_confined_path(path_param, must_exist=True)
+        if not path:
+            return {"error": err, "matches": [], "total_matches": 0, "named_groups": False}
+        text = path.read_text(encoding="utf-8", errors="replace")
+
+    if text is None:
+        return {
+            "error": "Either 'text' or 'path' must be provided",
+            "matches": [],
+            "total_matches": 0,
+            "named_groups": False,
+        }
+
+    regex_flags = 0
+    if flags_val:
+        if isinstance(flags_val, int):
+            regex_flags = flags_val
+        else:
+            f_str = str(flags_val).lower()
+            if "i" in f_str:
+                regex_flags |= re.IGNORECASE
+            if "m" in f_str:
+                regex_flags |= re.MULTILINE
+            if "s" in f_str:
+                regex_flags |= re.DOTALL
+            if "x" in f_str:
+                regex_flags |= re.VERBOSE
+
+    try:
+        compiled = re.compile(pattern, regex_flags)
+    except re.error as e:
+        return {
+            "error": f"Invalid regex pattern: {e}",
+            "matches": [],
+            "total_matches": 0,
+            "named_groups": False,
+        }
+
+    has_named = bool(compiled.groupindex)
+    matches = []
+    for m in compiled.finditer(text):
+        if has_named:
+            matches.append(m.groupdict())
+        else:
+            groups = m.groups()
+            if groups:
+                matches.append(list(groups) if len(groups) > 1 else groups[0])
+            else:
+                matches.append(m.group(0))
+
+    return {
+        "matches": matches,
+        "total_matches": len(matches),
+        "named_groups": has_named,
+    }
+
+
 EXTENDED_HANDLERS: dict[str, Any] = {
     "web_search": _web_search,
     "web_fetch": _web_fetch,
@@ -1143,4 +1846,10 @@ EXTENDED_HANDLERS: dict[str, Any] = {
     "find_databases": _find_databases,
     "query_database": _query_database,
     "process_multimodal_media": _process_multimodal_media,
+    "pytest_runner": _pytest_runner,
+    "csv_query": _csv_query,
+    "memory_graph_query": _memory_graph_query,
+    "code_search_semantic": _code_search_semantic,
+    "dependency_audit": _dependency_audit,
+    "regex_extract": _regex_extract,
 }

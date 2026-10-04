@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import ast
 import sys
+import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -215,13 +217,16 @@ def test_merge_purges_expired_leases():
 # ---------------------------------------------------------------------------
 
 
-def test_agent_comm_lock_helpers_and_fallback_file(tmp_path, monkeypatch):
-    """Verify acquire_file_lock, is_file_locked, and release_file_lock handle fallback files."""
-    # Direct main_root to tmp_path
+def _isolate_agent_comm(monkeypatch, tmp_path):
     monkeypatch.setattr(agent_comm, "main_root", lambda: tmp_path)
     monkeypatch.setattr(agent_comm, "STATE_FILE", tmp_path / "nexus_state.json")
     monkeypatch.setattr(agent_comm, "CRDT_FILE", tmp_path / "nexus_crdt.json")
     monkeypatch.setattr(agent_comm, "ACTIVITY_LOG", tmp_path / "agent_activity.jsonl")
+
+
+def test_agent_comm_lock_helpers_and_fallback_file(tmp_path, monkeypatch):
+    """Verify acquire_file_lock, is_file_locked, and release_file_lock handle fallback files."""
+    _isolate_agent_comm(monkeypatch, tmp_path)
 
     target_file = tmp_path / "src" / "nexus" / "domain" / "test_target.py"
     target_file.parent.mkdir(parents=True, exist_ok=True)
@@ -252,6 +257,69 @@ def test_agent_comm_lock_helpers_and_fallback_file(tmp_path, monkeypatch):
 
     locked, _ = agent_comm.is_file_locked(rel_path)
     assert locked is False
+
+
+def test_expired_agent_comm_lease_is_persistently_released(tmp_path, monkeypatch):
+    """A lease expiry is reflected in CRDT state and permits the next agent."""
+    _isolate_agent_comm(monkeypatch, tmp_path)
+    rel_path = "src/nexus/expired.py"
+
+    assert agent_comm.acquire_file_lock(rel_path, agent="astra", ttl=0.05)
+    time.sleep(0.08)
+
+    assert agent_comm.is_file_locked(rel_path) == (False, None)
+    assert not agent_comm._lock_file_path(rel_path).exists()  # noqa: SLF001
+    assert rel_path not in agent_comm.load_state()["locks"]
+
+    assert agent_comm.acquire_file_lock(rel_path, agent="tron", ttl=30.0)
+    assert agent_comm.is_file_locked(rel_path) == (True, "tron")
+
+
+def test_legacy_fallback_lockfile_is_respected_and_expires(tmp_path, monkeypatch):
+    """Existing lockfiles continue to block while live and expire by their lease."""
+    _isolate_agent_comm(monkeypatch, tmp_path)
+    rel_path = "src/nexus/legacy.py"
+    lock_file = agent_comm._lock_file_path(rel_path)  # noqa: SLF001
+    lock_file.parent.mkdir(parents=True)
+    lock_file.write_text(
+        f"agent: astra\nacquired_at: {time.time()}\nttl: 900\n",
+        encoding="utf-8",
+    )
+
+    assert agent_comm.is_file_locked(rel_path) == (True, "astra")
+    assert not agent_comm.acquire_file_lock(rel_path, agent="tron", ttl=30.0)
+    assert not agent_comm.release_file_lock(rel_path, agent="tron")
+    assert agent_comm.release_file_lock(rel_path, agent="astra")
+    assert not lock_file.exists()
+
+    lock_file.write_text(
+        f"agent: astra\nacquired_at: {time.time() - 901}\n",
+        encoding="utf-8",
+    )
+    assert agent_comm.is_file_locked(rel_path) == (False, None)
+    assert not lock_file.exists()
+    assert agent_comm.acquire_file_lock(rel_path, agent="tron", ttl=30.0)
+
+
+def test_agent_comm_cli_lock_commands_use_shared_helpers(tmp_path, monkeypatch, capsys):
+    """The public lock/unlock commands use the same CRDT-backed implementation."""
+    _isolate_agent_comm(monkeypatch, tmp_path)
+    rel_path = "src/nexus/cli_lock.py"
+
+    agent_comm.cmd_lock(SimpleNamespace(agent="tron", file=rel_path, ttl=30.0), {})
+    assert "acquired lock" in capsys.readouterr().out
+    assert agent_comm.load_state()["locks"] == [rel_path]
+
+    agent_comm.cmd_unlock(SimpleNamespace(agent="tron", file=rel_path), {})
+    assert "released lock" in capsys.readouterr().out
+    assert agent_comm.load_state()["locks"] == []
+
+
+@pytest.mark.parametrize("ttl", [0.0, -1.0, float("inf"), float("nan")])
+def test_agent_comm_rejects_invalid_lease_duration(ttl, tmp_path, monkeypatch):
+    _isolate_agent_comm(monkeypatch, tmp_path)
+    with pytest.raises(ValueError, match="finite positive"):
+        agent_comm.acquire_file_lock("src/nexus/invalid.py", agent="tron", ttl=ttl)
 
 
 # ---------------------------------------------------------------------------
