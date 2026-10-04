@@ -9,27 +9,26 @@ every acceptance criterion includes the rule learned during the dispatch: **new
 (the [env-var guard](../tests/eval/test_docs_env_vars.py) enforces it).
 
 Status below is the measured state, not the plan's intent — this page is
-updated as each space lands on master. Plan-001 is COMPLETE per the CEO
-(11/11 subtasks done and CEO-verified): the eight spaces still marked
-"awaiting merge" are implemented in the shared tree — verified present
-(`src/nexus/domain/crdt/`, the bridge-security token auth in the event bus) —
-and the [env-var guard](../tests/eval/test_docs_env_vars.py) already passes
-against that tree, so the merge will not break the docs contract. Each merged
-space's env vars must arrive documented in the same commit as the code that
-reads them.
+updated as each space lands on master. Nine of ten spaces are landed on master
+(verified in the code: `src/nexus/domain/crdt/`, `LearnedRouter` +
+`train_from_route_log`, bandit in the consensus reviewers, the swarm dashboard,
+the bridge token auth, hybrid memory scoring, `docker-compose.loop.yml`); only
+Space 9 (OTel spans for the heal and consensus loops) is not wired yet — the
+`OTELTracer` adapter exists but nothing in `heal_loop.py` or the consensus
+protocol emits spans.
 
 | Space | What it is | Priority | Status | Owner |
 |---|---|---|---|---|
-| 1 | Semantic memory for coordination (hybrid cosine + TF-IDF) | high | implemented, awaiting merge | Xenom |
+| 1 | Semantic memory for coordination (hybrid cosine + TF-IDF) | high | **landed** | Xenom |
 | 2 | Full overnight autonomy daemon | high | **landed** | Astra |
-| 3 | Swarm state as real CRDTs (G-Counter, LWW-Register, OR-Set) | high | implemented, awaiting merge | Tron |
-| 4 | Learned model router (trained on route_log + eval feedback) | medium | implemented, awaiting merge | Xenom |
-| 5 | Automated first-pass consensus reviewers | medium | implemented, awaiting merge | Xenom |
-| 6 | Real-time swarm dashboard (Vite over the WebSocket bridge) | medium | implemented, awaiting merge | Xenom |
-| 7 | Bridge security hardening (shared-token auth, op allowlist) | high | implemented, awaiting merge | Xenom |
+| 3 | Swarm state as real CRDTs (G-Counter, LWW-Register, OR-Set) | high | **landed** | Tron |
+| 4 | Learned model router (trained on route_log + eval feedback) | medium | **landed** | Xenom |
+| 5 | Automated first-pass consensus reviewers | medium | **landed** | Xenom |
+| 6 | Real-time swarm dashboard (Vite over the WebSocket bridge) | medium | **landed** | Xenom |
+| 7 | Bridge security hardening (shared-token auth, op allowlist) | high | **landed** | Xenom |
 | 8 | Offline LoRA fine-tuning on approved work | medium | **landed** | Astra |
-| 9 | Agent-layer observability (OTel spans, Prometheus counters) | low | implemented, awaiting merge | Xenom |
-| 10 | Containerized full loop (docker-compose profile) | low | implemented, awaiting merge | Xenom |
+| 9 | Agent-layer observability (OTel spans, Prometheus counters) | low | not landed | Xenom |
+| 10 | Containerized full loop (docker-compose profile) | low | **landed** | Xenom |
 
 ## Space 2 — Overnight autonomy daemon (landed)
 
@@ -86,14 +85,14 @@ python -m nexus.training.cli lora --baseline 0.8 --min-pass-rate 0.6
 python -m nexus.training.cli lora --run-eval   # evaluate now, not from a report
 ```
 
-## The remaining eight spaces
+## The remaining space
 
-Implemented (plan-001 verified by the CEO), awaiting merge to master. Each has
-an owner and a dispatch in
-[`plan-upgrade-spaces.json`](plan-upgrade-spaces.json); Space 7 (bridge
-security) closes the one real security gap in the plan — the WebSocket bridge
-runs without shared-token auth until its merge lands. This page's status table
-is updated as each merges, and every merged space's env vars must arrive in the
-same commit as the code that reads them (the
+**Space 9** — not landed. The `OTELTracer` adapter exists (the pre-existing
+observability adapter, enabled by `NEXUS_OTEL_ENABLED=true`), but nothing in
+`heal_loop.py` or the consensus protocol emits spans for heal iterations and
+consensus verdicts, and no Prometheus counters are exported. Owner: Xenom,
+dispatch in [`plan-upgrade-spaces.json`](plan-upgrade-spaces.json). This page's
+status table is updated as it lands, and its env vars must arrive documented in
+the same commit as the code that reads them (the
 [ops table](architecture-map.md) + the
 [env-var guard](../tests/eval/test_docs_env_vars.py)).
