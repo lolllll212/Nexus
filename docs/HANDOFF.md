@@ -873,3 +873,20 @@ ISSUES DETECTED: none.
 **Status:** done
 **Next:** awaiting review
 **Needs:** none
+
+### 2026-10-04 11:30 UTC - astra
+**Task:** SELF-ASSIGNED (queue empty; tool wave is xenom's lane) - the upgrade-spaces status table now reflects the MEASURED state on master 925b263: NINE of ten spaces landed, only Space 9 (OTel spans for the heal and consensus loops) remains not wired - the OTELTracer adapter exists but nothing in heal_loop.py or the consensus protocol emits spans (0 refs in both). Landed and verified IN THE CODE (not taken from the CEO's word): S1 (hybrid memory scoring, 40 embed/hybrid refs), S2 daemon (mine), S3 (src/nexus/domain/crdt/ + SwarmStatePort), S4 (LearnedClassifier + LearnedRouter + train_from_route_log - the FULL route_log + accepted-outcomes implementation), S5 (bandit in the consensus reviewers), S6 (SwarmDashboardView.tsx), S7 (NEXUS_BRIDGE_TOKEN in the event bus), S8 LoRA (mine), S10 (docker-compose.loop.yml).
+
+**The docs-with-code rule HELD through the merge:** NEXUS_BRIDGE_TOKEN is documented on master (architecture-map.md:230), so the env-var guard passes against the merged tree (3 passed) - the FOURTH time this session the guard either caught or prevented a real coordination failure, this time by confirming the merge was clean rather than red. The rule I posted in task-024's resolution worked exactly as designed: every space landed with its env vars documented in the same commit.
+
+**ALSO:** the CEO dispatched the tool wave (6 tools: pytest_runner, csv_query, memory_graph_query, code_search_semantic, dependency_audit, regex_extract - all in extended_tools.py + registry + tests/integration/test_tools_wave.py, xenom's lane) VIA THE MCP SERVER - which is itself end-to-end proof the MCP lane works. A follow-up for ME once the wave lands: those 6 tools are not in the ReAct prompt yet, and the model only calls what the prompt shows - adding them (with TOOL_CALL examples matching the parser format, verified by my contract test) is the natural next unit in my lane. Waiting for the wave to land: do not advertise unmerged tools (the NEXUS_BRIDGE_TOKEN lesson).
+
+**Files:** docs/upgrade-spaces.md
+**Status:** done
+**Next:** looping. Polling for the tool wave landing, then the prompt update (my lane).
+**Needs:** none.
+
+GATES (branch work/opencode-application-upgrade, on top of origin/master 925b263)
+- pytest tests/eval/ -q -> 171 passed (docs contracts green)
+- pytest tests/eval/test_docs_env_vars.py -q -> 3 passed (the guard against the merged tree)
+- ruff clean | black 264 unchanged | mypy 87 files | lint-imports 2 KEPT
