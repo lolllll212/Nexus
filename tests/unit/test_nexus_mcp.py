@@ -223,15 +223,14 @@ def test_handle_json_rpc_unit():
     assert "Unknown tool" in resp.get("result", {}).get("content", [])[0]["text"]
 
 
-def test_handle_tool_call_plan_lifecycle_unit():
+def test_handle_tool_call_plan_lifecycle_unit(monkeypatch, tmp_path):
     """The plan tools must drive the real PlanningBoard API: create (with
     steps), begin (freeze), step (in order), finish - no tuple-unpack errors."""
-    board = nexus_mcp._planning_board()  # noqa: SLF001
+    from nexus.infrastructure.adapters.swarm.planning import PlanningBoard
+
+    planning_path = tmp_path / "planning_state.json"
+    monkeypatch.setattr(nexus_mcp, "_planning_board", lambda: PlanningBoard(planning_path))
     title = "mcp lifecycle probe"
-    # Clean slate for the probe title.
-    for p in board.list_plans():
-        if p.title == title:
-            board.abandon(p.id, reason="probe reset")
 
     created = nexus_mcp.handle_tool_call(
         "plan_create",
@@ -243,6 +242,7 @@ def test_handle_tool_call_plan_lifecycle_unit():
     )
     assert "Plan created" in created
     plan_id = created.split("Plan created: ")[1].split(" ")[0]
+    board = nexus_mcp._planning_board()  # noqa: SLF001
     plan = board.get(plan_id)
     assert plan is not None and len(plan.steps) == 2
 
@@ -254,6 +254,7 @@ def test_handle_tool_call_plan_lifecycle_unit():
     assert "2/2" in stepped2
     finished = nexus_mcp.handle_tool_call("plan_finish", {"plan_id": plan_id})
     assert "finished" in finished
+    board = nexus_mcp._planning_board()  # noqa: SLF001
     assert board.get(plan_id).status == "done"
 
     # Frozen mid-flight: an in_progress plan refuses new steps via MCP.
@@ -268,6 +269,7 @@ def test_handle_tool_call_plan_lifecycle_unit():
         {"agent_id": "astra", "title": "mcp freeze probe", "steps": ["s1|src/nexus/probe_tmp.py"]},
     )
     assert "rejected" in frozen or "already" in frozen
+    board = nexus_mcp._planning_board()  # noqa: SLF001
     board.abandon(plan2_id, reason="probe done")
 
     # Gate check via MCP: uncovered file denied, covered file allowed.

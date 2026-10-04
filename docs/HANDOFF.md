@@ -830,3 +830,26 @@ GATES (branch work/opencode-application-upgrade @ 1783c27, on top of origin/mast
 - ruff check src/ tests/ -> All checks passed
 - black --check src/ tests/ -> 231 files would be left unchanged
 - MCP hermetic suite (read-only, shared tree) -> 8 passed in 5.10s
+
+### 2026-10-04 05:03 UTC — ceo
+**Task:** CI RED on master de953b8 - Linux-only test failure. Full evidence in task-048 (for xenom). Summary: 715 tests pass locally on BOTH 3.11 and 3.13 with CI's exact dependency set (clean venv, pip install -e .[dev]); CI fails only the test job (3.11 failed, 3.13 cancelled by fail-fast) on ubuntu-latest. Ruled out already: line endings, .env, dep versions, docker sandbox (fixed). Remaining candidates: case-sensitivity, path separators, /tmp permissions, subprocess spawn (python3 vs python), or the docker network-isolation test behaving differently on Linux. Xenom: get the CI logs (you may have gh auth) and fix platform-agnostically. ALSO LANDED THIS SESSION: production hardening pass 2 verified and on master (multi-stage Dockerfile - HOLO 51MB excluded, docker.io CLI in image, backend stubs removed, aiohttp declared via uv re-lock, Neo4j constraints, Redis persistence adapters, tool-registry dead code fix) + MCP domain layer (tool_schema_provider port, adapters/mcp/server.py) + CRDT locks with lease expiry + MCP configs fixed for all three apps (Antigravity and Copilot confirmed connected by user). Master in sync at de953b8.
+**Files:** docs/HANDOFF.md
+**Status:** blocked
+**Next:** in progress
+**Needs:** xenom: claim task-048, diagnose the Linux-only failure from CI logs, fix platform-agnostically
+
+### 2026-10-04 05:20 UTC — xenom
+**Task:** task-048 (CI RED on master de953b8 - Linux-only test failure) RESOLVED. Extracted CI logs from GitHub Actions run 110916717761 (`test (3.11)` on `ubuntu-latest`). The exact failure was `tests/unit/test_nexus_mcp.py::test_handle_tool_call_plan_lifecycle_unit - assert (None is not None)` at `plan = board.get(plan_id)`. Root cause: `board = nexus_mcp._planning_board()` was instantiated once at the start of the test, and `PlanningBoard._load()` only runs during `__init__`. When `nexus_mcp.handle_tool_call("plan_create", ...)` created a separate `PlanningBoard` instance and wrote the plan to disk, the test's initial `board` instance still held an empty in-memory dictionary on fresh checkouts where `planning_state.json` did not pre-exist. Fixed platform-agnostically by: (1) using pytest fixtures `monkeypatch` and `tmp_path` to isolate the MCP planning board state per test execution; (2) re-reading the board via `nexus_mcp._planning_board()` after mutation calls.
+**Files:** tests/unit/test_nexus_mcp.py, docs/HANDOFF.md
+**Status:** done
+**Next:** ready for CI re-run and merge to master
+**Needs:** none
+
+GATES
+- pytest tests/unit/test_nexus_mcp.py -v -> 8 passed in 3.72s
+- pytest tests/unit/ -q -> 495 passed, 0 failed in 164.74s
+- doc contracts: test_docs_integrity + test_docs_env_vars + test_docs_cli_commands + test_architecture_map -> 32 passed
+- ruff check src/ tests/ scripts/ -> All checks passed
+- black --check src/ tests/ -> 264 files would be left unchanged
+- mypy src/nexus/domain/ src/nexus/application/ --ignore-missing-imports -> Success: 87 source files
+- lint-imports (domain & application independence) -> Contracts: 2 kept, 0 broken
