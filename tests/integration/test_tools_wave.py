@@ -19,6 +19,7 @@ from nexus.infrastructure.adapters.execution.extended_tools import (
     set_embedder,
 )
 from nexus.infrastructure.adapters.inmemory.concept_repository import InMemoryConceptRepository
+from nexus.infrastructure.adapters.sandbox.subprocess_sandbox import SubprocessSandbox
 
 
 def test_tool_wave_registry_contains_pytest_runner():
@@ -45,7 +46,11 @@ async def test_pytest_runner_on_passing_target():
 
 
 @pytest.mark.asyncio
-async def test_pytest_runner_structured_failure_in_sandbox():
+async def test_pytest_runner_structured_failure_in_sandbox(monkeypatch):
+    monkeypatch.setattr(
+        "nexus.infrastructure.adapters.execution.extended_tools.get_default_sandbox",
+        lambda: SubprocessSandbox(),
+    )
     failing_project = {
         "test_sample.py": "def test_fail():\n    assert 1 == 2\n",
     }

@@ -97,8 +97,11 @@ def set_default_sandbox(sandbox: Any) -> None:
 def get_default_sandbox() -> Any:
     global _DEFAULT_SANDBOX
     if _DEFAULT_SANDBOX is None:
-        backend = os.getenv("NEXUS_SANDBOX_BACKEND", "docker").lower()
-        if backend == "subprocess":
+        backend_env = os.getenv("NEXUS_SANDBOX_BACKEND")
+        socket_available = Path("/var/run/docker.sock").exists()
+        if (backend_env and backend_env.lower() == "subprocess") or (
+            backend_env is None and not socket_available
+        ):
             from nexus.infrastructure.adapters.sandbox.subprocess_sandbox import SubprocessSandbox
 
             _DEFAULT_SANDBOX = SubprocessSandbox()
@@ -1279,6 +1282,15 @@ async def _pytest_runner(params: dict[str, Any]) -> dict[str, Any]:
             test_command=f"python -m pytest {target} {options}",
             timeout=timeout,
         )
+        if res.get("error") == "docker not available":
+            from nexus.infrastructure.adapters.sandbox.subprocess_sandbox import SubprocessSandbox
+
+            sub_sandbox = SubprocessSandbox()
+            res = await sub_sandbox.run_project(
+                files,
+                test_command=f"python -m pytest {target} {options}",
+                timeout=timeout,
+            )
         raw_output = (res.get("output", "") + "\n" + res.get("error", "")).strip()
         returncode = res.get("returncode", 0 if not res.get("error") else 1)
     else:
