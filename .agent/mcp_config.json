@@ -1,1 +1,12 @@
-{"mcpServers": {"nexus": {"command": "python", "args": ["scripts/nexus_mcp.py"]}}}
+{
+  "mcpServers": {
+    "nexus": {
+      "command": "python",
+      "args": ["scripts/nexus_mcp.py"]
+    },
+    "rea": {
+      "command": "python",
+      "args": ["scripts/rea_mcp.py"]
+    }
+  }
+}

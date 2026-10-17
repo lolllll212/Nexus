@@ -80,6 +80,14 @@ node_modules/
 web/node_modules/
 web/dist/
 
+# Vendored third-party tools: commit source, not build/install outputs
+vendor/rea/node_modules/
+vendor/rea/dist/
+vendor/rea/.cache/
+vendor/rea/.turbo/
+vendor/rea/.stryker-tmp/
+vendor/rea/test-results.xml
+
 # Logs
 logs/
 *.log

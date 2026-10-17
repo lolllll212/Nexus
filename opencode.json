@@ -9,6 +9,12 @@
       "command": ["python", "scripts/nexus_mcp.py"],
       "enabled": true,
       "environment": {}
+    },
+    "rea": {
+      "type": "local",
+      "command": ["python", "scripts/rea_mcp.py"],
+      "enabled": true,
+      "environment": {}
     }
   },
   "permission": {

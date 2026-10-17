@@ -1,1 +1,16 @@
-{"servers": {"nexus": {"type": "stdio", "command": "python", "args": ["scripts/nexus_mcp.py"], "env": {}}}}
+{
+  "servers": {
+    "nexus": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["scripts/nexus_mcp.py"],
+      "env": {}
+    },
+    "rea": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["scripts/rea_mcp.py"],
+      "env": {}
+    }
+  }
+}
