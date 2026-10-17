@@ -256,3 +256,49 @@ class TestPlanGate:
         allowed, reason = check_file("requirements.txt", b)
         assert allowed is False
         assert "no in_progress plan covers" in reason
+
+    def test_vendor_tree_is_gateable(self, tmp_path: Path):
+        """Vendored third-party tooling under vendor/ must be plan-gateable so
+        its provenance/shim files can be added under the plan-first gate."""
+        b = PlanningBoard(tmp_path / "plans.json")
+        f = "vendor/rea/package.json"
+        allowed, reason = check_file(f, b)
+        assert allowed is False
+        assert "outside the editable roots" not in reason
+        p, error = b.create_plan(
+            title="Vendor REA",
+            agent="xenom",
+            steps=[("copy rea sources", ["vendor/rea/package.json", "scripts/rea_mcp.py"])],
+        )
+        assert error is None
+        b.begin(p.id)
+        allowed, _ = check_file(f, b)
+        assert allowed is True
+
+    def test_deploy_hygiene_files_are_gateable(self, tmp_path: Path):
+        """README/.dockerignore/.env.example/railway.json live at the repo root
+        but are legitimately editable for production hardening - the gate must
+        treat them as plan-gateable, not 'outside editable roots'."""
+        gateable = (
+            "README.md",
+            ".dockerignore",
+            ".env.example",
+            ".github/workflows/ci.yml",
+            "railway.json",
+            "vercel.json",
+        )
+        b = PlanningBoard(tmp_path / "plans.json")
+        for f in gateable:
+            allowed, reason = check_file(f, b)
+            assert allowed is False
+            assert "outside the editable roots" not in reason
+        p, error = b.create_plan(
+            title="Production hygiene",
+            agent="xenom",
+            steps=[("add dockerignore", list(gateable))],
+        )
+        assert error is None
+        b.begin(p.id)
+        for f in gateable:
+            allowed, _ = check_file(f, b)
+            assert allowed is True

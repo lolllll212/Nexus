@@ -58,6 +58,12 @@ nexus train <add|search|...> # coding-training data CLI
   status, and how to enable each landed space
 - [MCP Server](mcp.md) - standard JSON-RPC 2.0 over stdio; 18 tools + 5
   resources for any MCP client
+- [REA (Reverse Engineer Anything)](rea.md) - vendored reverse-engineering MCP
+  server under `vendor/rea/`, built and registered alongside `nexus`
+- [Security & Secrets](security.md) - auth, secret stores, SSRF, sandbox, path
+  confinement, and container hardening
+- [Deployment](deploy.md) - Railway (backend) and Vercel (frontend) runbook,
+  env vars, and rollback
 - [Architecture Map](architecture-map.md) - every port and the adapter the DI
   container binds to it, plus every ops env var
 - [Agent Onboarding](agent-onboarding.md) - read this before your first change

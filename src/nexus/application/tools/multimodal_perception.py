@@ -101,7 +101,10 @@ class MultimodalPerceptionBridge:
 
                 top_colors = colors[:6]
                 for count, col in top_colors:
-                    r, g, b = col[:3]
+                    pixel = tuple(col) if isinstance(col, tuple) else ()
+                    if len(pixel) < 3:
+                        continue
+                    r, g, b = int(pixel[0]), int(pixel[1]), int(pixel[2])
                     hex_code = _rgb_to_hex(r, g, b)
                     pct = round((count / total_pixels) * 100, 1)
                     name = _color_name_heuristic(r, g, b)

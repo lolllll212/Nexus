@@ -11,7 +11,7 @@
 [![Tailwind CSS v4](https://img.shields.io/badge/tailwindcss-v4.0-38bdf8.svg)](https://tailwindcss.com/)
 [![NVIDIA NIM](https://img.shields.io/badge/NVIDIA-NIM%20Ready-76b900.svg)](https://developer.nvidia.com/nim)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests Passing](https://img.shields.io/badge/tests-251%20passed-brightgreen)](#testing)
+[![Tests Passing](https://img.shields.io/badge/tests-735%20passed-brightgreen)](#testing)
 
 </div>
 
@@ -279,7 +279,10 @@ Create your environment configuration:
 cp .env.example .env
 ```
 
-Configure your LLM provider and backend:
+The template ships a working local key (`sk-local-dev`) and `NEXUS_INFRA_BACKEND=memory`
+for zero external services. Replace `NEXUS_API_KEYS` with your own keys before
+any real deployment - auth is fail-closed (a request without a valid Bearer
+token returns 401). Configure your LLM provider and backend:
 
 ```env
 # Self-contained local mode (zero external database requirements)
@@ -296,7 +299,18 @@ NEXUS_CORS_ORIGINS=*
 NEXUS_JSON_LOGS=true
 ```
 
-### 3. Launch Services
+### 3. Preflight Check
+
+Verify the environment is ready in one command (Python, package import, `.env`,
+API keys, LLM reachability, sandbox backend, and infra mode):
+
+```bash
+python scripts/preflight.py           # human-readable report
+python scripts/preflight.py --json    # machine-readable, exits 1 on failure
+python scripts/preflight.py --strict  # treat warnings as failures
+```
+
+### 4. Launch Services
 
 Start the conscious API engine (FastAPI / Cortex & Second Brain fallback):
 
@@ -316,7 +330,7 @@ Start the HOLO Deck gesture control server:
 python3 frontend/server.py
 ```
 
-### 4. Access Interfaces & Ports
+### 5. Access Interfaces & Ports
 
 * **NEXUS OS Frontend (`Port 3000`)**: `http://localhost:3000`
   * **Tactical HUD (FUI)**: Arc Reactor orb, telemetry flanks, and voice cortex
@@ -395,7 +409,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ## Testing & Security Hardening
 
-NEXUS includes a 251+ test suite covering unit operations, production hardening, real-world algorithmic problems, and self-evolution:
+NEXUS includes a 735+ test suite covering unit operations, production hardening, real-world algorithmic problems, and self-evolution:
 
 ```bash
 # Run full unit test suite

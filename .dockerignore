@@ -1,0 +1,75 @@
+# Docker build context exclusions.
+# Keeps secrets, VCS history, caches, tests, and local runtime state out of
+# the image and off the build daemon.
+
+# --- Secrets / environment (NEVER ship these into an image) ---
+.env
+.env.*
+!.env.example
+
+# --- VCS & agent tooling ---
+.git
+.gitignore
+.gitattributes
+.github
+.agent
+.agents
+.claude
+.opencode
+.vscode
+
+# --- Caches ---
+.import_linter_cache
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+
+# --- Python build artifacts ---
+__pycache__
+**/__pycache__
+*.py[cod]
+*.egg-info
+.eggs
+build
+dist
+.venv
+venv
+env
+
+# --- Node ---
+node_modules
+**/node_modules
+
+# --- Tests, docs, website (not needed at runtime) ---
+tests
+docs
+website
+mkdocs.yml
+
+# --- Multi-agent coordination runtime state (local to the main worktree) ---
+nexus_state.json
+nexus_crdt.json
+agent_memory.json
+agent_activity.jsonl
+consensus_state.json
+planning_state.json
+token_budget_ledger.json
+board.txt
+inbox.txt
+status.txt
+
+# --- Local data, databases, backups ---
+backups
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+*.dump
+
+# --- Logs & OS cruft ---
+logs
+*.log
+.DS_Store
+Thumbs.db

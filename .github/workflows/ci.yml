@@ -62,3 +62,25 @@ jobs:
       - name: Check dependency rules (domain and application must not import infrastructure)
         run: lint-imports --config ../.github/workflows/importlinter.toml
         working-directory: src
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Dependency vulnerability scan (pip-audit)
+        # Advisory for now: surfaces known CVEs in the runtime lock without
+        # failing the build. Remove `continue-on-error` to make it a hard gate
+        # once existing findings are triaged.
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+      - name: Static security scan (bandit)
+        continue-on-error: true
+        run: |
+          pip install bandit
+          bandit -q -ll -r src/nexus
+

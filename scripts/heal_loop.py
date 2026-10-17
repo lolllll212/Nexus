@@ -21,6 +21,7 @@ Design:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import re
 import subprocess
@@ -227,6 +228,51 @@ def heal_once(dry_run: bool, target: str, author: str) -> int:
     return created
 
 
+def _agent_telemetry():
+    """Best-effort AgentTelemetry; observability must never break healing."""
+    try:
+        from nexus.infrastructure.adapters.observability.agent_telemetry import (
+            get_global_agent_telemetry,
+        )
+
+        return get_global_agent_telemetry()
+    except Exception:
+        return None
+
+
+def heal_iteration(dry_run: bool, target: str, author: str, iteration: int = 1, telemetry=None) -> int:
+    """Run one heal iteration wrapped in a heal span and cycle counter.
+
+    Space 9: emits a `nexus.heal_iteration` span (when OTEL is enabled) and a
+    `nexus_heal_cycles_total` counter + duration histogram for every iteration,
+    so heal activity shows up in the same `/metrics` and trace stream as the
+    rest of the swarm. Telemetry is best-effort: any failure falls through to a
+    plain `heal_once` so healing is never blocked by observability.
+    """
+    tele = telemetry if telemetry is not None else _agent_telemetry()
+    if tele is None:
+        return heal_once(dry_run, target, author)
+    started = time.perf_counter()
+
+    async def _run() -> int:
+        async with tele.heal_span(
+            author, outcome="in_progress", attributes={"iteration": iteration, "target": target}
+        ):
+            return heal_once(dry_run, target, author)
+
+    try:
+        created = asyncio.run(_run())
+    except RuntimeError:
+        # An event loop is already running (e.g. embedded) - skip the span.
+        created = heal_once(dry_run, target, author)
+    outcome = "ok" if created == 0 else "proposals"
+    try:
+        tele.record_heal_cycle(outcome, time.perf_counter() - started, agent=author)
+    except Exception:
+        pass
+    return created
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="NEXUS self-healing test loop")
     parser.add_argument("--target", default="tests/unit")
@@ -237,7 +283,7 @@ def main() -> None:
     args = parser.parse_args()
     for i in range(1, args.max_iterations + 1):
         print(f"[heal] === iteration {i}/{args.max_iterations} ===")
-        created = heal_once(args.dry_run, args.target, args.author)
+        created = heal_iteration(args.dry_run, args.target, args.author, iteration=i)
         if created == 0:
             break
         if i < args.max_iterations:

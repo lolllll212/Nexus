@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,29 @@ MANDATORY_REVIEWERS = ("bandit",)
 AUTOMATED_REVIEWERS = ("tests-required", "bandit")
 
 _VERDICT_ORDER = {"approved": 0, "rejected": 1, "in_review": 2}
+
+
+def _telemetry():
+    """Best-effort AgentTelemetry; observability must never break consensus."""
+    try:
+        from nexus.infrastructure.adapters.observability.agent_telemetry import (
+            get_global_agent_telemetry,
+        )
+
+        return get_global_agent_telemetry()
+    except Exception:
+        return None
+
+
+def _record_round(status: str, agent: str, started: float) -> None:
+    tele = _telemetry()
+    if tele is None:
+        return
+    try:
+        tele.record_consensus_round(status, time.perf_counter() - started, agent=agent)
+    except Exception:
+        pass
+
 
 _DANGEROUS_SECURITY_PATTERNS = [
     (re.compile(r"\b(eval|exec)\s*\("), "dynamic code execution (eval/exec)"),
@@ -361,10 +385,12 @@ class ConsensusProtocol:
         p = self._proposals.get(proposal_id)
         if p is None or p.status in ("approved", "rejected"):
             return p
+        started = time.perf_counter()
         p.evidence = collect_evidence(files=p.files, draft=p.draft)
         self._run_automated_reviewers(p)
         p.status = self._evaluate_status(p)
         self._save()
+        _record_round(p.status, "auto", started)
         return p
 
     def propose(
@@ -381,6 +407,7 @@ class ConsensusProtocol:
         existing = self._proposals.get(pid)
         if existing is not None:
             return existing
+        started = time.perf_counter()
         self._tick += 1
         p = Proposal(
             id=pid,
@@ -402,6 +429,7 @@ class ConsensusProtocol:
         p.status = self._evaluate_status(p)
         self._proposals[pid] = p
         self._save()
+        _record_round(p.status, author, started)
         return p
 
     def review(self, proposal_id: str, reviewer: str, verdict: str, note: str = "") -> Proposal | None:
@@ -410,9 +438,11 @@ class ConsensusProtocol:
             return p if p is not None else None
         if verdict not in ("approve", "request_changes"):
             return p
+        started = time.perf_counter()
         p.reviews[reviewer] = {"verdict": verdict, "note": note}
         p.status = self._evaluate_status(p)
         self._save()
+        _record_round(p.status, reviewer, started)
         return p
 
     def vote(self, proposal_id: str, agent: str, choice: str) -> Proposal | None:
@@ -421,9 +451,11 @@ class ConsensusProtocol:
             return p if p is not None else None
         if choice not in ("yes", "no", "abstain"):
             return p
+        started = time.perf_counter()
         p.votes[agent] = choice
         p.status = self._evaluate_status(p)
         self._save()
+        _record_round(p.status, agent, started)
         return p
 
     def _evaluate_status(self, p: Proposal) -> str:

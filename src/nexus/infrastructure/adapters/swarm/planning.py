@@ -46,6 +46,22 @@ PLAN_EDITABLE_ROOTS = (
     "requirements-dev.in",
     "requirements-dev.txt",
     "pyproject.toml",
+    # Deploy/hygiene files at the repo root (no directory prefix). These carry
+    # no secrets (.env.example is a template; .env itself stays denied) but are
+    # required for production hardening, so they must be plan-gateable.
+    "README.md",
+    ".dockerignore",
+    ".env.example",
+    # Cloud deploy config-as-code: Railway (backend) and Vercel (frontend).
+    # These hold no secrets - tokens are injected by the platform at deploy time.
+    "railway.json",
+    "vercel.json",
+    # CI config - security/lint gates are production concerns.
+    ".github",
+    # Vendored third-party tooling (e.g. the REA reverse-engineering MCP server
+    # under vendor/rea). Kept out of src/nexus so the hexagonal import rule is
+    # untouched, but still plan-gateable.
+    "vendor",
 )
 
 _STATUSES = ("draft", "in_progress", "done", "abandoned")
