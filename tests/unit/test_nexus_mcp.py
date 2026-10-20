@@ -107,6 +107,9 @@ def test_mcp_subprocess_tools_list_and_schemas(mcp_server_process):
         "plan_check_file",
         "memory_put",
         "memory_query",
+        "blueprint_save",
+        "blueprint_query",
+        "blueprint_latest",
         "consensus_propose",
         "consensus_review",
         "consensus_vote",
@@ -335,3 +338,84 @@ def test_handle_tool_call_memory_and_consensus_unit():
         "consensus_review", {"agent_id": "astra", "proposal_id": "nope", "verdict": "approve"}
     )
     assert "Error" in bad
+
+
+def _isolated_memory_store(monkeypatch, tmp_path):
+    from nexus.infrastructure.adapters.persistence.agent_memory_store import AgentMemoryStore
+
+    store = AgentMemoryStore(tmp_path / "agent_memory.json")
+    monkeypatch.setattr(nexus_mcp, "_agent_memory_store", lambda: store)
+    return store
+
+
+def test_handle_tool_call_blueprint_lifecycle_unit(monkeypatch, tmp_path):
+    """blueprint_save -> blueprint_query -> blueprint_latest round-trip against
+    an isolated store; duplicate content is deduplicated by content addressing."""
+    store = _isolated_memory_store(monkeypatch, tmp_path)
+
+    payload = {
+        "agent_id": "xenom",
+        "title": "Vendor an MCP tool",
+        "goal": "Ship a third-party MCP server inside the repo",
+        "steps": ["vendor source", "add launcher", "register mcp"],
+        "files": ["vendor/rea", "scripts/rea_mcp.py"],
+        "verify": ["pytest tests/unit/test_vendor_rea.py -q"],
+        "tools": ["rea:open_binary"],
+        "tags": "rea,mcp,vendor",
+        "task_id": "task-blueprint-probe",
+    }
+    saved = nexus_mcp.handle_tool_call("blueprint_save", payload)
+    assert "Blueprint saved" in saved
+
+    found = nexus_mcp.handle_tool_call("blueprint_query", {"query": "vendor mcp rea", "k": 3})
+    assert "BLUEPRINT: Vendor an MCP tool" in found
+    assert "VERIFY:" in found and "STEPS:" in found
+
+    latest = nexus_mcp.handle_tool_call("blueprint_latest", {"n": 5})
+    assert "Vendor an MCP tool" in latest
+
+    dup = nexus_mcp.handle_tool_call("blueprint_save", payload)
+    assert "already stored" in dup
+    assert len(store.latest(kind="blueprint", n=10)) == 1
+
+
+def test_resolve_task_saves_auto_blueprint(monkeypatch, tmp_path):
+    """Completing any task auto-saves a blueprint chunk (kind=blueprint) so the
+    work is remembered as a reusable recipe."""
+    store = _isolated_memory_store(monkeypatch, tmp_path)
+
+    def fake_resolve(args, state):
+        print(f"[{args.agent}] resolved task {args.task_id} (pending CEO verification)")
+
+    monkeypatch.setattr(nexus_mcp, "cmd_resolve", fake_resolve)
+
+    result = nexus_mcp.handle_tool_call(
+        "resolve_task",
+        {
+            "agent_id": "xenom",
+            "task_id": "task-auto-probe",
+            "evidence": "pytest tests/unit/test_rea_agent_tools.py -q: 9 passed",
+        },
+    )
+    assert "resolved task" in result
+    assert "Auto-blueprint saved" in result
+    blueprints = store.latest(kind="blueprint", n=5)
+    assert blueprints and any("task-auto-probe" in b.text for b in blueprints)
+
+
+def test_resolve_task_failure_does_not_save_blueprint(monkeypatch, tmp_path):
+    """A refused resolution must not fabricate a blueprint."""
+    store = _isolated_memory_store(monkeypatch, tmp_path)
+
+    def fake_resolve(args, state):
+        print(f"Task {args.task_id} not found")
+
+    monkeypatch.setattr(nexus_mcp, "cmd_resolve", fake_resolve)
+
+    result = nexus_mcp.handle_tool_call(
+        "resolve_task",
+        {"agent_id": "xenom", "task_id": "task-missing", "evidence": "n/a"},
+    )
+    assert "not found" in result
+    assert "Auto-blueprint" not in result
+    assert store.latest(kind="blueprint", n=5) == []

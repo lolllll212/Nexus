@@ -103,6 +103,22 @@ Copy-Item package\native\windows\build\* C:\Users\Ashut\Nexus\vendor\rea\native\
 The `.node` binary is git-ignored (`vendor/rea/native/windows/build/*.node`) —
 restore it per checkout after building REA. `manifest.json` is tracked.
 
+## Agent tests & blueprint memory
+
+Agents validate REA and record their work through two mechanisms:
+
+- **Health/analysis tests** — `tests/unit/test_rea_agent_tools.py` checks the
+  stdio handshake, the advertised tool catalog, and one real end-to-end
+  analysis with evidence. Run them before the first REA task in a session
+  (`python -m pytest tests/unit/test_rea_agent_tools.py -q`); they skip with an
+  actionable message when REA is not built.
+- **Blueprint memory** — completed REA work must be saved as a reusable recipe
+  via the nexus MCP `blueprint_save` tool (goal, steps, files, verify commands,
+  tools used). Similar future work starts with `blueprint_query` and replays
+  the recipe instead of re-deriving it. `resolve_task` also auto-saves a
+  minimal blueprint for every completed swarm task. The operating discipline
+  lives in the `nexus-blueprints` and `nexus-rea-workflow` skills.
+
 ## Updating
 
 Replace `vendor/rea/` with a newer `rea-main` unpack, rebuild with

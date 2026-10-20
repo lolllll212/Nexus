@@ -58,6 +58,36 @@ def _agent_memory_store() -> AgentMemoryStore:
     return AgentMemoryStore(main_root() / "agent_memory.json")
 
 
+def _compose_blueprint_text(
+    title: str,
+    goal: str,
+    steps: list[str],
+    files: list[str],
+    verify: list[str],
+    tools: list[str],
+    notes: str = "",
+) -> str:
+    """Compose a blueprint chunk: a reusable recipe for reproducing past work.
+
+    The text is deliberately keyword-rich (tokenized for TF-IDF recall) and
+    structured (STEPS/FILES/VERIFY/TOOLS sections) so an agent can re-execute
+    a similar task quickly instead of re-deriving the approach.
+    """
+    lines = [f"BLUEPRINT: {title}", f"GOAL: {goal}"]
+    if steps:
+        lines.append("STEPS:")
+        lines.extend(f"{i}. {s}" for i, s in enumerate(steps, 1))
+    if files:
+        lines.append(f"FILES: {', '.join(files)}")
+    if verify:
+        lines.append("VERIFY: " + " ; ".join(verify))
+    if tools:
+        lines.append(f"TOOLS: {', '.join(tools)}")
+    if notes:
+        lines.append(f"NOTES: {notes}")
+    return "\n".join(lines)
+
+
 # ── MCP Resources ─────────────────────────────────────────────────────────────
 
 RESOURCES_SPEC = [
@@ -321,6 +351,53 @@ TOOLS_SPEC = [
         },
     },
     {
+        "name": "blueprint_save",
+        "description": (
+            "Save a reusable blueprint (structured recipe: goal, steps, files, verify "
+            "commands, tools) to memory so similar future work can be replayed quickly. "
+            "Call after completing a task or an REA investigation."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "agent_id": {"type": "string", "enum": ["ceo", "astra", "tron", "xenom"]},
+                "title": {"type": "string", "description": "Short blueprint name (e.g. 'Vendor an MCP tool')"},
+                "goal": {"type": "string", "description": "What this blueprint achieves"},
+                "steps": {"type": "array", "items": {"type": "string"}, "description": "Ordered recipe steps"},
+                "files": {"type": "array", "items": {"type": "string"}, "description": "Files touched/created"},
+                "verify": {"type": "array", "items": {"type": "string"}, "description": "Verification commands"},
+                "tools": {"type": "array", "items": {"type": "string"}, "description": "Tools used (e.g. rea:open_binary)"},
+                "tags": {"type": "string", "description": "Comma-separated topic tags (e.g. rea,native,mcp)"},
+                "task_id": {"type": "string", "description": "Optional originating task ID"},
+                "notes": {"type": "string", "description": "Caveats and gotchas"},
+            },
+            "required": ["agent_id", "title", "goal"],
+        },
+    },
+    {
+        "name": "blueprint_query",
+        "description": "Recall blueprints by topic/keyword before starting similar work (fast replay of past projects)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Topic keywords (e.g. 'rea native mcp vendor')"},
+                "k": {"type": "integer", "default": 5, "description": "Number of blueprints to return"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "blueprint_latest",
+        "description": "List the most recent saved blueprints",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "n": {"type": "integer", "default": 10, "description": "Number of blueprints to list"},
+            },
+            "required": [],
+        },
+    },
+    {
         "name": "consensus_propose",
         "description": "Propose a patch for swarm review and automated checks",
         "inputSchema": {
@@ -466,7 +543,31 @@ def handle_tool_call(name: str, arguments: dict[str, Any]) -> str:
             task_id=arguments.get("task_id"),
             evidence=arguments.get("evidence"),
         )
-        return _exec_with_redirect(cmd_resolve, args, state)
+        result = _exec_with_redirect(cmd_resolve, args, state)
+        # Auto-blueprint: every completed piece of work is remembered as a
+        # reusable recipe, so similar future work can be replayed fast.
+        if "resolved" in result.lower():
+            try:
+                task_id = arguments.get("task_id", "")
+                store = _agent_memory_store()
+                text = _compose_blueprint_text(
+                    title=f"task {task_id} (auto)",
+                    goal=f"See resolved task {task_id}",
+                    steps=[],
+                    files=[],
+                    verify=[arguments.get("evidence", "")[:400]],
+                    tools=[],
+                )
+                store.put(
+                    agent=arguments.get("agent_id", "tron"),
+                    kind="blueprint",
+                    text=text,
+                    tags=["auto", "resolved", task_id],
+                )
+                result += "\nAuto-blueprint saved to memory (kind=blueprint)."
+            except Exception as exc:  # noqa: BLE001 - never break resolution
+                result += f"\nAuto-blueprint skipped: {exc}"
+        return result
 
     if name == "heartbeat":
         args = _Args(agent=arguments.get("agent_id"))
@@ -572,6 +673,64 @@ def handle_tool_call(name: str, arguments: dict[str, Any]) -> str:
         lines = [f"Found {len(results)} chunks:"]
         for chunk, score in results:
             lines.append(f"  [{score:.3f}] {chunk.id} ({chunk.kind} by {chunk.agent}): {chunk.text[:120]}")
+        return "\n".join(lines)
+
+    if name == "blueprint_save":
+        store = _agent_memory_store()
+        tags_raw = arguments.get("tags", "")
+        tags = (
+            [t.strip() for t in tags_raw.split(",") if t.strip()]
+            if isinstance(tags_raw, str)
+            else list(tags_raw or [])
+        )
+        task_id = arguments.get("task_id", "")
+        if task_id:
+            tags.append(f"task:{task_id}")
+        title = str(arguments.get("title", "")).strip() or "Untitled blueprint"
+        text = _compose_blueprint_text(
+            title=title,
+            goal=arguments.get("goal", ""),
+            steps=list(arguments.get("steps") or []),
+            files=list(arguments.get("files") or []),
+            verify=list(arguments.get("verify") or []),
+            tools=list(arguments.get("tools") or []),
+            notes=arguments.get("notes", ""),
+        )
+        chunk, created = store.put(
+            agent=arguments.get("agent_id", "tron"),
+            kind="blueprint",
+            text=text,
+            tags=tags or ["blueprint"],
+        )
+        verb = "Blueprint saved" if created else "Blueprint already stored (content-addressed)"
+        return f"{verb}: {chunk.id} '{title}' tags={sorted(chunk.tags)}"
+
+    if name == "blueprint_query":
+        store = _agent_memory_store()
+        q = arguments.get("query", "")
+        k = int(arguments.get("k", 5))
+        results = store.query(q, k=max(k * 3, 10))
+        hits = [(c, s) for c, s in results if c.kind == "blueprint"][:k]
+        if not hits:
+            recent = store.latest(kind="blueprint", n=k)
+            hits = [(c, 0.0) for c in recent]
+        if not hits:
+            return "No blueprints stored yet. Save one with blueprint_save after completing work."
+        lines = [f"Found {len(hits)} blueprint(s):"]
+        for chunk, score in hits:
+            lines.append(f"  [{score:.3f}] {chunk.id} (by {chunk.agent}, tags={sorted(chunk.tags)}):")
+            lines.append("    " + chunk.text.replace("\n", "\n    "))
+        return "\n".join(lines)
+
+    if name == "blueprint_latest":
+        store = _agent_memory_store()
+        chunks = store.latest(kind="blueprint", n=int(arguments.get("n", 10)))
+        if not chunks:
+            return "No blueprints stored yet. Save one with blueprint_save after completing work."
+        lines = [f"{len(chunks)} recent blueprint(s):"]
+        for chunk in chunks:
+            first = chunk.text.splitlines()[0] if chunk.text else ""
+            lines.append(f"  {chunk.id} (by {chunk.agent}, tick {chunk.tick}): {first}")
         return "\n".join(lines)
 
     if name == "consensus_propose":
