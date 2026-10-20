@@ -130,6 +130,64 @@ class TestMcpRegistration:
         assert data["mcpServers"]["rea"]["args"] == ["scripts/rea_mcp.py"]
 
 
+class TestInstalledSkill:
+    """The reverse-engineer-anything skill is installed where opencode auto-loads
+    project skills (.opencode/skills/<name>/SKILL.md). vendor/rea/.agents/ is
+    git-ignored, so the skill is copied into the tracked tree and kept in sync
+    with the vendored source by a test."""
+
+    SKILL_DIR = REPO_ROOT / ".opencode" / "skills" / "reverse-engineer-anything"
+    VENDOR_SKILL_DIR = rea_mcp.REA_ROOT / ".agents" / "skills" / "reverse-engineer-anything"
+
+    def _frontmatter(self) -> dict[str, str]:
+        text = (self.SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+        assert text.startswith("---\n"), "SKILL.md must start with YAML frontmatter"
+        _, fm, _ = text.split("---", 2)
+        parsed = {}
+        for line in fm.strip().splitlines():
+            if line.strip() and not line.startswith((" ", "\t")):
+                key, _, value = line.partition(":")
+                parsed[key.strip()] = value.strip()
+        return parsed
+
+    def test_skill_md_installed(self):
+        assert (self.SKILL_DIR / "SKILL.md").is_file()
+
+    def test_frontmatter_name_matches_folder(self):
+        fm = self._frontmatter()
+        assert fm.get("name") == "reverse-engineer-anything"
+
+    def test_frontmatter_has_description(self):
+        # opencode drops skills without a description, so it is effectively required.
+        fm = self._frontmatter()
+        assert fm.get("description")
+
+    def test_references_present(self):
+        refs = sorted(p.name for p in (self.SKILL_DIR / "references").glob("*.md"))
+        assert refs == [
+            "android-applications.md",
+            "connection-and-recovery.md",
+            "evidence-workflows.md",
+            "javascript-applications.md",
+            "native-and-artifacts.md",
+            "runtime-observation.md",
+        ]
+
+    def test_matches_vendored_source(self):
+        """Keep the installed skill in sync with the vendored copy: updating
+        vendor/rea/ without re-copying the skill fails here."""
+        if not self.VENDOR_SKILL_DIR.is_dir():
+            pytest.skip("vendored .agents/skills source is git-ignored and absent here")
+        installed = (self.SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+        vendored = (self.VENDOR_SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+        assert installed == vendored
+
+    def test_opencode_root_is_plan_gateable(self):
+        from nexus.infrastructure.adapters.swarm.planning import PLAN_EDITABLE_ROOTS
+
+        assert ".opencode" in PLAN_EDITABLE_ROOTS
+
+
 class TestFindNpm:
     def test_prefers_npm_cli_beside_node(self, tmp_path):
         node_dir = tmp_path / "nodejs"

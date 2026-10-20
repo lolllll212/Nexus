@@ -87,6 +87,9 @@ vendor/rea/.cache/
 vendor/rea/.turbo/
 vendor/rea/.stryker-tmp/
 vendor/rea/test-results.xml
+# REA Windows native addon is a packaged binary - restore it from the
+# rea-agents@<version> tarball (see docs/rea.md), do not commit it.
+vendor/rea/native/windows/build/*.node
 
 # Logs
 logs/

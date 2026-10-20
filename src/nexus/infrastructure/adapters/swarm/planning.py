@@ -62,6 +62,10 @@ PLAN_EDITABLE_ROOTS = (
     # under vendor/rea). Kept out of src/nexus so the hexagonal import rule is
     # untouched, but still plan-gateable.
     "vendor",
+    # Agent-facing opencode config: agents, commands, and installed skills
+    # (e.g. .opencode/skills/reverse-engineer-anything). No secrets; these are
+    # committed so every checkout gets the same agent surface.
+    ".opencode",
 )
 
 _STATUSES = ("draft", "in_progress", "done", "abandoned")

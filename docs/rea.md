@@ -64,6 +64,45 @@ node vendor/rea/scripts/rea.mjs analyze-javascript-application /path/to/app --js
 Native deep analysis (Hopper / Ghidra / IDA) and other providers are optional and
 configured separately; static JavaScript and .NET inspection need no extra engine.
 
+## Agent skill
+
+REA's user-facing skill — `reverse-engineer-anything` — is installed at
+`.opencode/skills/reverse-engineer-anything/` (SKILL.md + a `references/`
+folder covering native artifacts, JavaScript/Electron, Android, runtime
+observation, evidence workflows, and connection recovery). opencode auto-loads
+project skills from `.opencode/skills/<name>/SKILL.md`; **restart opencode** the
+first time so the skill (and the `rea` MCP server) are picked up.
+
+The skill is what tells the agent *when* to reach for REA and *how* to drive its
+207 tools: it uses REA for shipped binaries/packages, decompilation, passive
+runtime evidence, or version comparison — and explicitly tells the agent to use
+ordinary repository analysis instead for a complete source tree. It is a faithful
+copy of the upstream skill that ships in the vendored source; update it whenever
+you update `vendor/rea/` (see [Updating](#updating)).
+
+Only this one user-facing skill is installed. REA also bundles developer skills
+(`rea-tool-design`, `rea-ci-tests-audit`, `rea-changelog-update`) that exist to
+build REA itself — those stay under `vendor/rea/.agents/skills/` and are not
+installed into the agent surface. That directory is git-ignored, which is why the
+skill is copied into `.opencode/skills/` rather than referenced in place.
+
+## Windows native controls
+
+Some REA providers (notably the JavaScript static analyzer) load a packaged
+Windows native addon that is **not** part of the source-only vendor tree. If a
+tool fails with `Missing packaged Windows native file native/windows/build/manifest.json`,
+restore both files from the upstream tarball of the vendored version:
+
+```powershell
+cd $env:TEMP
+node <path-to-npm-cli.js> pack rea-agents@6.5.0
+tar -xzf rea-agents-6.5.0.tgz
+Copy-Item package\native\windows\build\* C:\Users\Ashut\Nexus\vendor\rea\native\windows\build\
+```
+
+The `.node` binary is git-ignored (`vendor/rea/native/windows/build/*.node`) —
+restore it per checkout after building REA. `manifest.json` is tracked.
+
 ## Updating
 
 Replace `vendor/rea/` with a newer `rea-main` unpack, rebuild with

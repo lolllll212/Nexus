@@ -275,6 +275,24 @@ class TestPlanGate:
         allowed, _ = check_file(f, b)
         assert allowed is True
 
+    def test_opencode_skill_is_gateable(self, tmp_path: Path):
+        """Installed agent skills under .opencode/skills/ must be plan-gateable
+        so a skill can be added/updated under the plan-first gate."""
+        b = PlanningBoard(tmp_path / "plans.json")
+        f = ".opencode/skills/reverse-engineer-anything/SKILL.md"
+        allowed, reason = check_file(f, b)
+        assert allowed is False
+        assert "outside the editable roots" not in reason
+        p, error = b.create_plan(
+            title="Install REA skill",
+            agent="xenom",
+            steps=[("install skill", [f])],
+        )
+        assert error is None
+        b.begin(p.id)
+        allowed, _ = check_file(f, b)
+        assert allowed is True
+
     def test_deploy_hygiene_files_are_gateable(self, tmp_path: Path):
         """README/.dockerignore/.env.example/railway.json live at the repo root
         but are legitimately editable for production hardening - the gate must
