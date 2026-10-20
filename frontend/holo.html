@@ -160,6 +160,29 @@
     border-radius:12px; padding:14px; width:260px; backdrop-filter:blur(18px); box-shadow:0 12px 40px rgba(0,0,0,.7);
     display:none; flex-direction:column; gap:10px; z-index:20; }
   .popover-menu.open { display:flex; }
+
+  /* REA Workbench box */
+  #rea-popover { right:64px; width:380px; }
+  .rea-row { display:flex; gap:6px; align-items:center; }
+  .rea-row select, .rea-row input {
+    flex:1; min-width:0; background:rgba(255,255,255,.06); border:1px solid rgba(125,255,217,.25);
+    border-radius:8px; color:#eafff8; font-size:11px; padding:6px 8px; outline:none;
+    font-family:inherit;
+  }
+  .rea-actions { display:flex; gap:6px; }
+  #rea-out {
+    max-height:180px; overflow:auto; white-space:pre-wrap; word-break:break-word;
+    background:rgba(0,0,0,.45); border:1px solid rgba(125,255,217,.18); border-radius:8px;
+    padding:8px; font-size:10px; line-height:1.5; color:#9fd8cc;
+  }
+  .bp-row {
+    display:flex; gap:6px; align-items:center; padding:5px 6px; border-radius:7px;
+    cursor:pointer; border:1px solid transparent;
+  }
+  .bp-row:hover { background:rgba(125,255,217,.08); border-color:rgba(125,255,217,.2); }
+  .bp-row b { font-size:10.5px; color:#eafff8; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+  .bp-row span { font-size:9px; color:#5a6b62; flex-shrink:0; }
+
   #forces-popover { right:50px; }
   #help-popover { right:0; width:270px; }
 
@@ -331,6 +354,30 @@
   </div>
 
   <div style="position:relative;">
+    <button class="tbtn" id="btn-rea" title="REA Reverse-Engineering Workbench">REA</button>
+  <div class="popover-menu" id="rea-popover">
+    <div class="sec-label" style="margin:0 0 4px;">REA WORKBENCH</div>
+    <div class="rea-row">
+      <select id="rea-tool"></select>
+    </div>
+    <div class="rea-row">
+      <input id="rea-path" placeholder="Target path (binary / app / file)" autocomplete="off"
+             value="vendor/rea/node_modules/@lydell/node-pty-win32-x64/conpty_console_list.node" />
+    </div>
+    <div class="rea-actions">
+      <button class="tbtn" id="btn-rea-run" style="flex:1;">ANALYZE</button>
+      <button class="tbtn gold" id="btn-rea-blueprint" title="Save this work as a reusable blueprint">BLUEPRINT</button>
+    </div>
+    <div id="rea-out">Pick a tool, aim at a target, and analyze. Results arrive with evidence ids.</div>
+    <div class="sec-label" style="margin:4px 0 2px;">BLUEPRINTS <span style="color:#5a6b62;">(click a row to load its recipe)</span></div>
+    <div id="rea-blueprints" style="display:flex; flex-direction:column; gap:2px; max-height:140px; overflow:auto;">
+      <div class="bp-row"><b>No blueprints yet</b><span></span></div>
+    </div>
+    <div class="rea-row">
+      <input id="rea-bp-q" placeholder="Search blueprints..." autocomplete="off" />
+      <button class="tbtn" id="btn-rea-bp-find" style="padding:6px 10px;">GO</button>
+    </div>
+  </div>
     <button class="tbtn" id="btn-help" title="Keyboard Shortcuts">?</button>
     <div class="popover-menu" id="help-popover">
       <div class="sec-label" style="margin:0 0 4px;">KEYBOARD SHORTCUTS</div>
@@ -721,6 +768,103 @@ function applyForces() {
   GRAPH.d3Force('link').distance(() => FORCES.linkLen);
   if (!HOLD_SIM) GRAPH.d3ReheatSimulation && GRAPH.d3ReheatSimulation();
 }
+
+/* ── REA Workbench ────────────────────────────────────────────────── */
+const REA_STATE = { lastResult: '', lastTool: '', lastPath: '' };
+
+(function initRea() {
+  const sel = $('rea-tool');
+  fetch('/api/rea/tools').then(r => r.json()).then(d => {
+    sel.innerHTML = Object.entries(d.tools || {})
+      .map(([name, desc]) => '<option value="' + name + '"' + (d.ready ? '' : ' disabled') + '>' + name + ' — ' + desc + '</option>')
+      .join('');
+    if (!d.ready) $('rea-out').textContent = 'REA is not built yet. Run: python scripts/setup_rea.py';
+  }).catch(() => { sel.innerHTML = '<option value="">backend offline</option>'; });
+})();
+
+function refreshBlueprints(q) {
+  const box = $('rea-blueprints');
+  fetch('/api/blueprints?' + (q ? 'q=' + encodeURIComponent(q) : 'k=8'))
+    .then(r => r.json())
+    .then(d => {
+      const bps = d.blueprints || [];
+      box.innerHTML = bps.length ? '' : '<div class="bp-row"><b>No blueprints yet</b><span></span></div>';
+      bps.forEach(bp => {
+        const row = document.createElement('div');
+        row.className = 'bp-row';
+        const title = (String(bp.text || '').split('\n')[0] || 'BLUEPRINT').replace('BLUEPRINT: ', '');
+        row.innerHTML = '<b>' + title + '</b><span>' + (bp.tags || []).join(', ') + '</span>';
+        row.onclick = () => { $('rea-out').textContent = bp.text; REA_STATE.lastResult = bp.text; };
+        box.appendChild(row);
+      });
+    })
+    .catch(() => { box.innerHTML = '<div class="bp-row"><b>backend offline</b><span></span></div>'; });
+}
+
+$('btn-rea').addEventListener('click', e => {
+  e.stopPropagation();
+  document.querySelectorAll('.popover-menu').forEach(p => { if (p.id !== 'rea-popover') p.classList.remove('open'); });
+  const opening = !$('rea-popover').classList.contains('open');
+  $('rea-popover').classList.toggle('open');
+  if (opening) refreshBlueprints('');
+});
+
+document.addEventListener('click', e => {
+  const pop = $('rea-popover');
+  if (pop.classList.contains('open') && !pop.contains(e.target) && e.target !== $('btn-rea')) {
+    pop.classList.remove('open');
+  }
+});
+
+$('btn-rea-run').addEventListener('click', async () => {
+  const tool = $('rea-tool').value;
+  const path = $('rea-path').value.trim();
+  if (!tool || !path) { $('rea-out').textContent = 'Pick a tool and a target path.'; return; }
+  $('rea-out').textContent = 'Running ' + tool + ' on ' + path + ' ...';
+  try {
+    const r = await fetch('/api/rea/analyze', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tool: tool, path: path })
+    });
+    const d = await r.json();
+    REA_STATE.lastTool = tool; REA_STATE.lastPath = path;
+    REA_STATE.lastResult = d.ok ? (d.result || '') : '';
+    $('rea-out').textContent = d.ok
+      ? 'TOOL: ' + tool + '\nTARGET: ' + path + '\n\n' + REA_STATE.lastResult
+      : 'ERROR: ' + (d.error || 'unknown');
+  } catch (err) {
+    $('rea-out').textContent = 'Request failed: ' + err;
+  }
+});
+
+$('btn-rea-blueprint').addEventListener('click', async () => {
+  if (!REA_STATE.lastResult) { $('rea-out').textContent = 'Run an analysis first, then save the blueprint.'; return; }
+  const title = prompt('Blueprint title:', 'REA ' + REA_STATE.lastTool);
+  if (!title) return;
+  const goal = prompt('What did this work achieve?', 'Analyze ' + REA_STATE.lastPath + ' with ' + REA_STATE.lastTool);
+  if (goal === null) return;
+  try {
+    const r = await fetch('/api/blueprints', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: title, goal: goal,
+        steps: ['aim the REA workbench at the target', 'run ' + REA_STATE.lastTool, 'read the evidence'],
+        files: [REA_STATE.lastPath],
+        verify: ['python -m pytest tests/unit/test_rea_agent_tools.py -q'],
+        tools: ['rea:' + REA_STATE.lastTool],
+        tags: 'rea,workbench'
+      })
+    });
+    const d = await r.json();
+    $('rea-out').textContent = 'Blueprint saved: ' + d.id;
+    refreshBlueprints('');
+  } catch (err) {
+    $('rea-out').textContent = 'Save failed: ' + err;
+  }
+});
+
+$('btn-rea-bp-find').addEventListener('click', () => refreshBlueprints($('rea-bp-q').value.trim()));
+$('rea-bp-q').addEventListener('keydown', e => { if (e.key === 'Enter') refreshBlueprints($('rea-bp-q').value.trim()); });
 
 $('f-repel').addEventListener('input', e => {
   FORCES.repel = +e.target.value;
