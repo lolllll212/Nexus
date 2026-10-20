@@ -33,7 +33,8 @@ import { MultimodalBridgeModal } from './components/MultimodalBridgeModal';
 import { CanvasBuilderModal } from './components/CanvasBuilderModal';
 import { CodeCompilerModal } from './components/CodeCompilerModal';
 import { ConversationalStream } from './components/ConversationalStream';
-import { JarvisModal } from './components/JarvisModal';
+  import { JarvisModal, type JarvisAction } from './components/JarvisModal';
+  import { JarvisHUD } from './components/JarvisHUD';
 import { AnalyticsDashboardView } from './components/AnalyticsDashboardView';
 import { SwarmDashboardView } from './components/SwarmDashboardView';
 import { MobileCompactCockpit } from './components/MobileCompactCockpit';
@@ -73,6 +74,7 @@ export const App: React.FC = () => {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isJarvisOpen, setIsJarvisOpen] = useState(false);
+  const [jarvisListening, setJarvisListening] = useState(false);
   const [nimStatus, setNimStatus] = useState<any>(null);
 
   // Module 2: The Conversational Stream framing AI feedback
@@ -497,6 +499,43 @@ export const App: React.FC = () => {
     setCurrentMode('GRAPH');
   }, []);
 
+  // Spoken commands from the Jarvis console map onto app-level actions.
+  const handleJarvisCommand = (action: JarvisAction) => {
+    playHudClick();
+    switch (action) {
+      case 'open-research':
+        setCurrentMode('RESEARCH');
+        break;
+      case 'open-workflow':
+        setCurrentMode('WORKFLOW');
+        break;
+      case 'open-video':
+        setCurrentMode('VIDEO');
+        break;
+      case 'open-dashboard':
+        setCurrentMode('DASHBOARD');
+        break;
+      case 'open-architecture':
+        setCurrentMode('ARCHITECTURE');
+        break;
+      case 'open-studio':
+        setIsClaudeStudioOpen(true);
+        break;
+      case 'open-agents':
+        setIsAgentsModalOpen(true);
+        break;
+      case 'open-integrations':
+        setIsIntegrationsModalOpen(true);
+        break;
+      case 'open-multimodal':
+        setIsMultimodalBridgeOpen(true);
+        break;
+      default:
+        // 'stop-speaking' / 'dismiss' are fully handled inside the console.
+        break;
+    }
+  };
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#030508] text-slate-100 font-sans antialiased select-none">
       {/* ── Minimal Floating Top Bar ─────────────────────────────────────────── */}
@@ -530,7 +569,23 @@ export const App: React.FC = () => {
         onRefreshNimStatus={refreshNimStatus}
         agentStatus={agentStatus}
         onStatusChange={setAgentStatus}
+        onCommand={handleJarvisCommand}
+        onListeningChange={setJarvisListening}
       />
+
+      {/* Floating JARVIS orb - always visible, mirrors listening/speaking state */}
+      <div className="fixed bottom-5 right-5 z-40 hidden md:block">
+        <JarvisHUD
+          ringActive
+          listening={jarvisListening}
+          speaking={agentStatus === 'speaking'}
+          hasNimKey={Boolean(nimStatus?.has_api_key)}
+          onClick={() => {
+            playHudClick();
+            setIsJarvisOpen(true);
+          }}
+        />
+      </div>
 
       {/* ── Left Sidebar: Workspaces, Search & System Telemetry ─────────────── */}
       <LeftSidebar

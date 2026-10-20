@@ -5,6 +5,8 @@ import {
   Sparkles, 
   Cpu, 
   Key, 
+  Mic, 
+  MicOff, 
   Volume2, 
   VolumeX, 
   ChevronDown, 
@@ -16,6 +18,91 @@ import { NimStatus, NimModel, AgentStatus } from '../types';
 import { speakWithStatus, stopAnySpeaking } from '../utils/voiceManager';
 import { nexusFetch } from '../api';
 
+/* ---------- Minimal Web Speech API typings (no external dependency) ---------- */
+
+type SpeechRecognitionAlternativeLike = { readonly transcript: string };
+type SpeechRecognitionResultLike = {
+  readonly isFinal: boolean;
+  readonly 0: SpeechRecognitionAlternativeLike;
+};
+type SpeechRecognitionEventLike = {
+  readonly resultIndex: number;
+  readonly results: { readonly length: number; readonly [index: number]: SpeechRecognitionResultLike };
+};
+interface SpeechRecognitionErrorEventLike {
+  readonly error: string;
+}
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
+const getSpeechRecognitionCtor = (): SpeechRecognitionCtor | null => {
+  const w = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionCtor;
+    webkitSpeechRecognition?: SpeechRecognitionCtor;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+};
+
+/* ----------------------------- Voice commands ----------------------------- */
+
+export type JarvisAction =
+  | 'open-research'
+  | 'open-workflow'
+  | 'open-video'
+  | 'open-dashboard'
+  | 'open-architecture'
+  | 'open-studio'
+  | 'open-agents'
+  | 'open-integrations'
+  | 'open-multimodal'
+  | 'stop-speaking'
+  | 'dismiss';
+
+interface JarvisCommand {
+  action: JarvisAction;
+  label: string;
+  keywords: string[];
+}
+
+// Control words first so explicit commands win over navigation words
+// (e.g. "stop" before anything else). Matching is word-boundary based so
+// "workshop" never triggers "stop".
+const VOICE_COMMANDS: JarvisCommand[] = [
+  { action: 'stop-speaking', label: '', keywords: ['stop', 'silence', 'be quiet'] },
+  { action: 'dismiss', label: '', keywords: ['dismiss', 'go away', 'stand down'] },
+  { action: 'open-research', label: 'Deep Research hub', keywords: ['research', 'deep dive'] },
+  { action: 'open-workflow', label: 'Workflow canvas', keywords: ['workflow', 'workflows'] },
+  { action: 'open-dashboard', label: 'Analytics dashboard', keywords: ['dashboard', 'analytics', 'metrics'] },
+  { action: 'open-video', label: 'Runway video studio', keywords: ['video', 'runway'] },
+  { action: 'open-architecture', label: 'Architecture view', keywords: ['architecture'] },
+  { action: 'open-studio', label: 'Claude coding studio', keywords: ['studio', 'coding'] },
+  { action: 'open-agents', label: 'Agent orchestration', keywords: ['agents', 'orchestration', 'swarm'] },
+  { action: 'open-integrations', label: 'Integrations', keywords: ['integrations', 'connectors'] },
+  { action: 'open-multimodal', label: 'Multimodal bridge', keywords: ['multimodal', 'transcode'] },
+];
+
+export const matchVoiceCommand = (text: string): JarvisCommand | null => {
+  const lower = text.toLowerCase();
+  for (const command of VOICE_COMMANDS) {
+    for (const keyword of command.keywords) {
+      if (new RegExp(`\\b${keyword}\\b`).test(lower)) return command;
+    }
+  }
+  return null;
+};
+
+/* -------------------------------- Component ------------------------------- */
+
 interface JarvisModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -24,6 +111,10 @@ interface JarvisModalProps {
   onRefreshNimStatus: () => void;
   agentStatus?: AgentStatus;
   onStatusChange?: (status: AgentStatus) => void;
+  /** Fired when a spoken command maps to an app-level action. */
+  onCommand?: (action: JarvisAction) => void;
+  /** Reports mic arming transitions so outer HUDs can mirror the state. */
+  onListeningChange?: (listening: boolean) => void;
 }
 
 interface ChatMessage {
@@ -42,6 +133,8 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
   onRefreshNimStatus,
   agentStatus = 'idle',
   onStatusChange,
+  onCommand,
+  onListeningChange,
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -63,6 +156,13 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [configSuccess, setConfigSuccess] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
+
+  /* ------------------------------ Voice input ------------------------------ */
+
+  const [isListening, setIsListening] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const listeningIntentRef = useRef(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -219,6 +319,131 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
     }
   };
 
+  /* --------------------------- Recognition engine -------------------------- */
+
+  const getRecognition = (): SpeechRecognitionLike | null => {
+    if (recognitionRef.current) return recognitionRef.current;
+    const Ctor = getSpeechRecognitionCtor();
+    if (!Ctor) return null;
+
+    const rec = new Ctor();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = 'en-US';
+
+    rec.onresult = (event) => {
+      let interim = '';
+      let finalText = '';
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        const text = result[0]?.transcript ?? '';
+        if (result.isFinal) finalText += text;
+        else interim += text;
+      }
+      // Live transcript in the input while the phrase is still forming.
+      if (interim) setInputPrompt(interim.trim());
+      if (finalText.trim()) handleFinalTranscript(finalText.trim());
+    };
+
+    rec.onend = () => {
+      if (listeningIntentRef.current) {
+        // Chrome ends the stream periodically - restart while the mic is armed.
+        try {
+          rec.start();
+        } catch (_) {
+          setIsListening(false);
+          onListeningChange?.(false);
+        }
+      } else {
+        setIsListening(false);
+        onListeningChange?.(false);
+      }
+    };
+
+    rec.onerror = (event) => {
+      if (event.error === 'no-speech' || event.error === 'aborted') return;
+      listeningIntentRef.current = false;
+      setIsListening(false);
+      onListeningChange?.(false);
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        setMicError('Microphone access denied. Allow it in your browser settings.');
+      } else {
+        setMicError(`Voice capture error: ${event.error}`);
+      }
+    };
+
+    recognitionRef.current = rec;
+    return rec;
+  };
+
+  const handleFinalTranscript = (text: string) => {
+    const command = matchVoiceCommand(text);
+    if (command) {
+      if (command.action === 'stop-speaking') {
+        stopAnySpeaking();
+        onStatusChange?.('idle');
+        setInputPrompt('');
+        speakText('Going quiet.');
+        return;
+      }
+      if (command.action === 'dismiss') {
+        setInputPrompt('');
+        speakText('Standing by.');
+        onClose();
+        return;
+      }
+      speakText(`Opening ${command.label}.`);
+      onCommand?.(command.action);
+      return;
+    }
+    handleSend(text);
+  };
+
+  const startListening = () => {
+    const rec = getRecognition();
+    if (!rec) {
+      setMicError('Speech recognition unsupported here. Try Chrome or Edge.');
+      return;
+    }
+    setMicError(null);
+    listeningIntentRef.current = true;
+    try {
+      rec.start();
+      setIsListening(true);
+      onListeningChange?.(true);
+    } catch (_) {
+      // start() throws if the engine is already running - keep listening.
+    }
+  };
+
+  const stopListening = () => {
+    listeningIntentRef.current = false;
+    setIsListening(false);
+    onListeningChange?.(false);
+    try {
+      recognitionRef.current?.stop();
+    } catch (_) {
+      /* engine already stopped */
+    }
+  };
+
+  // Mic is disarmed whenever the console closes or the component unmounts.
+  useEffect(() => {
+    if (!isOpen) stopListening();
+  }, [isOpen]);
+
+  useEffect(
+    () => () => {
+      listeningIntentRef.current = false;
+      try {
+        recognitionRef.current?.abort();
+      } catch (_) {
+        /* engine already stopped */
+      }
+    },
+    []
+  );
+
   const handleSaveConfig = async () => {
     setConfigError(null);
     try {
@@ -271,11 +496,25 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
               </div>
               <div className="text-[10px] font-mono text-slate-400">
                 Connected: {selectedModel} · Status: {nimStatus?.status || 'simulation'}
+                {isListening && <span className="text-red-300"> · LISTENING</span>}
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Microphone (voice input) */}
+            <button
+              onClick={() => (isListening ? stopListening() : startListening())}
+              className={`p-1.5 rounded-lg border transition-all ${
+                isListening
+                  ? 'bg-red-950 border-red-400 text-red-300 shadow-[0_0_10px_rgba(248,113,113,0.4)] animate-pulse'
+                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-cyan-300 hover:border-cyan-500/50'
+              }`}
+              title={isListening ? 'Stop listening' : 'Start voice input'}
+            >
+              {isListening ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+            </button>
+
             {/* Audio toggle */}
             <button
               onClick={() => {
@@ -442,6 +681,14 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
           ))}
         </div>
 
+        {/* Mic error, if any */}
+        {micError && (
+          <div className="px-5 py-1.5 bg-red-950/40 border-t border-red-500/20 text-[10px] font-mono text-red-300 flex items-center gap-1.5">
+            <MicOff className="w-3 h-3" />
+            {micError}
+          </div>
+        )}
+
         {/* Input Bar */}
         <div className="p-4 border-t border-cyan-500/20 bg-[#020712] flex items-center gap-2">
           <input
@@ -451,7 +698,9 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
             onChange={(e) => setInputPrompt(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder={
-              agentStatus === 'thinking'
+              isListening
+                ? 'Listening... speak now (say "stop", "close", or a hub name to command)'
+                : agentStatus === 'thinking'
                 ? 'NEXUS is thinking... Input locked'
                 : agentStatus === 'speaking'
                 ? 'NEXUS is speaking... Input locked'

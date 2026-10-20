@@ -5,6 +5,10 @@ interface JarvisHUDProps {
   ringActive: boolean;
   statusText?: string;
   hasNimKey?: boolean;
+  /** Mic armed - pulsing red ring while speech is being captured. */
+  listening?: boolean;
+  /** Assistant is vocalizing a reply - teal ring. */
+  speaking?: boolean;
   onClick?: () => void;
 }
 
@@ -12,8 +16,18 @@ export const JarvisHUD: React.FC<JarvisHUDProps> = ({
   ringActive = true,
   statusText = 'ONLINE',
   hasNimKey = false,
+  listening = false,
+  speaking = false,
   onClick,
 }) => {
+  const subtitle = listening ? 'LISTENING' : speaking ? 'SPEAKING' : hasNimKey ? 'NIM ACTIVE' : statusText;
+  const accent = listening ? '#f87171' : speaking ? '#2dd4bf' : '#00f0ff';
+  const accentSoft = listening
+    ? 'rgba(248, 113, 113, 0.35)'
+    : speaking
+    ? 'rgba(45, 212, 191, 0.35)'
+    : 'rgba(0, 240, 255, 0.2)';
+
   // Generate 36 tick marks around the circle
   const ticks = Array.from({ length: 36 }, (_, i) => {
     const angle = i * 10;
@@ -29,7 +43,12 @@ export const JarvisHUD: React.FC<JarvisHUDProps> = ({
       title="Click to interact with NEXUS AI (NVIDIA NIM Cortex)"
     >
       {/* Background glow */}
-      <div className="absolute inset-0 rounded-full bg-cyan-500/10 blur-xl group-hover:bg-cyan-400/20 transition-all pointer-events-none"></div>
+      <div
+        className={`absolute inset-0 rounded-full blur-xl transition-all pointer-events-none ${
+          listening || speaking ? 'opacity-100 animate-pulse' : 'group-hover:opacity-100 opacity-70'
+        }`}
+        style={{ backgroundColor: listening ? 'rgba(248,113,113,0.18)' : speaking ? 'rgba(45,212,191,0.18)' : 'rgba(0,240,255,0.10)' }}
+      ></div>
 
       {/* SVG Tick marks & outer ring */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 200 200">
@@ -46,7 +65,7 @@ export const JarvisHUD: React.FC<JarvisHUDProps> = ({
           cy="100"
           r="95"
           fill="none"
-          stroke="rgba(0, 240, 255, 0.2)"
+          stroke={accentSoft}
           strokeWidth="1"
         />
 
@@ -55,10 +74,10 @@ export const JarvisHUD: React.FC<JarvisHUDProps> = ({
           {ticks.map(({ angle, isMajor, isMedium }) => {
             const length = isMajor ? 10 : isMedium ? 6 : 3;
             const strokeColor = isMajor
-              ? '#00f0ff'
+              ? accent
               : isMedium
-              ? 'rgba(0, 240, 255, 0.65)'
-              : 'rgba(0, 240, 255, 0.3)';
+              ? accentSoft
+              : 'rgba(148, 163, 184, 0.25)';
             const strokeW = isMajor ? 2 : 1;
             return (
               <line
@@ -76,17 +95,17 @@ export const JarvisHUD: React.FC<JarvisHUDProps> = ({
         </g>
       </svg>
 
-      {/* Ring 1: Outer Rotating Segmented Cyan Ring */}
+      {/* Ring 1: Outer Rotating Segmented Accent Ring */}
       <div
         className={`absolute inset-2 rounded-full border border-cyan-400/30 ${
           ringActive ? 'animate-spin-slow' : ''
         }`}
         style={{
-          borderTopColor: '#00f0ff',
-          borderRightColor: 'rgba(0, 240, 255, 0.2)',
-          borderBottomColor: '#00e5bc',
+          borderTopColor: accent,
+          borderRightColor: accentSoft,
+          borderBottomColor: listening ? '#fca5a5' : speaking ? '#5eead4' : '#00e5bc',
           borderLeftColor: 'transparent',
-          boxShadow: '0 0 16px rgba(0, 240, 255, 0.2), inset 0 0 16px rgba(0, 240, 255, 0.1)',
+          boxShadow: `0 0 16px ${accentSoft}, inset 0 0 16px ${accentSoft}`,
         }}
       />
 
@@ -124,8 +143,11 @@ export const JarvisHUD: React.FC<JarvisHUDProps> = ({
         </div>
 
         {/* Subtitle status */}
-        <div className="text-[8.5px] font-mono tracking-widest text-cyan-400/80 uppercase mt-0.5 font-semibold">
-          {hasNimKey ? 'NIM ACTIVE' : statusText}
+        <div
+          className="text-[8.5px] font-mono tracking-widest uppercase mt-0.5 font-semibold"
+          style={{ color: accentSoft }}
+        >
+          {subtitle}
         </div>
 
         {/* Small audio level dots */}
