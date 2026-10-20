@@ -14,7 +14,9 @@ Endpoints:
                          sir"). Nothing reads it yet by design — prototype stays
                          standalone until proven.
 """
-import json, os, time
+import json
+import os
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -42,9 +44,9 @@ def _note(path, n):
         text = open(path, encoding="utf-8", errors="ignore").read()
     except OSError:
         return None
-    lines = [l for l in text.splitlines() if l.strip()]
+    lines = [line for line in text.splitlines() if line.strip()]
     title = (lines[0].lstrip("# ").strip() if lines else n)[:48] or n
-    rest = [l for l in lines[1:] if not l.startswith("#")]
+    rest = [line for line in lines[1:] if not line.startswith("#")]
     return {"name": n, "title": title, "body": "\n".join(rest)[:420],
             "full": "\n".join(lines[1:])[:4000]}
 
@@ -54,7 +56,8 @@ def load_notes(limit=18):
     try:
         for n in sorted(x for x in os.listdir(d) if x.endswith((".md", ".txt")))[:limit]:
             note = _note(os.path.join(d, n), n)
-            if note: out.append(note)
+            if note:
+                out.append(note)
     except OSError:
         pass
     return out
@@ -72,12 +75,14 @@ def load_tree(limit_files=14):
                 files = []
                 for n in sorted(x for x in os.listdir(p) if x.endswith((".md", ".txt")))[:limit_files]:
                     note = _note(os.path.join(p, n), n)
-                    if note: files.append(note)
+                    if note:
+                        files.append(note)
                 if files:
                     tree.append({"kind": "folder", "name": e.upper()[:22], "files": files})
             elif e.endswith((".md", ".txt")):
                 note = _note(p, e)
-                if note: loose.append(note)
+                if note:
+                    loose.append(note)
         if loose:
             tree.append({"kind": "folder", "name": "NOTES", "files": loose[:limit_files]})
     except OSError:

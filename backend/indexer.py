@@ -1,0 +1,181 @@
+"""Nexus Knowledge-Graph Indexer — stdlib only.
+
+Scans ``docs/`` and ``.opencode/`` for Markdown files (skipping node_modules),
+extracts titles/excerpts, discovers cross-references (title mentions and
+``[[wikilinks]]``), and writes:
+
+* ``frontend/graph-data.js``  — ``const GRAPH = {nodes:[…], links:[…]}``
+* ``frontend/holo.json``      — same payload as JSON for the server
+
+Run:  ``python backend/indexer.py``
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+SCAN_DIRS = [
+    ROOT / "docs",
+    ROOT / ".opencode",
+]
+
+SKIP_DIRS = {"node_modules", ".git", "__pycache__", ".mypy_cache"}
+
+EXCERPT_LEN = 700
+
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+
+def _title_from_md(lines: list[str], fallback: str) -> str:
+    """Return the first ``# Heading`` or the filename stem."""
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            return stripped.lstrip("# ").strip()[:80]
+    return fallback
+
+
+_WIKILINK = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
+
+
+def _extract_wikilinks(text: str) -> set[str]:
+    """Return lowered targets of ``[[Link]]`` or ``[[Link|alias]]``."""
+    return {m.group(1).strip().lower() for m in _WIKILINK.finditer(text)}
+
+
+def _group_from_relpath(rel: str) -> str:
+    """Top-level folder name (or 'root') used to colour-code nodes."""
+    parts = Path(rel).parts
+    if len(parts) <= 1:
+        return "root"
+    return parts[0].replace(".", "").lower() or "root"
+
+
+def _excerpt(text: str) -> str:
+    """~700-char excerpt: skip YAML front-matter and blank lines."""
+    body = text
+    if body.startswith("---"):
+        end = body.find("---", 3)
+        if end != -1:
+            body = body[end + 3 :]
+    lines = [
+        ln.strip()
+        for ln in body.splitlines()
+        if ln.strip() and not ln.strip().startswith("#")
+    ]
+    return " ".join(lines)[:EXCERPT_LEN]
+
+
+# ── scanning ─────────────────────────────────────────────────────────────────
+
+
+def _collect_md_files() -> list[Path]:
+    """Walk SCAN_DIRS, return .md paths (skip node_modules etc.)."""
+    found: list[Path] = []
+    for base in SCAN_DIRS:
+        if not base.is_dir():
+            continue
+        for dirpath, dirnames, filenames in os.walk(base):
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+            for fn in filenames:
+                if fn.lower().endswith(".md"):
+                    found.append(Path(dirpath) / fn)
+    return sorted(found)
+
+
+# ── main ─────────────────────────────────────────────────────────────────────
+
+
+def build_graph() -> dict:
+    """Return ``{nodes: [...], links: [...]}``."""
+    paths = _collect_md_files()
+
+    # Pass 1 — build nodes
+    nodes: list[dict] = []
+    title_to_idx: dict[str, int] = {}
+    node_texts: list[str] = []
+
+    for idx, p in enumerate(paths):
+        text = p.read_text(encoding="utf-8", errors="ignore")
+        lines = text.splitlines()
+        rel = str(p.relative_to(ROOT))
+        stem = p.stem
+        title = _title_from_md(lines, stem)
+        group = _group_from_relpath(rel)
+        excerpt = _excerpt(text)
+
+        nodes.append(
+            {
+                "id": idx,
+                "label": title,
+                "group": group,
+                "file": rel.replace("\\", "/"),
+                "excerpt": excerpt,
+            }
+        )
+        title_to_idx[title.lower()] = idx
+        title_to_idx[stem.lower()] = idx
+        node_texts.append(text.lower())
+
+    # Pass 2 — discover links
+    seen_edges: set[tuple[int, int]] = set()
+    links: list[dict] = []
+
+    for src_idx, text_lower in enumerate(node_texts):
+        # title mentions
+        for title_key, tgt_idx in title_to_idx.items():
+            if tgt_idx == src_idx:
+                continue
+            if title_key in text_lower:
+                edge = (min(src_idx, tgt_idx), max(src_idx, tgt_idx))
+                if edge not in seen_edges:
+                    seen_edges.add(edge)
+                    links.append({"source": edge[0], "target": edge[1]})
+
+        # [[wikilinks]]
+        for wl in _extract_wikilinks(node_texts[src_idx]):
+            tgt = title_to_idx.get(wl)
+            if tgt is not None and tgt != src_idx:
+                edge = (min(src_idx, tgt), max(src_idx, tgt))
+                if edge not in seen_edges:
+                    seen_edges.add(edge)
+                    links.append({"source": edge[0], "target": edge[1]})
+
+    return {"nodes": nodes, "links": links}
+
+
+def write_outputs(graph: dict) -> None:
+    """Write ``frontend/graph-data.js`` and ``frontend/holo.json``."""
+    frontend = ROOT / "frontend"
+    frontend.mkdir(exist_ok=True)
+
+    js_path = frontend / "graph-data.js"
+    payload = json.dumps(graph, indent=2, ensure_ascii=False)
+    js_path.write_text(
+        f"/* Auto-generated by backend/indexer.py — DO NOT EDIT */\n"
+        f"const GRAPH = {payload};\n",
+        encoding="utf-8",
+    )
+
+    json_path = frontend / "holo.json"
+    json_path.write_text(
+        json.dumps(graph, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    print(f"[indexer] {len(graph['nodes'])} nodes, {len(graph['links'])} links")
+    print(f"[indexer] wrote {js_path}")
+    print(f"[indexer] wrote {json_path}")
+
+
+if __name__ == "__main__":
+    graph = build_graph()
+    write_outputs(graph)
+    sys.exit(0)
