@@ -127,3 +127,9 @@ token_budget_ledger.json
 board.txt
 inbox.txt
 status.txt
+
+# Runtime LLM selection (provider+model only; keys stay in memory/env)
+backend/llm_state.json
+
+# RL training reward store (accumulated scored pairs)
+backend/rl_training_state.json

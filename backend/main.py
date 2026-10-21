@@ -100,6 +100,70 @@ def _load_llm_config() -> dict[str, str]:
 
 LLM_CFG = _load_llm_config()
 
+# ─── Model registry: local (OpenAI-compatible) + NVIDIA NIM ──────────────────
+
+from nexus.infrastructure.adapters.llm.nvidia_nim_provider import (  # noqa: E402
+    DEFAULT_NIM_BASE_URL,
+    SUPPORTED_NIM_MODELS,
+)
+
+NIM_KEY_ENV_VARS = ("NEXUS_NIM_API_KEY", "NVIDIA_API_KEY", "NVAPI_KEY")
+# Persisted state holds provider+model only - API keys never touch disk here.
+LLM_STATE_PATH = BACKEND_DIR / "llm_state.json"
+
+LLM_STATE: dict[str, str] = {
+    "provider": "local",
+    "model": LLM_CFG.get("model", ""),
+    "api_key": next(
+        (os.getenv(name, "").strip() for name in NIM_KEY_ENV_VARS if os.getenv(name, "").strip()),
+        "",
+    ),
+}
+
+if LLM_STATE_PATH.is_file():
+    try:
+        _saved_llm = json.loads(LLM_STATE_PATH.read_text(encoding="utf-8") or "{}")
+        if _saved_llm.get("provider") in ("local", "nim"):
+            LLM_STATE["provider"] = str(_saved_llm["provider"])
+        if _saved_llm.get("model"):
+            LLM_STATE["model"] = str(_saved_llm["model"])
+    except Exception:
+        pass
+
+
+def _persist_llm_state() -> None:
+    try:
+        LLM_STATE_PATH.write_text(
+            json.dumps(
+                {"provider": LLM_STATE["provider"], "model": LLM_STATE["model"]}, indent=2
+            ),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
+def _nim_ready() -> bool:
+    return bool(LLM_STATE["api_key"])
+
+
+def _active_llm_target() -> tuple[str, str, str]:
+    """Resolve (base_url, model, api_key) for the currently selected provider."""
+    if LLM_STATE["provider"] == "nim" and _nim_ready():
+        # EOL-proofing: a persisted id that NVIDIA retired (410/404) snaps to
+        # the first verified catalog entry instead of failing every chat.
+        nim_ids = {str(m["id"]) for m in SUPPORTED_NIM_MODELS}
+        if LLM_STATE["model"] not in nim_ids:
+            LLM_STATE["model"] = str(SUPPORTED_NIM_MODELS[0]["id"])
+            _persist_llm_state()
+        return DEFAULT_NIM_BASE_URL, LLM_STATE["model"], LLM_STATE["api_key"]
+    model = (
+        LLM_STATE["model"]
+        if LLM_STATE["provider"] == "local" and LLM_STATE["model"]
+        else LLM_CFG.get("model", "")
+    )
+    return LLM_CFG.get("base_url", "").rstrip("/"), model, LLM_CFG.get("api_key", "")
+
 # ── graph data ───────────────────────────────────────────────────────────────
 
 
@@ -428,7 +492,7 @@ async def _check_llm_alive() -> bool:
     if (now - _LLM_LAST_CHECK) < 45.0:
         return _LLM_IS_ALIVE
 
-    base = LLM_CFG.get("base_url", "").rstrip("/")
+    base, _model, key = _active_llm_target()
     if not base:
         _LLM_IS_ALIVE = False
         _LLM_LAST_CHECK = now
@@ -436,9 +500,11 @@ async def _check_llm_alive() -> bool:
 
     import httpx
 
+    headers = {"Authorization": f"Bearer {key}"} if key else {}
+    timeout = 3.0 if base.startswith("https://") else 0.8
     try:
-        async with httpx.AsyncClient(timeout=0.6) as client:
-            resp = await client.get(f"{base}/models")
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.get(f"{base}/models", headers=headers)
             _LLM_IS_ALIVE = resp.status_code == 200
     except Exception:
         _LLM_IS_ALIVE = False
@@ -447,13 +513,15 @@ async def _check_llm_alive() -> bool:
     return _LLM_IS_ALIVE
 
 
-async def _call_llm(system: str, messages: list[dict[str, str]]) -> str:
-    """Call configured OpenAI-compatible LLM."""
+async def _call_llm(system: str, messages: list[dict[str, str]]) -> tuple[str, str]:
+    """Call the active model. Returns (answer, reasoning) - reasoning may be ''.
+
+    Reasoning-style NIM models stream their chain-of-thought in the separate
+    ``reasoning_content`` field; ``content`` holds only the final answer.
+    """
     import httpx
 
-    base = LLM_CFG.get("base_url", "").rstrip("/")
-    model = LLM_CFG.get("model", "")
-    key = LLM_CFG.get("api_key", "")
+    base, model, key = _active_llm_target()
 
     if not base or not model:
         raise RuntimeError("LLM not configured")
@@ -466,11 +534,17 @@ async def _call_llm(system: str, messages: list[dict[str, str]]) -> str:
     payload = {
         "model": model,
         "messages": [{"role": "system", "content": system}, *messages],
-        "max_tokens": 512,
+        # Reasoning-style NIM models spend part of the budget thinking before
+        # the final content lands - 4096 leaves room for the actual answer.
+        "max_tokens": 4096 if LLM_STATE["provider"] == "nim" else 512,
         "temperature": 0.4,
     }
 
-    async with httpx.AsyncClient(timeout=4.0) as client:
+    # Cloud NIM models (70B+, reasoning traces) routinely exceed a few seconds;
+    # a tight timeout silently degrades every chat to the canned fallback.
+    llm_timeout = 120.0 if LLM_STATE["provider"] == "nim" else 30.0
+
+    async with httpx.AsyncClient(timeout=llm_timeout) as client:
         resp = await client.post(url, json=payload, headers=headers)
         resp.raise_for_status()
         data = resp.json()
@@ -479,7 +553,32 @@ async def _call_llm(system: str, messages: list[dict[str, str]]) -> str:
     if not choices:
         raise RuntimeError("No choices returned from LLM")
     msg = choices[0].get("message", {})
-    return msg.get("content", "") or msg.get("reasoning_content", "") or ""
+    content = msg.get("content", "") or ""
+    reasoning = msg.get("reasoning_content", "") or ""
+
+    # Reasoning-heavy models can exhaust the whole budget while deliberating
+    # and never emit content. One strict retry without deliberation rescues it.
+    if not content.strip() and reasoning.strip():
+        retry_payload = dict(payload)
+        retry_payload["messages"] = [
+            {"role": "system", "content": system},
+            *messages,
+            {
+                "role": "system",
+                "content": "IMPORTANT: Do not deliberate. Output only the final answer, immediately.",
+            },
+        ]
+        retry_payload["max_tokens"] = min(payload["max_tokens"], 1024)
+        async with httpx.AsyncClient(timeout=llm_timeout) as client:
+            resp = await client.post(url, json=retry_payload, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+        choices = data.get("choices", [])
+        if choices:
+            msg = choices[0].get("message", {})
+            content = msg.get("content", "") or ""
+
+    return content, reasoning
 
 
 # ── J.A.R.V.I.S. Intelligent Synthesis Engine ────────────────────────────────
@@ -680,12 +779,14 @@ def _synthesize_jarvis_answer(
         first = top_notes[0]
         node_id = first["id"]
         label = first.get("label", "Knowledge Note")
-        excerpt = _clean_markdown_excerpt(first.get("excerpt", ""))
+        raw = _clean_markdown_excerpt(first.get("excerpt", ""))
+        excerpt = raw[:280]
 
+        # Short pointer only - the conversational LLM pass (below) turns this
+        # into a real answer; this fallback must never dump raw archive text.
         ans = (
-            f"According to the Nexus knowledge archive in **{label}**, sir:\n\n"
-            f"{excerpt}\n\n"
-            f"I have highlighted the **{label}** node on your 3D Cosmos graph for visual inspection."
+            f"Closest match in your brain: **{label}** — {excerpt}{'…' if len(raw) > 280 else ''}\n\n"
+            f"I've highlighted **{label}** on your Cosmos graph, sir."
         )
         return (
             ans,
@@ -1440,6 +1541,7 @@ async def chat_endpoint(req: Request):
     )
 
     # Try external LLM if available and responding
+    assistant_reasoning = ""
     base_url = LLM_CFG.get("base_url", "")
     model = LLM_CFG.get("model", "")
     if base_url and model and await _check_llm_alive():
@@ -1450,15 +1552,32 @@ async def chat_endpoint(req: Request):
             system_prompt = (
                 "You are J.A.R.V.I.S., the suave, razor-sharp AI operating the NEXUS autonomous second brain.\n"
                 "Address the user politely as 'sir'. Be concise, intelligent, and helpful.\n"
+                "Answer in your own words in at most 6 sentences. Never paste raw archive, "
+                "note, or tool text - synthesize it. If the context does not help, say so briefly and answer generally.\n"
                 f"Context from tools:\n{json.dumps(tool_data, indent=2)}\n"
                 f"Relevant repository notes:\n{notes_context}"
             )
-            llm_reply = await _call_llm(
+            # Reinforcement pathway: past top-rated answers for similar
+            # questions become few-shot exemplars of expected quality.
+            exemplars = _pick_exemplars(query)
+            if exemplars:
+                ex_txt = "\n\n".join(
+                    f"Q: {p['q']}\nA (rated {p['score']}/10): {p['a'][:500]}"
+                    for p in exemplars
+                )
+                system_prompt += (
+                    "\n\nMirror the clarity, structure, and technical depth of "
+                    f"these past top-rated answers:\n{ex_txt}"
+                )
+            reply_text, reply_reasoning = await _call_llm(
                 system_prompt,
                 [{"role": "user", "content": query}],
             )
-            if llm_reply and len(llm_reply.strip()) > 10:
-                answer = llm_reply.strip()
+            if reply_text and len(reply_text.strip()) > 10:
+                answer = reply_text.strip()
+                # Keep the chain-of-thought separate: the UI renders it faint,
+                # the voice never reads it, and history stores only the answer.
+                assistant_reasoning = reply_reasoning.strip()
         except Exception:
             # Fallback gracefully to our smart synthesis
             pass
@@ -1474,6 +1593,7 @@ async def chat_endpoint(req: Request):
         {
             "answer": answer,
             "response": answer,
+            "reasoning": assistant_reasoning,
             "nodes": node_ids,
             "tools_used": tools_used,
             "memories_recalled": len(top_notes),
@@ -1482,6 +1602,468 @@ async def chat_endpoint(req: Request):
 
 
 # ── static file fallback (serve frontend/) ───────────────────────────────────
+
+
+# ─── Model registry endpoints (local + NVIDIA NIM) ───────────────────────────
+
+class ModelSwitchRequest(BaseModel):
+    provider: str
+    model: str = ""
+    api_key: str | None = None
+
+
+@app.get("/api/llm/models")
+async def api_llm_models():
+    """Switcher payload: local models (probed live) + the NVIDIA NIM catalog."""
+    # Resolve (and EOL-snap) the active selection so the UI never shows a
+    # retired model id after the catalog was refreshed.
+    _active_base, active_model, _active_key = _active_llm_target()
+    local_models: list[str] = []
+    base = LLM_CFG.get("base_url", "").rstrip("/")
+    if base:
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=2.5) as client:
+                resp = await client.get(f"{base}/models")
+                if resp.status_code == 200:
+                    local_models = [
+                        m.get("id", "") for m in resp.json().get("data", []) if m.get("id")
+                    ]
+        except Exception:
+            local_models = []
+    return JSONResponse(
+        {
+            "active": {"provider": LLM_STATE["provider"], "model": active_model},
+            "local": {"base_url": base, "reachable": bool(local_models), "models": local_models},
+            "nim": {"configured": _nim_ready(), "models": SUPPORTED_NIM_MODELS},
+        }
+    )
+
+
+@app.post("/api/llm/model")
+async def api_llm_switch(req: ModelSwitchRequest):
+    """Switch the active chat model between the local server and NVIDIA NIM."""
+    provider = (req.provider or "").strip().lower()
+    if provider not in ("local", "nim"):
+        return JSONResponse(
+            {"ok": False, "error": "provider must be 'local' or 'nim'"}, status_code=400
+        )
+    if req.api_key:
+        LLM_STATE["api_key"] = req.api_key.strip()
+    if provider == "nim" and not _nim_ready():
+        return JSONResponse(
+            {
+                "ok": False,
+                "needs_key": True,
+                "error": "NVIDIA NIM needs an API key (starts with nvapi-).",
+            },
+            status_code=400,
+        )
+    if req.model.strip():
+        LLM_STATE["model"] = req.model.strip()
+    if provider == "nim":
+        # The carried-over local id is not valid on NIM - snap to the catalog.
+        nim_ids = {str(m["id"]) for m in SUPPORTED_NIM_MODELS}
+        if LLM_STATE["model"] not in nim_ids:
+            LLM_STATE["model"] = str(SUPPORTED_NIM_MODELS[0]["id"])
+    elif not LLM_STATE["model"]:
+        LLM_STATE["model"] = LLM_CFG.get("model", "")
+    LLM_STATE["provider"] = provider
+    _persist_llm_state()
+
+    reachable = False
+    try:
+        import httpx
+
+        probe_base = (
+            DEFAULT_NIM_BASE_URL if provider == "nim" else LLM_CFG.get("base_url", "").rstrip("/")
+        )
+        headers = (
+            {"Authorization": f"Bearer {LLM_STATE['api_key']}"} if provider == "nim" else {}
+        )
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            resp = await client.get(f"{probe_base}/models", headers=headers)
+            reachable = resp.status_code == 200
+    except Exception:
+        reachable = False
+    return JSONResponse(
+        {"ok": True, "active": {"provider": provider, "model": LLM_STATE["model"]}, "reachable": reachable}
+    )
+
+
+# ─── RL training: hard-question corpus, judge, reward store ──────────────────
+#
+# A working reinforcement-lite loop: hard questions are answered, an LLM judge
+# scores them 0-10 against rubrics, pairs land in a reward store, and the
+# highest-scoring answers become few-shot exemplars injected into JARVIS's
+# prompt when a similar question returns - reward-weighted behavior shaping.
+
+TRAINING_CORPUS = [
+    {
+        "id": "gil-py313",
+        "category": "python-internals",
+        "q": "How does Python 3.13 (free-threading / GIL changes) alter CPU-bound vs I/O-bound multithreading compared to older 3.x releases?",
+        "rubric": [
+            "GIL remains the default; free-threading is opt-in and experimental",
+            "CPU-bound threads gain real core parallelism only under free-threading, and race-safety shifts to user code",
+            "I/O-bound behavior is essentially unchanged because the GIL is released during blocking waits",
+            "Multiprocessing remains the safe route for heavy CPU compute",
+        ],
+    },
+    {
+        "id": "cap-partition",
+        "category": "distributed-systems",
+        "q": "For a 3-node replicated key-value store, what must you sacrifice during a network partition, and why can consistency and availability not both hold?",
+        "rubric": [
+            "A partition forces a choice: reject writes (CP) or serve stale reads/writes (AP)",
+            "Consistency + availability cannot both hold because nodes cannot agree on truth while cut off",
+            "Concrete examples: quorum writes vs last-writer-wins divergence",
+        ],
+    },
+    {
+        "id": "friday-deadlock",
+        "category": "debugging",
+        "q": "Your REST API deadlocks under load only on Fridays. Describe a systematic diagnosis method.",
+        "rubric": [
+            "Start with observability: correlate the time pattern with scheduled jobs (Friday backups/reports/cron)",
+            "Capture thread dumps / stack samples at the hang; identify the lock ordering cycle",
+            "Reproduce under controlled load; fix via consistent lock ordering or timeouts",
+        ],
+    },
+    {
+        "id": "param-queries",
+        "category": "security",
+        "q": "Why are parameterized queries immune to SQL injection at the parser level?",
+        "rubric": [
+            "SQL structure is parsed/planned BEFORE parameter values are bound",
+            "Injected strings remain data in a typed channel - they can never alter the parse tree",
+            "Contrast with string concatenation, which mixes code and data channels",
+        ],
+    },
+    {
+        "id": "raft-timeout",
+        "category": "distributed-systems",
+        "q": "Why must a Raft election timeout be substantially larger than the round-trip time variance between nodes?",
+        "rubric": [
+            "Election timeout must exceed the worst-case round-trip so a follower does not call elections while a leader is healthy",
+            "Too-small timeouts cause split votes and livelock churn",
+            "Randomized timeouts break symmetry so split votes resolve",
+        ],
+    },
+    {
+        "id": "jmm-happens-before",
+        "category": "concurrency",
+        "q": "What does 'happens-before' actually guarantee in a memory model, and what defines a data race?",
+        "rubric": [
+            "Happens-before is a visibility/ordering guarantee between operations, not wall-clock time",
+            "Concurrent unsynchronized conflicting accesses on shared data = data race",
+            "Proper synchronization (locks/volatile) creates happens-before edges that forbid reordering observable effects",
+        ],
+    },
+    {
+        "id": "contains-p99",
+        "category": "complexity",
+        "q": "A colleague claims p99 latency improved 10x after switching list.contains to set.contains, but you know list and set both 'check membership'. When is that claim impossible, and what actually explains any real speedup?",
+        "rubric": [
+            "O(n) vs O(1) average - a 10x claim is plausible only for large n, not universally",
+            "Hashing cost and collision behaviour matter; tiny collections can be faster as lists",
+            "Real wins come from asymptotics at scale, cache-friendly buckets, and avoiding quadratic loops",
+        ],
+    },
+    {
+        "id": "refcycle-leak",
+        "category": "python-internals",
+        "q": "Why can a Python object involved in a reference cycle still leak despite refcounting plus the cycle collector?",
+        "rubric": [
+            "Refcounting alone never frees cycles; the cyclic GC handles pure cycles",
+            "Cycles containing objects with __del__/finalizers or C-level references can evade or delay collection",
+            "Global caches and exception tracebacks pin objects beyond the cycle",
+        ],
+    },
+    {
+        "id": "ecb-images",
+        "category": "security",
+        "q": "Why is ECB mode considered broken for images even with a cryptographically strong block cipher?",
+        "rubric": [
+            "ECB encrypts identical blocks to identical ciphertext - patterns survive",
+            "Semantic leakage of structure (the penguin outline) without breaking the cipher itself",
+            "Fix: randomized modes (CBC with IV, GCM) that chain or nonce-encrypt blocks",
+        ],
+    },
+    {
+        "id": "hex-domain-rule",
+        "category": "nexs-architecture",
+        "q": "In NEXUS's hexagonal architecture, why does the domain layer forbid importing infrastructure, and how do ports fix this?",
+        "rubric": [
+            "Domain holds pure business rules; infrastructure is replaceable detail",
+            "Ports (abstract interfaces) let domain/application depend on contracts, adapters implement them",
+            "The DI container is the only place concrete adapters are chosen; import-linter enforces the rule",
+        ],
+    },
+    {
+        "id": "bat-ball",
+        "category": "reasoning",
+        "q": "A bat and a ball cost $1.10 together. The bat costs $1.00 more than the ball. How much is the ball - and what is the intuitive trap?",
+        "rubric": [
+            "Ball = $0.05 (the $1.10-1.00 = 0.10 answer is the System-1 trap)",
+            "Algebra: ball b, bat b+1.00, total 2b+1.00=1.10",
+            "Explains why the intuitive answer feels right but fails the constraint",
+        ],
+    },
+    {
+        "id": "goroutine-race",
+        "category": "concurrency",
+        "q": "Two goroutines increment a shared counter 1000 times each and the final value varies per run. Name the phenomenon and give two fixes.",
+        "rubric": [
+            "Read-modify-write race (non-atomic increment) causing lost updates",
+            "Fix 1: sync.Mutex around the critical section; Fix 2: atomic.AddInt64 or channels to serialize ownership",
+            "Note determinism: correct code always yields 2000",
+        ],
+    },
+    {
+        "id": "cache-hurts",
+        "category": "performance",
+        "q": "Give three concrete ways adding a cache can INCREASE end-to-end latency for a workload.",
+        "rubric": [
+            "Low hit rate: extra hop + serialization overhead with rare hits",
+            "Cache stampede/thundering herd on expiry; locking contention on hot keys",
+            "Invalidation overhead and stale-read retries outweigh savings for rapidly changing data",
+        ],
+    },
+    {
+        "id": "doh-privacy",
+        "category": "networking",
+        "q": "Why is DNS-over-HTTPS not a privacy panacea even though it hides queries from the local network?",
+        "rubric": [
+            "The DoH resolver sees everything the ISP used to see - trust moves, it does not vanish",
+            "Traffic analysis / SNI and IP patterns still leak destinations",
+            "Centralization risks: few providers gain a global query log",
+        ],
+    },
+]
+
+RL_STATE_PATH = BACKEND_DIR / "rl_training_state.json"
+
+
+def _load_rl_state() -> dict:
+    try:
+        if RL_STATE_PATH.is_file():
+            data = json.loads(RL_STATE_PATH.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and isinstance(data.get("pairs"), list):
+                data.setdefault("daily", {})
+                return data
+    except Exception:
+        pass
+    return {"pairs": [], "daily": {}}
+
+
+def _save_rl_state(state: dict) -> None:
+    try:
+        RL_STATE_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+RL_STATE = _load_rl_state()
+
+
+def _record_training_pair(
+    q: str,
+    a: str,
+    score: float,
+    critique: str,
+    category: str,
+    model: str,
+    judge: str = "",
+) -> dict:
+    entry = {
+        "ts": datetime.now(UTC).isoformat(),
+        "category": category,
+        "model": model,
+        "judge": judge,
+        "score": round(float(score), 2),
+        "critique": (critique or "")[:400],
+        "q": (q or "")[:400],
+        "a": (a or "")[:1200],
+    }
+    RL_STATE["pairs"].append(entry)
+    day = entry["ts"][:10]
+    day_stat = RL_STATE["daily"].setdefault(day, {"count": 0, "score_sum": 0.0})
+    day_stat["count"] += 1
+    day_stat["score_sum"] += entry["score"]
+    _save_rl_state(RL_STATE)
+    return entry
+
+
+async def _judge_answer(q: str, answer: str, rubric: list[str]) -> dict:
+    """LLM-as-judge: score 0-10 against rubric key points + a short critique."""
+    system = (
+        "You are a strict evaluation judge for an AI assistant. Score the ANSWER "
+        "from 0 to 10 against the RUBRIC key points (each covered point earns "
+        "marks; wrong, vague, or evasive claims lose marks). Reply in EXACTLY this format:\n"
+        "SCORE: <number 0-10, one decimal allowed>\n"
+        "CRITIQUE: <one or two sentences>"
+    )
+    user = (
+        f"QUESTION: {q}\n\nRUBRIC:\n- "
+        + "\n- ".join(rubric)
+        + f"\n\nANSWER:\n{(answer or '')[:1500]}"
+    )
+    try:
+        content, reasoning = await _call_llm(system, [{"role": "user", "content": user}])
+        m = re.search(r"SCORE:\s*([0-9]+(?:\.[0-9]+)?)", content or "")
+        c = re.search(r"CRITIQUE:\s*(.+)", content or "", re.S)
+        if m:
+            score = max(0.0, min(10.0, float(m.group(1))))
+            critique = c.group(1).strip() if c else ""
+            return {"score": score, "critique": critique[:400], "judge": "llm"}
+        if reasoning:
+            # Reasoning-heavy judges sometimes do the scoring inside their
+            # chain-of-thought - extract it instead of falling to heuristic.
+            m2 = re.search(r"SCORE:\s*([0-9]+(?:\.[0-9]+)?)", reasoning) or re.search(
+                r"(\d+(?:\.\d+)?)\s*(?:/|out of)\s*10", reasoning
+            )
+            if m2:
+                score = max(0.0, min(10.0, float(m2.group(1))))
+                return {
+                    "score": score,
+                    "critique": "scored from judge reasoning",
+                    "judge": "reasoning-derived",
+                }
+    except Exception:
+        pass
+    # Heuristic fallback so training never stalls when the judge is offline.
+    words = len((answer or "").split())
+    heuristic = 3.0 + (1.0 if words > 40 else 0.0) + (1.0 if words > 90 else 0.0)
+    return {
+        "score": min(heuristic, 10.0),
+        "critique": "judge offline - heuristic length-based score",
+        "judge": "heuristic",
+    }
+
+
+def _pick_exemplars(query: str, k: int = 2) -> list[dict]:
+    """Reward-weighted memory: top-scoring past pairs whose question words
+    overlap the query. These become few-shot exemplars for the live answer."""
+    best = [p for p in RL_STATE["pairs"] if p.get("score", 0) >= 8.0]
+    if not best:
+        return []
+    from nexus.infrastructure.adapters.persistence.agent_memory_store import tokenize
+
+    q_tokens = set(tokenize(query or ""))
+
+    def overlap(p: dict) -> int:
+        return len(q_tokens & set(tokenize(p.get("q", ""))))
+
+    best.sort(key=lambda p: (overlap(p), p.get("score", 0)), reverse=True)
+    return [p for p in best[:k] if overlap(p) > 0]
+
+
+class TrainingJudgeRequest(BaseModel):
+    q: str
+    a: str
+    category: str = "custom"
+
+
+@app.get("/api/training/corpus")
+async def api_training_corpus():
+    return JSONResponse({"count": len(TRAINING_CORPUS), "corpus": TRAINING_CORPUS})
+
+
+@app.post("/api/training/judge")
+async def api_training_judge(req: TrainingJudgeRequest):
+    """Judge any question/answer pair and store it as a scored training pair."""
+    verdict = await _judge_answer(
+        req.q,
+        req.a,
+        ["Accuracy", "Technical depth", "Clarity", "No boilerplate or hedging"],
+    )
+    entry = _record_training_pair(
+        req.q, req.a, verdict["score"], verdict["critique"], req.category,
+        LLM_STATE.get("model", ""), verdict.get("judge", ""),
+    )
+    return JSONResponse({"ok": True, "entry": entry})
+
+
+@app.post("/api/training/run")
+async def api_training_run(n: int = 3):
+    """Answer + judge n not-yet-scored hard questions from the corpus."""
+    target = max(1, min(n, len(TRAINING_CORPUS)))
+    scored_qs = {p.get("q") for p in RL_STATE["pairs"]}
+    done = []
+    for item in TRAINING_CORPUS:
+        if len(done) >= target:
+            break
+        if item["q"] in scored_qs:
+            continue
+        answer, _r = await _call_llm(
+            "You are J.A.R.V.I.S. Answer precisely and technically. Address the "
+            "user as 'sir'. At most 8 sentences; no preamble or meta talk.",
+            [{"role": "user", "content": item["q"]}],
+        )
+        if not (answer or "").strip():
+            continue
+        verdict = await _judge_answer(item["q"], answer, item["rubric"])
+        entry = _record_training_pair(
+            item["q"], answer, verdict["score"], verdict["critique"],
+            item["category"], LLM_STATE.get("model", ""), verdict.get("judge", ""),
+        )
+        done.append(
+            {"id": item["id"], "score": entry["score"], "critique": entry["critique"][:160]}
+        )
+    return JSONResponse({"ok": True, "trained": len(done), "results": done})
+
+
+@app.get("/api/training/stats")
+async def api_training_stats():
+    """Day-day progression: total pairs, per-day averages, category averages."""
+    pairs = RL_STATE["pairs"]
+    daily = [
+        {
+            "date": day,
+            "count": v["count"],
+            "avg_score": round(v["score_sum"] / max(v["count"], 1), 2),
+        }
+        for day, v in sorted(RL_STATE["daily"].items())
+    ]
+    by_cat: dict[str, list[float]] = {}
+    for p in pairs:
+        by_cat.setdefault(p.get("category", "custom"), []).append(p.get("score", 0))
+    categories = {
+        c: {"count": len(v), "avg": round(sum(v) / len(v), 2)} for c, v in by_cat.items()
+    }
+    best = sorted(pairs, key=lambda p: p.get("score", 0), reverse=True)[:5]
+    return JSONResponse(
+        {
+            "total_pairs": len(pairs),
+            "avg_score": round(sum(p.get("score", 0) for p in pairs) / max(len(pairs), 1), 2),
+            "daily": daily,
+            "categories": categories,
+            "best_exemplars": [{"q": p["q"][:80], "score": p["score"]} for p in best],
+        }
+    )
+
+
+_TRAINING_TASK: asyncio.Task | None = None
+
+
+async def _daily_training_loop():
+    """Day-day training: answer + judge fresh corpus questions every 24h."""
+    await asyncio.sleep(45)  # let the app finish booting
+    while True:
+        try:
+            await api_training_run(3)
+        except Exception:
+            pass
+        await asyncio.sleep(24 * 3600)
+
+
+@app.on_event("startup")
+async def _start_daily_training():
+    global _TRAINING_TASK
+    if _TRAINING_TASK is None or _TRAINING_TASK.done():
+        _TRAINING_TASK = asyncio.create_task(_daily_training_loop())
 
 
 # ─── REA workbench + blueprint memory ─────────────────────────────────────────
