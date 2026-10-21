@@ -6,7 +6,7 @@ const GRAPH = {
       "label": "architecture-reviewer",
       "group": "opencode",
       "file": ".opencode/agent/architecture-reviewer.md",
-      "excerpt": "You review changes in this NEXUS repo for correctness under hexagonal architecture. Read `AGENTS.md` and `docs/AGENT_COORDINATION.md` first. Check every diff for: 1. Domain importing infrastructure or application (architecture violation). 2. Application importing infrastructure directly (must go through ports). 3. New ports without corresponding adapters. 4. New use cases without tests. 5. Auth bypass or fail-open patterns. 6. Missing `.env` entries for new config. Never edit files. Report findings as a numbered list, each with file:line, severity, and the specific fix."
+      "excerpt": "You review changes in this NEXUS repo for correctness under hexagonal architecture. Read `AGENTS.md` and `docs/AGENT_COORDINATION.md` first. Check every diff for: 1. Domain importing infrastructure or application (architecture violation). 2. Application importing infrastructure directly (must go through ports). 3. New ports without corresponding adapters. 4. New use cases without tests. 5. Auth bypass or fail-open patterns. 6. Missing `.env` entries for new config. Never edit files. Report findings as a numbered list, each with file:line, severity, and the specific fix. - [[astra]] - [[ceo]] - [[ceo-triage]] - [[handoff]] - [[REA Workflow in NEXUS]] - [[Android application artifacts]] - [[Ja"
     },
     {
       "id": 1,
@@ -38,181 +38,202 @@ const GRAPH = {
     },
     {
       "id": 5,
+      "label": "NEXUS Blueprints",
+      "group": "opencode",
+      "file": ".opencode/skills/nexus-blueprints/SKILL.md",
+      "excerpt": "A blueprint is a structured recipe — goal, steps, files, verify commands, tools — stored in the shared content-addressable memory (`kind=blueprint`) so that any NEXUS agent can replay similar work quickly instead of re-deriving the approach. **Before starting work that resembles a past project — query first:** - `blueprint_query` with topic keywords, e.g. `{\"query\": \"rea native pe inspect\", \"k\": 5}`. Hits come back ranked with their full recipe text (STEPS / FILES / VERIFY / TOOLS). - If a hit matches, **adapt and replay it** — reuse its steps, files, and verify commands, changing only what differs. This is the fast path for \"make it like last time\" requests. **After completing work — save w"
+    },
+    {
+      "id": 6,
+      "label": "REA Workflow in NEXUS",
+      "group": "opencode",
+      "file": ".opencode/skills/nexus-rea-workflow/SKILL.md",
+      "excerpt": "The vendored REA server (`rea`, 207 tools, MCP) is the reverse-engineering engine. This skill is the operating discipline around it; the `reverse-engineer-anything` skill covers REA's own tool semantics. ```bash python -m pytest tests/unit/test_rea_agent_tools.py -q   # handshake + tools + real analysis python scripts/rea_mcp.py --doctor                        # node + entry + dist status ``` If the tests skip with \"REA not built\", run `python scripts/setup_rea.py` and retry. If REA tools are already available in-session and working, skip the check and go straight to the target. Use the REA MCP tools directly (`open_binary` → analyze → `close_binary`). Keep every evidence id (`ev_...`) in yo"
+    },
+    {
+      "id": 7,
       "label": "Android application artifacts",
       "group": "opencode",
       "file": ".opencode/skills/reverse-engineer-anything/references/android-applications.md",
       "excerpt": "Use the connected server's advertised Android tools. Repository main and npm 4.1.0 include this family. A skill installation alone cannot add it to an older server. Start with `inspect_android_package` on the caller's APK path for package identity, manifest declarations, coverage, and inline Evidence. Use `search_android_classes` to find candidates, `inspect_android_class` for one class's members, `inspect_android_method` for decompilation, and `trace_android_references` for incoming static references. Each call takes its own APK path and explicit selectors; do not open a native session first. Choose an `overload_index` from the class inventory when methods are ambiguous instead of guessing."
     },
     {
-      "id": 6,
+      "id": 8,
       "label": "Connection and task recovery",
       "group": "opencode",
       "file": ".opencode/skills/reverse-engineer-anything/references/connection-and-recovery.md",
       "excerpt": "Read this guide only for an observed connection, command, approval or provider blocker. Keep the user's target and question in view. Explain what prevented the operation and the next useful step; after repair, continue the investigation. Commands below use an installed `rea`. If none is available, use the package invocation in `SKILL.md` when acquiring REA is authorized. Follow the connected server's schemas and the installed CLI's help rather than assuming repository main and an older release expose the same arguments. | Observation                                                     | Meaning and next step                                                                                     "
     },
     {
-      "id": 7,
+      "id": 9,
       "label": "Evidence, comparison, and verification workflows",
       "group": "opencode",
       "file": ".opencode/skills/reverse-engineer-anything/references/evidence-workflows.md",
       "excerpt": "Evidence-producing tools return the complete Evidence record directly in MCP `structuredContent` and CLI JSON. Read `normalized_result` for operation data, and cite `evidence_id` when another tool or your explanation needs a stable reference. Preserve authority, limitations, coverage, and residual unknowns. If a result is incomplete or paginated, continue only when the remaining data matters to the task; do not fetch a bundle or resource merely to read a result already returned inline. When complete `inspect_binary_layout` or `analyze_javascript_application` Evidence is already retained, call `inspect_analysis_view` for a summary, one section/symbol/module, or a stable page instead of repeat"
     },
     {
-      "id": 8,
+      "id": 10,
       "label": "JavaScript and Electron application artifacts",
       "group": "opencode",
       "file": ".opencode/skills/reverse-engineer-anything/references/javascript-applications.md",
       "excerpt": "For captured or bundled JavaScript that needs readable source recovery, use `recover_javascript_sources` with an absolute `path` and absent `output_directory`. Supply related runtime/shared/lazy files in `additional_paths` when advertised, then analyze the returned `analysis_input` directory together. Each input retains its own snapshot, digest and byte-range provenance; inputs and recovered code are never executed. Recovery requires a caller-supplied Wakaru on Linux x64; see [the recovery guide](https://github.com/morluto/rea/blob/main/docs/javascript-recovery.md). Use `analyze_javascript_application` directly on the operator-supplied ASAR or extracted tree. When the question concerns known"
     },
     {
-      "id": 9,
+      "id": 11,
       "label": "Native, managed, and packaged artifacts",
       "group": "opencode",
       "file": ".opencode/skills/reverse-engineer-anything/references/native-and-artifacts.md",
       "excerpt": "Use `inspect_go_binary` for an explicit local ELF, PE or thin Mach-O when the question concerns the embedded compiler version, module/dependency versions, local replacements or build settings. No `open_binary`, Go installation or target execution is required. The CLI equivalent is `inspect-go-binary PATH`. Preserve artifact SHA-256, original file ranges, framed module bytes and every unparsed module-text line. A missing record is an unknown, not proof of a non-Go binary; observed metadata does not authenticate its claims. Function, source and type recovery remain a separate native-analysis question. Use `inspect_rust_binary` for an explicit local ELF, PE, or thin Mach-O when the question con"
     },
     {
-      "id": 10,
+      "id": 12,
       "label": "Browser and Electron runtime observation",
       "group": "opencode",
       "file": ".opencode/skills/reverse-engineer-anything/references/runtime-observation.md",
       "excerpt": "Supply the existing browser or Electron instance's literal-port loopback CDP endpoint in the request. No separate permission configuration or per-call approval flag is needed. Browser discovery lists eligible HTTP(S) pages; `allowed_origins` optionally filters them. An individual capture defaults to the selected page's current origin. Electron discovery lists eligible local `file://` targets without a configured file-root allowlist. Start passive browser work with `list_browser_targets`; start Electron runtime work with `list_electron_targets`. Before an electron-main Inspector attempt, check packaged fuses with `inspect_electron_fuses`. Inspect the target selected for the user's task. Obser"
     },
     {
-      "id": 11,
+      "id": 13,
       "label": "REA",
       "group": "opencode",
       "file": ".opencode/skills/reverse-engineer-anything/SKILL.md",
       "excerpt": "Use REA when a claim depends on a shipped binary or package, decompilation, passive application runtime evidence, or comparison with behavior not established by available source. For ordinary analysis of a complete source repository, use normal repository tools and do not run REA readiness or provider commands. Installing this skill supplies instructions; it does not register the REA MCP server, install analysis engines, or add tools to an already-running agent. If REA tools are available and their registration is not known to be stale, proceed directly to the target. Do not run diagnostics or setup before every investigation. Use the connected server's actual tool list and input schemas; a "
     },
     {
-      "id": 12,
+      "id": 14,
       "label": "Agent Onboarding",
       "group": "docs",
       "file": "docs/agent-onboarding.md",
       "excerpt": "You are one of three agents working on NEXUS at the same time, in three different tools, against one shared git working tree. This page is the short version. **[AGENTS.md](../AGENTS.md) is the single source of truth.** It has the architecture, the commands, the known quirks, the file→task mapping, and the list of bugs already fixed. Do not memorize it and do not copy it into your own config file — link to it, so there is exactly one copy to keep correct. Then read **[docs/AGENT_COORDINATION.md](AGENT_COORDINATION.md)** for the ownership table, the handoff format, and the branch strategy. | Agent | Tool | Owns | Reads AGENTS.md via | |---|---|---|---| | opencode | terminal (CLI) | `src/nexus/"
     },
     {
-      "id": 13,
+      "id": 15,
       "label": "Multi-Agent Operating Agreement — NEXUS",
       "group": "docs",
       "file": "docs/AGENT_COORDINATION.md",
       "excerpt": "Three agents work on this repo simultaneously: **opencode** (terminal), **Antigravity IDE**, and **GitHub Copilot** (VS Code). This file is the single source of truth for who owns what and how handoffs work. All three agents read `AGENTS.md` automatically. Do not duplicate its content in agent-specific files — link to it instead. - opencode → `AGENTS.md` (via `instructions` in `opencode.json`) - Antigravity → `AGENTS.md` (auto-loaded) + `.agent/rules/` for extra rules - Copilot → `AGENTS.md` (via `.github/copilot-instructions.md`) | Agent | Name | Tool | Owns | | --- | --- | --- | --- | | CEO | — | opencode (4th window) | delegation, reporting, coordination | | Astra | application layer | op"
     },
     {
-      "id": 14,
+      "id": 16,
       "label": "Architecture Map",
       "group": "docs",
       "file": "docs/architecture-map.md",
       "excerpt": "Every port, entity, and value object, and the concrete adapter the DI container binds to each one. **Generated from the code, not from memory** — the port→adapter table is cross-checked by [`tests/eval/test_architecture_map.py`](../tests/eval/test_architecture_map.py), which fails if the container drifts from this page. Source of truth for the bindings: `src/nexus/infrastructure/di/container.py` (one `_build_*` method per port). Swap an adapter by editing that file and nothing else. ``` src/nexus/ domain/          pure entities + value objects + ports    (zero imports from the layers above) application/     use cases, depends only on ports infrastructure/  adapters, FastAPI routes, DI contai"
     },
     {
-      "id": 15,
+      "id": 17,
       "label": "Autonomous Goals - Self-Directed Work with Guardrails",
       "group": "docs",
       "file": "docs/autonomous-goals.md",
       "excerpt": "A goal is a piece of work the user states once and the system drives to completion on its own, within an explicit budget. This is the difference between \"answer this question\" and \"go fix the failing deploy tests.\" ``` POST /v1/goals  {statement, budget_units, requires_approval} │ ▼ PROPOSED ──approve──► ACTIVE ──AutonomyLoopUseCase──► COMPLETED │                    │                              ▲ │                    └──authorize_step denied──► BLOCKED │                                     │ └──────────────── cancel ◄────────────┘ CANCELLED ``` `domain/entities/goal.py`: | Enum | Values | |---|---| | `GoalStatus` | `proposed`, `active`, `blocked`, `completed`, `failed`, `cancelled` | | `Go"
     },
     {
-      "id": 16,
+      "id": 18,
       "label": "Backup & Disaster Recovery",
       "group": "docs",
       "file": "docs/backup-dr.md",
       "excerpt": "NEXUS has four pieces of state. Only two of them are irreplaceable. | State | Store | In `memory` mode | Backup story | |---|---|---|---| | **Memories (vectors)** | Qdrant collection `nexus_memory` | in-process dict | Qdrant collection snapshots | | **Concept graph** | Neo4j `:Concept` / `:CONNECTS` | in-process dict | portable Cypher JSONL dump | | **Short-term memory** | Redis | in-process dict | disposable, TTL-based | | **Rate limits / autonomy budget** | Redis | in-process dict | disposable, resets on restart | Short-term memory and rate limits are caches with a TTL. Losing them costs you a warm cache, not data, so they are deliberately not backed up. Redis persistence (AOF/RDB) is stil"
     },
     {
-      "id": 17,
+      "id": 19,
       "label": "Clean Architecture & The Dependency Rule",
       "group": "docs",
       "file": "docs/clean-architecture.md",
       "excerpt": "A dual-loop brain means simultaneous processes: live chat vs. background thinking. Without rigid boundaries you get race conditions, memory collisions, and a codebase that's unmaintainable. The rules below are enforced and proven by the test suite. ``` Entry Points (FastAPI, Celery) │  calls ▼ Application Layer (use cases) │  depends only on ▼ Domain Ports (interfaces) │  implemented by ▼ Infrastructure (adapters) ``` And below the ports sits the pure **Domain Core** (entities, value objects) which nothing outside the domain may depend on, and which depends on nothing. Pure Python. **Zero imports from application, infrastructure, or any framework.** `Memory`, `Concept`, `SynapticConnection`,"
     },
     {
-      "id": 18,
+      "id": 20,
       "label": "Deployment",
       "group": "docs",
       "file": "docs/deploy.md",
       "excerpt": "NEXUS ships as a single Docker image containing both the Cortex API and the compiled Second Brain UI. Two hosting shapes are supported: | Shape | Backend | Frontend | When | |---|---|---|---| | **Single origin** | Railway (Docker) | served by the same container at `/` | simplest, no CORS | | **Split origin** | Railway (Docker) | Vercel (static `frontend/dist`) | CDN for the UI, API separate | The single-origin shape is the default and needs no extra config: the image already copies the built UI into `frontend/dist/`, and the API serves it at `/`. Use the split shape only when you want the UI on a CDN. `railway.json` at the repo root drives Railway's config-as-code: - **builder**: `DOCKERFILE"
     },
     {
-      "id": 19,
+      "id": 21,
       "label": "Dreaming - Deep Batch Optimization",
       "group": "docs",
       "file": "docs/dreaming.md",
       "excerpt": "The brain \"sleeps\" at 3 AM. `Celery beat` fires `dreaming.run`, which executes `DreamSessionUseCase` - four phases in sequence. The hour is configurable: `NEXUS_DREAM_HOUR` (default `3`). `application/subcortex/dreaming/compress.py` The day's raw episodic transcripts are batched and sent to the **background** LLM with one instruction: *\"Consolidate into durable, abstract facts about the user, their projects, preferences, and recurring problems.\"* The distilled facts are stored as `SEMANTIC` memories. Originals are flagged `consolidated=True` for cold storage. `application/subcortex/dreaming/prune.py` The #1 killer of RAG systems is vector-space bloat. This phase: - Finds memories unaccessed "
     },
     {
-      "id": 20,
+      "id": 22,
       "label": "Dual-Loop Architecture",
       "group": "docs",
       "file": "docs/dual-loop.md",
       "excerpt": "Standard AI waits in a coma: it wakes for a prompt, computes, and sleeps again. A brain must have **two concurrently-running loops**. ``` ┌──────────────────────────┐ │      NEXUS SYSTEM         │ └───────────┬──────────────┘ │ ┌──────────────────┴──────────────────┐ │                                     │ ┌──────────▼──────────┐              ┌───────────▼──────────┐ │   CORTEX             │              │   SUBCORTEX          │ │   (Conscious)        │              │   (Subconscious)     │ │   Fast-Twitch        │              │   Slow-Twitch        │ │   sub-second         │              │   continuous         │ │                      │              │                      │ │   FastAPI /v1"
     },
     {
-      "id": 21,
+      "id": 23,
       "label": "HANDOFF — NEXUS Multi-Agent Message Board",
       "group": "docs",
       "file": "docs/HANDOFF.md",
       "excerpt": "All agents (opencode, Antigravity, Copilot) read and write this file to communicate. When you finish a unit of work, append a message below using this format: ``` **Task:** <what was done> **Files:** <files changed> **Status:** done | in-progress | blocked **Next:** <what should happen next> **Needs:** <what you need from other agents> ``` When you need something from another agent, post a request. When you see a request you can fulfill, claim it by adding `**Claimed by:** <agent>`. --- **Task:** Initialized handoff board **Files:** docs/HANDOFF.md **Status:** done **Next:** Agents begin work on assigned issues **Needs:** None **Task:** CEO REPORT 2026-10-01 23:09 - baseline audit + 3 tasks "
     },
     {
-      "id": 22,
+      "id": 24,
       "label": "NEXUS",
       "group": "docs",
       "file": "docs/index.md",
       "excerpt": "A new kind of AI brain - dual-loop architecture with subconscious synthesis, dreaming, and self-evolution. NEXUS is not a chatbot wrapper. It is a cerebral architecture with two loops: - **The conscious loop** (`/v1/chat`) - a ReAct reasoning engine with tool use, multimodal I/O (vision + speech), session-level emotional state, and hybrid memory recall (vector + graph). - **The subconscious loop** - asynchronous synthesis, pattern detection, autonomic self-healing, nocturnal dreaming, conscious goal pursuit, and multi-agent swarms. The two loops communicate over an event bus. The cortex never blocks on the subcortex; the subcortex reshapes memory, tools, and strategies overnight. ```bash pip"
     },
     {
-      "id": 23,
+      "id": 25,
       "label": "MCP Server",
       "group": "docs",
       "file": "docs/mcp.md",
       "excerpt": "NEXUS speaks **standard MCP (JSON-RPC 2.0 over stdio, protocolVersion `2024-11-05`)** — any MCP client (VS Code Copilot, Antigravity, opencode) connects natively with zero copy-paste. The server is `scripts/nexus_mcp.py`, and it is wired in `.vscode/mcp.json` + `.agent/mcp_config.json` (and `opencode.json`) as `python scripts/nexus_mcp.py`. - `nexus://tasks/pending` — the ticket queue - `nexus://state/current` — git + agents - `nexus://board/plans` — the plan-first gate's drafts - `nexus://board/consensus` — consensus proposals and verdicts - `nexus://memory/recent` — the content-addressable agent memory 18 tools: `next_task(agent_id)` — capability-based auto-pick; `claim_task`, `resolve_tas"
     },
     {
-      "id": 24,
+      "id": 26,
       "label": "Memory System - Synaptic Graph + Vector + Working",
       "group": "docs",
       "file": "docs/memory.md",
       "excerpt": "| Store | Port | `external` adapter | `memory` adapter | |---|---|---|---| | **Synaptic Graph** | `ConceptRepository` | `Neo4jConceptRepository` | `InMemoryConceptRepository` | | **Vector Space** | `MemoryRepository` | `QdrantMemoryRepository` | `InMemoryMemoryRepository` | | **Working Memory** | `ShortTermMemory` | `RedisShortTermMemory` | `InMemoryShortTermMemory` | The `memory` column is selected by `NEXUS_INFRA_BACKEND=memory`, which runs the whole brain with no Redis, Qdrant, or Neo4j. See [architecture-map.md](architecture-map.md) for every port and its binding. The graph is not static. Every access strengthens; every silence decays. - `Concept.strengthen(amount)` - accessed concepts g"
     },
     {
-      "id": 25,
+      "id": 27,
+      "label": "Synthesis: Hello Nexus.",
+      "group": "docs",
+      "file": "docs/notes/synthesis-hello-nexus.md",
+      "excerpt": "Hello Nexus. Good day, sir. All N.E.X.U.S. cognitive systems are operating at nominal parameters. • **Knowledge Graph**: 31 constellations synchronized • **Cosmos Mesh**: 8 automation joints online • **Multi-Agent Swarm**: Astra, Tron, and Xenom on standby • **Inference Cortex**: Mode `connected` How may I be of assistance to you today, sir? You can inquire about repository architecture, request git status, examine active swarm tasks, run Python code, or trigger Cosmos cycles."
+    },
+    {
+      "id": 28,
       "label": "REA (Reverse Engineer Anything)",
       "group": "docs",
       "file": "docs/rea.md",
       "excerpt": "NEXUS ships a **vendored, source-only copy of REA** under `vendor/rea/` and exposes it as a second MCP server so any connected agent (opencode, GitHub Copilot, Antigravity) gains reverse-engineering tools: inspect native binaries, Electron/JavaScript apps, .NET assemblies, Android APKs, firmware, websites, network captures, and more — with evidence attached to each finding. REA is upstream `rea-agents` v6.5.0 (MIT). See `vendor/rea/README.vendor.md` for provenance and what is / is not committed (`node_modules` and `dist` are build outputs and are git-ignored). The tool lives *inside the repo*, so a checkout is self-contained and offline after a one-time build. `vendor/rea/` is kept out of `s"
     },
     {
-      "id": 26,
+      "id": 29,
       "label": "NEXUS Architecture Documentation",
       "group": "docs",
       "file": "docs/README.md",
       "excerpt": "- [Dual-Loop Architecture](dual-loop.md) — the conscious/subconscious split - [Clean Architecture & Dependency Rule](clean-architecture.md) — the layering enforced by tests - [Memory System](memory.md) — synaptic graph + vector + working memory - [Dreaming Pipeline](dreaming.md) — the 4-phase overnight cycle - [Self-Evolution](self-evolution.md) — dynamic tool generation - [Autonomous Goals](autonomous-goals.md) — P2 budget/approval/audit guardrails - [Swarm](swarm.md) — P4 multi-agent leader/worker orchestration `/v1/chat` accepts images and audio and can reply in speech: - **Vision**: `image_urls: [\"https://.../a.png\"]` are attached to the user turn as OpenAI content blocks (`{\"type\": \"ima"
     },
     {
-      "id": 27,
+      "id": 30,
       "label": "Security & Secrets",
       "group": "docs",
       "file": "docs/security.md",
       "excerpt": "How NEXUS is hardened for production: what is enforced in code, what is a deployment responsibility, and the safe defaults to keep. Every `/v1/*` route requires a Bearer token validated against `NEXUS_API_KEYS`, a JSON map of `{key: {user_id, tenant_id, role}}`. - **Fail-closed.** `NEXUS_API_KEYS={}` means zero keys are configured, so every request is rejected with `401`. There is no \"auth disabled\" mode and no wildcard key. Configure at least one key before exposing the service. - **Roles.** `admin` and `user`. Admin-only routes additionally check the role; a valid `user` token is still rejected on admin surfaces. - **Identity → tenant.** The token's `tenant_id` scopes memory, graph, quotas"
     },
     {
-      "id": 28,
+      "id": 31,
       "label": "Self-Evolution - Dynamic Tool Generation",
       "group": "docs",
       "file": "docs/self-evolution.md",
       "excerpt": "Standard agents have fixed tools. NEXUS **builds its own**. When the ReAct loop meets a problem no tool solves, the brain can: ``` GenerateToolUseCase 1. Analyze problem -> ToolSpecRequest (name, description, examples) 2. LLM writes the Python source (a `solve(input_data) -> dict` function) 3. Test it in the Sandbox against its own example inputs 4. Deploy it through the DeploymentProvider (Local FastAPI; Railway/Vercel next) 5. Register it in the ToolRegistry -> permanently part of its toolkit ``` `DeploymentProvider` is a port. The container picks the adapter from `NEXUS_DEPLOY_PLATFORM`: | `NEXUS_DEPLOY_PLATFORM` | Adapter | |---|---| | unset / anything else | `LocalDeployer` | | `railway"
     },
     {
-      "id": 29,
+      "id": 32,
       "label": "Multi-Agent Swarm",
       "group": "docs",
       "file": "docs/swarm.md",
       "excerpt": "Sometimes one mind is not enough. A **swarm** is a leader agent plus a set of worker agents. The leader has no special powers in the code - it is just another agent - but by convention it is given the synthesis role. ``` ┌───────────────────────────────┐ │      SwarmCoordinatorUseCase   │ │        (application layer)      │ └───────────────┬───────────────┘ │ ┌───────────────┴───────────────┐ │                               │ PHASE 1: fan out              PHASE 2: synthesize bounded to max_workers        leader sees every sequential per worker         worker report │                               │ ┌─────┼─────┬─────┐                 │ ▼     ▼     ▼     ▼                 ▼ worker worker work"
     },
     {
-      "id": 30,
+      "id": 33,
       "label": "Upgrade Spaces",
       "group": "docs",
       "file": "docs/upgrade-spaces.md",
@@ -222,15 +243,47 @@ const GRAPH = {
   "links": [
     {
       "source": 0,
-      "target": 25
+      "target": 1
     },
     {
       "source": 0,
-      "target": 13
+      "target": 2
     },
     {
       "source": 0,
-      "target": 22
+      "target": 3
+    },
+    {
+      "source": 0,
+      "target": 23
+    },
+    {
+      "source": 0,
+      "target": 6
+    },
+    {
+      "source": 0,
+      "target": 7
+    },
+    {
+      "source": 0,
+      "target": 10
+    },
+    {
+      "source": 0,
+      "target": 11
+    },
+    {
+      "source": 0,
+      "target": 28
+    },
+    {
+      "source": 0,
+      "target": 15
+    },
+    {
+      "source": 0,
+      "target": 24
     },
     {
       "source": 1,
@@ -238,31 +291,31 @@ const GRAPH = {
     },
     {
       "source": 1,
-      "target": 21
+      "target": 23
     },
     {
       "source": 1,
-      "target": 25
+      "target": 28
     },
     {
       "source": 1,
-      "target": 13
+      "target": 15
     },
     {
       "source": 1,
-      "target": 22
+      "target": 24
     },
     {
       "source": 2,
-      "target": 21
+      "target": 23
     },
     {
       "source": 2,
-      "target": 25
+      "target": 28
     },
     {
       "source": 2,
-      "target": 22
+      "target": 24
     },
     {
       "source": 2,
@@ -270,35 +323,43 @@ const GRAPH = {
     },
     {
       "source": 3,
-      "target": 21
+      "target": 23
     },
     {
       "source": 4,
-      "target": 21
+      "target": 23
     },
     {
       "source": 4,
-      "target": 25
+      "target": 28
     },
     {
       "source": 4,
+      "target": 15
+    },
+    {
+      "source": 5,
       "target": 13
     },
     {
       "source": 5,
+      "target": 28
+    },
+    {
+      "source": 5,
+      "target": 24
+    },
+    {
+      "source": 5,
       "target": 25
     },
     {
       "source": 5,
-      "target": 11
+      "target": 26
     },
     {
-      "source": 5,
-      "target": 22
-    },
-    {
-      "source": 5,
-      "target": 23
+      "source": 6,
+      "target": 13
     },
     {
       "source": 6,
@@ -306,51 +367,67 @@ const GRAPH = {
     },
     {
       "source": 6,
+      "target": 28
+    },
+    {
+      "source": 6,
+      "target": 24
+    },
+    {
+      "source": 6,
       "target": 25
     },
     {
       "source": 6,
-      "target": 11
-    },
-    {
-      "source": 6,
-      "target": 23
+      "target": 32
     },
     {
       "source": 7,
-      "target": 25
+      "target": 13
     },
     {
       "source": 7,
-      "target": 23
+      "target": 28
     },
     {
       "source": 7,
-      "target": 27
-    },
-    {
-      "source": 8,
-      "target": 25
-    },
-    {
-      "source": 8,
-      "target": 23
-    },
-    {
-      "source": 8,
       "target": 24
     },
     {
+      "source": 7,
+      "target": 25
+    },
+    {
+      "source": 8,
+      "target": 13
+    },
+    {
+      "source": 8,
+      "target": 10
+    },
+    {
+      "source": 8,
+      "target": 28
+    },
+    {
+      "source": 8,
+      "target": 25
+    },
+    {
+      "source": 9,
+      "target": 28
+    },
+    {
       "source": 9,
       "target": 25
     },
     {
       "source": 9,
-      "target": 23
+      "target": 30
     },
     {
-      "source": 9,
-      "target": 24
+      "source": 10,
+      "target": 28
     },
     {
       "source": 10,
@@ -358,23 +435,11 @@ const GRAPH = {
     },
     {
       "source": 10,
-      "target": 11
+      "target": 26
     },
     {
-      "source": 10,
-      "target": 23
-    },
-    {
-      "source": 7,
-      "target": 11
-    },
-    {
-      "source": 8,
-      "target": 11
-    },
-    {
-      "source": 9,
-      "target": 11
+      "source": 11,
+      "target": 28
     },
     {
       "source": 11,
@@ -382,27 +447,7 @@ const GRAPH = {
     },
     {
       "source": 11,
-      "target": 22
-    },
-    {
-      "source": 11,
-      "target": 23
-    },
-    {
-      "source": 11,
-      "target": 24
-    },
-    {
-      "source": 2,
-      "target": 12
-    },
-    {
-      "source": 12,
-      "target": 21
-    },
-    {
-      "source": 12,
-      "target": 25
+      "target": 26
     },
     {
       "source": 12,
@@ -410,35 +455,55 @@ const GRAPH = {
     },
     {
       "source": 12,
+      "target": 28
+    },
+    {
+      "source": 12,
+      "target": 25
+    },
+    {
+      "source": 9,
+      "target": 13
+    },
+    {
+      "source": 10,
+      "target": 13
+    },
+    {
+      "source": 11,
+      "target": 13
+    },
+    {
+      "source": 13,
+      "target": 28
+    },
+    {
+      "source": 13,
+      "target": 24
+    },
+    {
+      "source": 13,
+      "target": 25
+    },
+    {
+      "source": 13,
+      "target": 26
+    },
+    {
+      "source": 2,
       "target": 14
     },
     {
-      "source": 12,
-      "target": 22
-    },
-    {
-      "source": 2,
-      "target": 13
-    },
-    {
-      "source": 13,
-      "target": 21
-    },
-    {
-      "source": 13,
-      "target": 25
-    },
-    {
-      "source": 13,
-      "target": 22
-    },
-    {
-      "source": 13,
-      "target": 27
+      "source": 14,
+      "target": 23
     },
     {
       "source": 14,
-      "target": 25
+      "target": 28
+    },
+    {
+      "source": 14,
+      "target": 15
     },
     {
       "source": 14,
@@ -446,59 +511,15 @@ const GRAPH = {
     },
     {
       "source": 14,
-      "target": 17
-    },
-    {
-      "source": 14,
-      "target": 18
-    },
-    {
-      "source": 14,
-      "target": 19
-    },
-    {
-      "source": 14,
-      "target": 20
-    },
-    {
-      "source": 14,
-      "target": 22
-    },
-    {
-      "source": 14,
-      "target": 23
-    },
-    {
-      "source": 14,
       "target": 24
     },
     {
-      "source": 14,
-      "target": 27
-    },
-    {
-      "source": 14,
-      "target": 29
-    },
-    {
-      "source": 14,
-      "target": 30
-    },
-    {
-      "source": 15,
-      "target": 25
-    },
-    {
-      "source": 14,
+      "source": 2,
       "target": 15
     },
     {
       "source": 15,
-      "target": 18
-    },
-    {
-      "source": 15,
-      "target": 22
+      "target": 23
     },
     {
       "source": 15,
@@ -506,307 +527,395 @@ const GRAPH = {
     },
     {
       "source": 15,
-      "target": 29
-    },
-    {
-      "source": 16,
-      "target": 25
-    },
-    {
-      "source": 16,
-      "target": 18
-    },
-    {
-      "source": 16,
-      "target": 20
-    },
-    {
-      "source": 16,
-      "target": 22
-    },
-    {
-      "source": 16,
       "target": 24
     },
     {
-      "source": 17,
-      "target": 25
+      "source": 15,
+      "target": 30
     },
     {
-      "source": 17,
+      "source": 16,
+      "target": 28
+    },
+    {
+      "source": 16,
       "target": 18
     },
     {
-      "source": 17,
+      "source": 16,
       "target": 19
     },
     {
-      "source": 17,
+      "source": 16,
       "target": 20
-    },
-    {
-      "source": 17,
-      "target": 22
-    },
-    {
-      "source": 17,
-      "target": 24
-    },
-    {
-      "source": 17,
-      "target": 28
-    },
-    {
-      "source": 18,
-      "target": 25
-    },
-    {
-      "source": 18,
-      "target": 22
-    },
-    {
-      "source": 18,
-      "target": 24
-    },
-    {
-      "source": 18,
-      "target": 29
-    },
-    {
-      "source": 19,
-      "target": 25
-    },
-    {
-      "source": 19,
-      "target": 22
-    },
-    {
-      "source": 19,
-      "target": 24
-    },
-    {
-      "source": 19,
-      "target": 28
-    },
-    {
-      "source": 20,
-      "target": 25
-    },
-    {
-      "source": 18,
-      "target": 20
-    },
-    {
-      "source": 19,
-      "target": 20
-    },
-    {
-      "source": 20,
-      "target": 22
-    },
-    {
-      "source": 20,
-      "target": 24
-    },
-    {
-      "source": 20,
-      "target": 29
-    },
-    {
-      "source": 0,
-      "target": 21
-    },
-    {
-      "source": 21,
-      "target": 25
-    },
-    {
-      "source": 14,
-      "target": 21
     },
     {
       "source": 16,
       "target": 21
     },
     {
+      "source": 16,
+      "target": 22
+    },
+    {
+      "source": 16,
+      "target": 24
+    },
+    {
+      "source": 16,
+      "target": 25
+    },
+    {
+      "source": 16,
+      "target": 26
+    },
+    {
+      "source": 16,
+      "target": 30
+    },
+    {
+      "source": 16,
+      "target": 32
+    },
+    {
+      "source": 16,
+      "target": 33
+    },
+    {
+      "source": 17,
+      "target": 28
+    },
+    {
+      "source": 16,
+      "target": 17
+    },
+    {
+      "source": 17,
+      "target": 20
+    },
+    {
+      "source": 17,
+      "target": 24
+    },
+    {
+      "source": 17,
+      "target": 31
+    },
+    {
+      "source": 17,
+      "target": 32
+    },
+    {
+      "source": 18,
+      "target": 28
+    },
+    {
+      "source": 18,
+      "target": 20
+    },
+    {
+      "source": 18,
+      "target": 22
+    },
+    {
+      "source": 18,
+      "target": 24
+    },
+    {
+      "source": 18,
+      "target": 26
+    },
+    {
+      "source": 19,
+      "target": 28
+    },
+    {
+      "source": 19,
+      "target": 20
+    },
+    {
       "source": 19,
       "target": 21
+    },
+    {
+      "source": 19,
+      "target": 22
+    },
+    {
+      "source": 19,
+      "target": 24
+    },
+    {
+      "source": 19,
+      "target": 26
+    },
+    {
+      "source": 19,
+      "target": 31
+    },
+    {
+      "source": 20,
+      "target": 28
+    },
+    {
+      "source": 20,
+      "target": 24
+    },
+    {
+      "source": 20,
+      "target": 26
+    },
+    {
+      "source": 20,
+      "target": 32
+    },
+    {
+      "source": 21,
+      "target": 28
+    },
+    {
+      "source": 21,
+      "target": 24
+    },
+    {
+      "source": 21,
+      "target": 26
+    },
+    {
+      "source": 21,
+      "target": 31
+    },
+    {
+      "source": 22,
+      "target": 28
+    },
+    {
+      "source": 20,
+      "target": 22
     },
     {
       "source": 21,
       "target": 22
     },
     {
-      "source": 21,
+      "source": 22,
+      "target": 24
+    },
+    {
+      "source": 22,
+      "target": 26
+    },
+    {
+      "source": 22,
+      "target": 32
+    },
+    {
+      "source": 13,
+      "target": 23
+    },
+    {
+      "source": 23,
+      "target": 28
+    },
+    {
+      "source": 16,
+      "target": 23
+    },
+    {
+      "source": 18,
       "target": 23
     },
     {
       "source": 21,
+      "target": 23
+    },
+    {
+      "source": 23,
       "target": 24
     },
     {
-      "source": 21,
-      "target": 26
-    },
-    {
-      "source": 21,
-      "target": 27
-    },
-    {
-      "source": 21,
-      "target": 28
-    },
-    {
-      "source": 21,
-      "target": 29
-    },
-    {
-      "source": 21,
-      "target": 30
-    },
-    {
-      "source": 22,
+      "source": 23,
       "target": 25
     },
     {
-      "source": 22,
-      "target": 23
-    },
-    {
-      "source": 22,
-      "target": 24
-    },
-    {
-      "source": 22,
+      "source": 23,
       "target": 26
     },
     {
-      "source": 22,
-      "target": 27
-    },
-    {
-      "source": 22,
-      "target": 28
-    },
-    {
-      "source": 22,
+      "source": 23,
       "target": 29
     },
     {
-      "source": 22,
+      "source": 23,
       "target": 30
+    },
+    {
+      "source": 23,
+      "target": 31
+    },
+    {
+      "source": 23,
+      "target": 32
+    },
+    {
+      "source": 23,
+      "target": 33
+    },
+    {
+      "source": 24,
+      "target": 28
+    },
+    {
+      "source": 24,
+      "target": 25
+    },
+    {
+      "source": 24,
+      "target": 26
+    },
+    {
+      "source": 24,
+      "target": 29
+    },
+    {
+      "source": 24,
+      "target": 30
+    },
+    {
+      "source": 24,
+      "target": 31
+    },
+    {
+      "source": 24,
+      "target": 32
+    },
+    {
+      "source": 24,
+      "target": 33
     },
     {
       "source": 2,
-      "target": 23
-    },
-    {
-      "source": 23,
-      "target": 25
-    },
-    {
-      "source": 23,
-      "target": 24
-    },
-    {
-      "source": 24,
       "target": 25
     },
     {
       "source": 25,
-      "target": 26
+      "target": 28
     },
     {
-      "source": 15,
-      "target": 26
-    },
-    {
-      "source": 17,
-      "target": 26
-    },
-    {
-      "source": 19,
-      "target": 26
-    },
-    {
-      "source": 20,
-      "target": 26
-    },
-    {
-      "source": 24,
+      "source": 25,
       "target": 26
     },
     {
       "source": 26,
       "target": 28
-    },
-    {
-      "source": 26,
-      "target": 29
-    },
-    {
-      "source": 25,
-      "target": 27
-    },
-    {
-      "source": 16,
-      "target": 27
-    },
-    {
-      "source": 18,
-      "target": 27
-    },
-    {
-      "source": 24,
-      "target": 27
-    },
-    {
-      "source": 25,
-      "target": 28
-    },
-    {
-      "source": 14,
-      "target": 28
-    },
-    {
-      "source": 18,
-      "target": 28
-    },
-    {
-      "source": 25,
-      "target": 29
-    },
-    {
-      "source": 12,
-      "target": 29
-    },
-    {
-      "source": 27,
-      "target": 29
     },
     {
       "source": 1,
-      "target": 30
-    },
-    {
-      "source": 2,
-      "target": 30
-    },
-    {
-      "source": 25,
-      "target": 30
+      "target": 27
     },
     {
       "source": 24,
-      "target": 30
+      "target": 27
     },
     {
       "source": 27,
-      "target": 30
+      "target": 32
+    },
+    {
+      "source": 28,
+      "target": 29
+    },
+    {
+      "source": 28,
+      "target": 32
+    },
+    {
+      "source": 17,
+      "target": 29
+    },
+    {
+      "source": 19,
+      "target": 29
+    },
+    {
+      "source": 21,
+      "target": 29
+    },
+    {
+      "source": 22,
+      "target": 29
+    },
+    {
+      "source": 26,
+      "target": 29
     },
     {
       "source": 29,
+      "target": 31
+    },
+    {
+      "source": 29,
+      "target": 32
+    },
+    {
+      "source": 28,
       "target": 30
+    },
+    {
+      "source": 18,
+      "target": 30
+    },
+    {
+      "source": 20,
+      "target": 30
+    },
+    {
+      "source": 26,
+      "target": 30
+    },
+    {
+      "source": 28,
+      "target": 31
+    },
+    {
+      "source": 16,
+      "target": 31
+    },
+    {
+      "source": 20,
+      "target": 31
+    },
+    {
+      "source": 14,
+      "target": 32
+    },
+    {
+      "source": 30,
+      "target": 32
+    },
+    {
+      "source": 1,
+      "target": 33
+    },
+    {
+      "source": 2,
+      "target": 33
+    },
+    {
+      "source": 28,
+      "target": 33
+    },
+    {
+      "source": 26,
+      "target": 33
+    },
+    {
+      "source": 30,
+      "target": 33
+    },
+    {
+      "source": 32,
+      "target": 33
     }
   ]
 };

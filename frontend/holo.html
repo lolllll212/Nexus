@@ -1,8 +1,8 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>NEXUS — COGNITIVE OS</title>
+<title>NEXUS â€” COGNITIVE OS</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
@@ -313,9 +313,9 @@
   #fallback { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center;
     background:rgba(4,6,10,.95); color:#c9d6d2; font-size:13px; text-align:center; line-height:1.8; }
 </style>
-<script src="/vendor/three.min.js"></script>
-<script>window.THREE || document.write('<script src="https://unpkg.com/three@0.160.0/build/three.min.js"><\/script>');</script>
-<script src="/vendor/3d-force-graph.min.js"></script>
+<script src="/vendor/three.0.152.2.min.js"></script>
+<script>window.THREE || document.write('<script src="https://unpkg.com/three@0.152.2/build/three.min.js"><\/script>');</script>
+<script src="/vendor/3d-force-graph.1.70.8.min.js"></script>
 <script>window.ForceGraph3D || document.write('<script src="https://unpkg.com/3d-force-graph/dist/3d-force-graph.min.js"><\/script>');</script>
 </head>
 <body>
@@ -326,14 +326,14 @@
 <!-- Top-Center Unified Toolbar -->
 <div id="top-toolbar">
   <button class="tbtn" id="btn-view-mode" title="Toggle 2D / 3D Layout">3D</button>
-  <button class="tbtn" id="btn-fit" title="Fit Camera (F)">⊙ FIT</button>
+  <button class="tbtn" id="btn-fit" title="Fit Camera (F)">âŠ™ FIT</button>
   <span id="focus-name">NEXUS GALAXY</span>
-  <button class="tbtn gold" id="btn-reset" title="Reset Selection (Esc)">↺ RESET</button>
-  <button class="tbtn magenta" id="btn-dream" title="Dream Mode: Auto-Link Discovery">✧ DREAM</button>
-  <button class="tbtn danger" id="btn-shield" title="Shield Radar: Security Audit">🛡 SHIELD</button>
+  <button class="tbtn gold" id="btn-reset" title="Reset Selection (Esc)">â†º RESET</button>
+  <button class="tbtn magenta" id="btn-dream" title="Dream Mode: Auto-Link Discovery">âœ§ DREAM</button>
+  <button class="tbtn danger" id="btn-shield" title="Shield Radar: Security Audit">ðŸ›¡ SHIELD</button>
   
   <div style="position:relative;">
-    <button class="tbtn" id="btn-forces" title="Physics & Forces">⚙ FORCES</button>
+    <button class="tbtn" id="btn-forces" title="Physics & Forces">âš™ FORCES</button>
     <div class="popover-menu" id="forces-popover">
       <div class="fslider">
         <span>Repel (<b id="lbl-repel">80</b>)</span>
@@ -396,7 +396,7 @@
   <div class="head">
     <b>NEXUS COGNITIVE OS</b>
     <!-- Single source of truth for counts -->
-    <div class="sub" id="counts">— nodes · — connections</div>
+    <div class="sub" id="counts">â€” nodes Â· â€” connections</div>
   </div>
 
   <div id="search-box">
@@ -408,13 +408,13 @@
   <div id="inspector">
     <div class="ins-header">
       <div id="ins-name"><span class="dot"></span><span>Node Name</span></div>
-      <button class="close-btn" id="btn-close-ins" title="Close Inspector">✕</button>
+      <button class="close-btn" id="btn-close-ins" title="Close Inspector">âœ•</button>
     </div>
     <div id="ins-group">CORE</div>
-    <div id="ins-meta">—</div>
+    <div id="ins-meta">â€”</div>
 
     <div id="path-banner">
-      <div class="path-title">⚡ SHORTEST PATH TRACER</div>
+      <div class="path-title">âš¡ SHORTEST PATH TRACER</div>
       <div id="path-summary" style="font-size:10.5px; color:#c9d6d2;"></div>
       <div class="path-chips" id="path-chips"></div>
       <button class="btn-sm btn-cancel" id="btn-clear-path" style="margin-top:6px;">Clear Trace</button>
@@ -432,7 +432,7 @@
     </div>
 
     <div class="ins-actions">
-      <button class="act-btn secondary" id="btn-edit-note">✎ Edit Note</button>
+      <button class="act-btn secondary" id="btn-edit-note">âœŽ Edit Note</button>
       <span id="ins-dynamic-run"></span>
     </div>
 
@@ -470,14 +470,14 @@
 
   <!-- Compact Icon Toggles -->
   <div class="hud-toggles">
-    <div class="hud-tog" id="tog-watch" title="Watch Swarm Activity">👁 Watch</div>
-    <div class="hud-tog" id="tog-hold" title="Hold Force Simulation">⏸ Hold</div>
-    <div class="hud-tog" id="tog-focus" title="1-Hop Isolation">🎯 Focus</div>
+    <div class="hud-tog" id="tog-watch" title="Watch Swarm Activity">ðŸ‘ Watch</div>
+    <div class="hud-tog" id="tog-hold" title="Hold Force Simulation">â¸ Hold</div>
+    <div class="hud-tog" id="tog-focus" title="1-Hop Isolation">ðŸŽ¯ Focus</div>
   </div>
 </div>
 
 <!-- EYES webcam PiP -->
-<div id="eyes"><span class="tag">EYES · LOCAL CAM</span><video id="eyesvid" autoplay playsinline muted></video></div>
+<div id="eyes"><span class="tag">EYES Â· LOCAL CAM</span><video id="eyesvid" autoplay playsinline muted></video></div>
 
 <!-- Bottom Floating Glassmorphic Command Dock -->
 <div id="dock-container">
@@ -487,20 +487,20 @@
       <div class="status-gem" id="dock-gem"></div>
       <span class="status-text" id="dock-status">IDLE</span>
     </div>
-    <div class="model-badge" id="dock-model">QWEN/QWEN3.5-9B</div>
+    <select class="model-badge" id="dock-model" title="Active model - local or NVIDIA NIM" style="appearance:none;-webkit-appearance:none;cursor:pointer;background:transparent;border:none;outline:none;max-width:200px;"></select>
     <input id="msg" placeholder="Ask NEXUS or press M to speak..." autocomplete="off" />
-    <div class="dock-btn" id="mic" title="Voice (M)">🎙</div>
-    <div class="dock-btn" id="send" title="Send (Enter)">➤</div>
+    <div class="dock-btn" id="mic" title="Voice (M)">ðŸŽ™</div>
+    <div class="dock-btn" id="send" title="Send (Enter)">âž¤</div>
   </div>
 </div>
 
 <div id="caption"></div>
 <div id="toast"></div>
-<div id="fallback"><div>⚠ 3D libraries failed to load.<br/>Please ensure three.js and 3d-force-graph CDN connections are reachable.</div></div>
+<div id="fallback"><div>âš  3D libraries failed to load.<br/>Please ensure three.js and 3d-force-graph CDN connections are reachable.</div></div>
 
 <script>
 /* ============================================================
-   NEXUS COGNITIVE OS — 3D Cosmos & ReAct Agent Brain
+   NEXUS COGNITIVE OS â€” 3D Cosmos & ReAct Agent Brain
    ============================================================ */
 const $ = id => document.getElementById(id);
 const MESH_POLL = 20000, LLM_POLL = 30000;
@@ -519,7 +519,7 @@ async function nexusFetch(path, opts = {}) {
   if (opts.json) headers['Content-Type'] = 'application/json';
   return fetch(path, Object.assign({}, opts, { headers }));
 }
-const jget = async p => { const r = await nexusFetch(p); if (!r.ok) throw new Error(p + ' → ' + r.status); return r.json(); };
+const jget = async p => { const r = await nexusFetch(p); if (!r.ok) throw new Error(p + ' â†’ ' + r.status); return r.json(); };
 const jpost = (p, body) => nexusFetch(p, { method: 'POST', json: true, body: JSON.stringify(body || {}) });
 const jput = (p, body) => nexusFetch(p, { method: 'PUT', json: true, body: JSON.stringify(body || {}) });
 
@@ -706,7 +706,7 @@ function nodeObject(n) {
 }
 
 /* Link Key */
-const linkKey = l => `${typeof l.source === 'object' ? l.source.id : l.source}→${typeof l.target === 'object' ? l.target.id : l.target}`;
+const linkKey = l => `${typeof l.source === 'object' ? l.source.id : l.source}â†’${typeof l.target === 'object' ? l.target.id : l.target}`;
 
 /* Link Resting Opacity: 0.05 cross-group, 0.15 same-group, 0.85 on highlight */
 function getLinkOpacity(l) {
@@ -734,7 +734,7 @@ function initGraph() {
     .backgroundColor('rgba(0,0,0,0)')
     .showNavInfo(false)
     .nodeThreeObject(nodeObject)
-    .nodeLabel(n => `${n.__label || n.label || n.id} — ${gstyle(n.group).label}`)
+    .nodeLabel(n => `${n.__label || n.label || n.id} â€” ${gstyle(n.group).label}`)
     .linkColor(l => {
       if (l.__dream) return '#e056fd';
       if (l.__path) return '#00f0ff';
@@ -769,14 +769,14 @@ function applyForces() {
   if (!HOLD_SIM) GRAPH.d3ReheatSimulation && GRAPH.d3ReheatSimulation();
 }
 
-/* ── REA Workbench ────────────────────────────────────────────────── */
+/* â”€â”€ REA Workbench â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 const REA_STATE = { lastResult: '', lastTool: '', lastPath: '' };
 
 (function initRea() {
   const sel = $('rea-tool');
   fetch('/api/rea/tools').then(r => r.json()).then(d => {
     sel.innerHTML = Object.entries(d.tools || {})
-      .map(([name, desc]) => '<option value="' + name + '"' + (d.ready ? '' : ' disabled') + '>' + name + ' — ' + desc + '</option>')
+      .map(([name, desc]) => '<option value="' + name + '"' + (d.ready ? '' : ' disabled') + '>' + name + ' â€” ' + desc + '</option>')
       .join('');
     if (!d.ready) $('rea-out').textContent = 'REA is not built yet. Run: python scripts/setup_rea.py';
   }).catch(() => { sel.innerHTML = '<option value="">backend offline</option>'; });
@@ -985,7 +985,7 @@ function computeDegree() {
 
 /* Single source of truth for counters in top-left subtitle */
 function renderCounts() {
-  $('counts').textContent = `${FULL.nodes.length} nodes · ${FULL.links.length} connections`;
+  $('counts').textContent = `${FULL.nodes.length} nodes Â· ${FULL.links.length} connections`;
 }
 
 function refresh() {
@@ -1171,7 +1171,7 @@ function handlePathTracing(node) {
 
   selectNode(end);
   refresh();
-  showToast(`⚡ Path traced: ${path.length} nodes linked.`);
+  showToast(`âš¡ Path traced: ${path.length} nodes linked.`);
 }
 
 $('btn-clear-path').onclick = () => {
@@ -1211,7 +1211,7 @@ function selectNode(id) {
   const conns = connectionsOf(id);
   metaBits.push(`${conns.length} connection${conns.length === 1 ? '' : 's'}`);
   if (n.status) metaBits.push(`status: ${n.status}`);
-  $('ins-meta').textContent = metaBits.join(' · ');
+  $('ins-meta').textContent = metaBits.join(' Â· ');
 
   // Full excerpt / desc
   const excerptText = n.full || n.excerpt || n.desc || 'No documentation excerpt available.';
@@ -1293,7 +1293,7 @@ $('btn-save-note').onclick = async () => {
       $('ins-desc').textContent = newContent;
       $('ins-editor-wrap').classList.remove('active');
       $('ins-desc').style.display = 'block';
-      showToast('✓ Note saved to disk and re-indexed live.');
+      showToast('âœ“ Note saved to disk and re-indexed live.');
       loadAll();
     } else {
       alert('Save failed: ' + (j.error || 'Unknown error'));
@@ -1308,20 +1308,20 @@ function renderRunButton(n) {
   const box = $('ins-dynamic-run'); box.innerHTML = '';
   if (!n.triggerable) return;
   const btn = document.createElement('button'); btn.className = 'act-btn';
-  btn.textContent = { dream: '▶ DREAM CYCLE', run: '▶ RUN SWARM', generate: '▶ GENERATE TOOL' }[n.action || n.id] || '▶ RUN';
+  btn.textContent = { dream: 'â–¶ DREAM CYCLE', run: 'â–¶ RUN SWARM', generate: 'â–¶ GENERATE TOOL' }[n.action || n.id] || 'â–¶ RUN';
   btn.onclick = async () => {
     btn.textContent = 'WORKING...';
     try {
       const r = await jpost('/api/cosmos/trigger', { node: n.id, params: {} });
       const j = await r.json();
       $('ins-result').className = 'show';
-      $('ins-result').textContent = (j.ok ? '✓ ' : '✗ ') + (j.summary || 'Trigger executed');
+      $('ins-result').textContent = (j.ok ? 'âœ“ ' : 'âœ— ') + (j.summary || 'Trigger executed');
       pulseAround(n.id, 14);
     } catch (e) {
       $('ins-result').className = 'show';
-      $('ins-result').textContent = '✗ ' + e.message;
+      $('ins-result').textContent = 'âœ— ' + e.message;
     }
-    btn.textContent = '▶ RUN';
+    btn.textContent = 'â–¶ RUN';
   };
   box.appendChild(btn);
 }
@@ -1384,7 +1384,7 @@ function animateThoughtTrail(nodeIds) {
 /* Dreaming (Auto-Link Discovery) */
 $('btn-dream').onclick = async () => {
   setDockStatus('THINKING');
-  showToast('✧ Dreaming: scanning repository for conceptual links...');
+  showToast('âœ§ Dreaming: scanning repository for conceptual links...');
   try {
     const res = await jpost('/api/dream', {});
     const data = await res.json();
@@ -1403,7 +1403,7 @@ $('btn-dream').onclick = async () => {
 
     refresh();
     openDreamApprovalList(suggestions);
-    showToast(`✧ Discovered ${suggestions.length} dream links! Inspect to approve.`);
+    showToast(`âœ§ Discovered ${suggestions.length} dream links! Inspect to approve.`);
   } catch (err) {
     showToast('Dream scan failed: ' + err.message);
   }
@@ -1424,7 +1424,7 @@ function openDreamApprovalList(suggestions) {
     item.style.padding = '8px 4px';
     item.style.borderBottom = '1px solid rgba(224,86,253,.2)';
     item.innerHTML = `
-      <div style="font-size:11px; color:#eafff8; font-weight:600;">${s.source_label} ↔ ${s.target_label}</div>
+      <div style="font-size:11px; color:#eafff8; font-weight:600;">${s.source_label} â†” ${s.target_label}</div>
       <div style="font-size:9.5px; color:#8fd8c2; margin:2px 0;">${s.reason} (${Math.round(s.score * 100)}% match)</div>
       <button class="btn-sm btn-save" style="margin-top:4px; font-size:8.5px; padding:3px 9px;">Approve Link</button>
     `;
@@ -1434,7 +1434,7 @@ function openDreamApprovalList(suggestions) {
         const r = await jpost('/api/dream/approve', { source: s.source, target: s.target });
         const j = await r.json();
         if (j.ok) {
-          showToast(`✓ Link approved: ${s.source_label} ↔ ${s.target_label}`);
+          showToast(`âœ“ Link approved: ${s.source_label} â†” ${s.target_label}`);
           item.remove();
           loadAll();
         }
@@ -1456,14 +1456,14 @@ $('btn-shield').onclick = async () => {
     return;
   }
 
-  showToast('🛡 Auditing repository nodes for security posture...');
+  showToast('ðŸ›¡ Auditing repository nodes for security posture...');
   try {
     const res = await jpost('/api/scan/nodes', {});
     const data = await res.json();
     SHIELD_AUDIT.clear();
     (data.scanned_nodes || []).forEach(item => SHIELD_AUDIT.set(item.id, item));
     refresh();
-    showToast(`🛡 Shield Active: ${data.high_count} High, ${data.med_count} Med risk issues found.`);
+    showToast(`ðŸ›¡ Shield Active: ${data.high_count} High, ${data.med_count} Med risk issues found.`);
   } catch (err) {
     showToast('Shield scan failed: ' + err.message);
   }
@@ -1512,10 +1512,73 @@ function setDockStatus(s) {
 
 function updateLlmBadge(llm) {
   if (!llm) return;
-  const modelName = String(llm.model || 'QWEN3.5-9B').toUpperCase();
-  $('dock-model').textContent = modelName.slice(0, 18);
-  $('dock-model').title = `${llm.kind} @ ${llm.base_url}`;
+  /* The dock model picker below is the source of truth; this legacy hook is kept
+     for the /api/llm/status caller. */
 }
+
+async function loadDockModels() {
+  const sel = $('dock-model');
+  if (!sel || sel.tagName !== 'SELECT') return;
+  try {
+    const d = await jget('/api/llm/models');
+    const locals = (d.local && d.local.models) || [];
+    const nim = (d.nim && d.nim.models) || [];
+    let html = locals.length
+      ? '<optgroup label="LOCAL">' + locals.map(m => '<option value="local|' + m + '">' + m + '</option>').join('') + '</optgroup>'
+      : '<optgroup label="LOCAL"><option value="local|">local offline</option></optgroup>';
+    html += '<optgroup label="NVIDIA NIM">' +
+      nim.map(m => '<option value="nim|' + m.id + '">' + String(m.name || m.id).slice(0, 28) + '</option>').join('') +
+      '</optgroup>';
+    sel.innerHTML = html;
+    const active = d.active || {};
+    sel.value = (active.provider || 'local') + '|' + (active.model || '');
+    if (sel.selectedIndex < 0) sel.selectedIndex = 0;
+    sel.dataset.prev = sel.value;
+    sel.title = 'Active model - local or NVIDIA NIM';
+  } catch (e) { /* backend offline */ }
+}
+
+$('dock-model').addEventListener('change', async () => {
+  const sel = $('dock-model');
+  const prev = sel.dataset.prev || sel.value;
+  const parts = sel.value.split('|');
+  try {
+    const d = await jpost('/api/llm/model', { provider: parts[0], model: parts[1] || '' });
+    if (d && d.needs_key) {
+      const key = prompt('NVIDIA NIM API key (nvapi-...):');
+      if (!key) { sel.value = prev; return; }
+      const d2 = await jpost('/api/llm/model', { provider: 'nim', model: parts[1] || '', api_key: key });
+      if (!d2 || !d2.ok) { alert((d2 && d2.error) || 'NIM key rejected'); sel.value = prev; return; }
+    } else if (!d || !d.ok) {
+      alert((d && d.error) || 'Switch failed');
+      sel.value = prev;
+      return;
+    }
+    sel.dataset.prev = sel.value;
+    if (typeof setDockStatus === 'function') setDockStatus('idle');
+  } catch (e) {
+    alert('Switch failed: ' + e);
+    sel.value = prev;
+  }
+});
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', loadDockModels);
+} else {
+  loadDockModels();
+}
+
+/* opencode-style faint reasoning block */
+(function ensureThinkingStyles() {
+  if (document.getElementById('nexus-thinking-styles')) return;
+  const st = document.createElement('style');
+  st.id = 'nexus-thinking-styles';
+  st.textContent = [
+    '.bubble .thinking-block{margin:2px 0 9px;padding:8px 10px;border-left:2px solid rgba(125,255,217,.25);background:rgba(125,255,217,.04);border-radius:6px;text-align:left;}',
+    '.thinking-label{font-size:8.5px;letter-spacing:.22em;text-transform:uppercase;color:rgba(125,255,217,.45);margin-bottom:4px;}',
+    '.thinking-body{font-size:10px;line-height:1.6;color:#5a6b62;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;}'
+  ].join('');
+  document.head.appendChild(st);
+})();
 
 async function sendChat(raw) {
   const text = (raw || $('msg').value || '').trim();
@@ -1541,9 +1604,10 @@ async function sendChat(raw) {
     const res = await jpost('/chat', { message: text, question: text, session_id: API.session });
     const j = await res.json();
     const answer = j.answer || j.response || 'No synthesis returned.';
+    const reasoning = (j.reasoning || '').trim();
     const returnedNodes = j.nodes || [];
 
-    appendChatBubble('nexus', answer, returnedNodes, text);
+    appendChatBubble('nexus', answer, returnedNodes, text, reasoning);
     speak(answer);
     animateThoughtTrail(returnedNodes);
   } catch (err) {
@@ -1552,13 +1616,28 @@ async function sendChat(raw) {
   setDockStatus('IDLE');
 }
 
-function appendChatBubble(role, text, nodes = [], originalPrompt = '') {
+function appendChatBubble(role, text, nodes = [], originalPrompt = '', reasoning = '') {
   const d = document.createElement('div');
   d.className = 'bubble ' + role;
 
   if (role === 'user') {
     d.textContent = text;
   } else {
+    // opencode-style faint reasoning: dimmed, capped, never spoken.
+    if (reasoning) {
+      const think = document.createElement('div');
+      think.className = 'thinking-block';
+      const lbl = document.createElement('div');
+      lbl.className = 'thinking-label';
+      lbl.textContent = 'reasoning';
+      const body = document.createElement('div');
+      body.className = 'thinking-body';
+      body.textContent = reasoning;
+      think.appendChild(lbl);
+      think.appendChild(body);
+      d.appendChild(think);
+    }
+
     d.innerHTML = `<div>${text.replace(/\n/g, '<br>')}</div>`;
 
     const footer = document.createElement('div');
@@ -1591,8 +1670,8 @@ function appendChatBubble(role, text, nodes = [], originalPrompt = '') {
         const r = await jpost('/api/notes/save', { title, content });
         const resp = await r.json();
         if (resp.ok) {
-          showToast('✓ Note saved to docs/notes/ & indexed into graph!');
-          saveBtn.textContent = '✓ Saved';
+          showToast('âœ“ Note saved to docs/notes/ & indexed into graph!');
+          saveBtn.textContent = 'âœ“ Saved';
           loadAll();
         }
       } catch (e) { alert('Save failed: ' + e.message); }
@@ -1650,20 +1729,53 @@ function caption(text, holdMs) {
   caption._tm = setTimeout(() => c.classList.remove('show'), holdMs || 3000);
 }
 
+/* Preferred clear voices: Windows natural voices first, then Google en-US. */
+function pickVoice() {
+  const vs = speechSynthesis.getVoices() || [];
+  const score = v => {
+    const n = (v.name || '').toLowerCase();
+    if (/natural|online/.test(n) && /en[-_ ]us|english/.test(n + ' ' + v.lang)) return 0;
+    if (/aria|guy|emma|jenny/.test(n)) return 1;
+    if (v.lang === 'en-US' && /google/.test(n)) return 2;
+    if (v.lang === 'en-US') return 3;
+    if (/^en/.test(v.lang)) return 4;
+    return 9;
+  };
+  return vs.slice().sort((a, b) => score(a) - score(b))[0] || null;
+}
+
+/* Strip markdown/table noise so the voice reads clean sentences. */
+function speakable(text) {
+  return String(text || '')
+    .replace(/```[\s\S]*?```/g, ' code block ')
+    .replace(/^\s*FINAL ANSWER:\s*/i, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/https?:\/\/\S+/g, ' a link ')
+    .replace(/[|#>~_*]/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .slice(0, 420);
+}
+
 function speak(text) {
-  caption(text);
+  caption(speakable(text));
   if (isMuted || !window.speechSynthesis) return;
   try {
     speechSynthesis.cancel();
-    const cleanText = text.replace(/^\s*FINAL ANSWER:\s*/i, '').replace(/[#*`]/g, '').slice(0, 360);
-    const u = new SpeechSynthesisUtterance(cleanText);
-    u.rate = 1.0; u.pitch = 0.95;
+    const u = new SpeechSynthesisUtterance(speakable(text));
+    const v = pickVoice();
+    if (v) { u.voice = v; u.lang = v.lang; }
+    u.rate = 0.98; u.pitch = 1.0;
     u.onstart = () => setDockStatus('SPEAKING');
     u.onend = () => setDockStatus('IDLE');
     u.onerror = () => setDockStatus('IDLE');
     speechSynthesis.speak(u);
   } catch (_) {}
 }
+if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => {};
 
 /* Two-Way Buffered Voice Recognition */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1682,7 +1794,7 @@ if (SR) {
     }
     const current = (final || interim);
     $('msg').value = current;
-    caption('🎙 ' + current, 1800);
+    caption('ðŸŽ™ ' + current, 1800);
 
     // Buffer pause for 900ms before auto-dispatch
     silenceTimer = setTimeout(() => {

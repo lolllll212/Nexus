@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NEXUS — Talk to the Brain</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300f0ff'><circle cx='12' cy='12' r='10' stroke='%2300f0ff' stroke-width='2' fill='none'/><circle cx='12' cy='12' r='4' fill='%2300f0ff'/></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #020408;
+    --cyan: #00f0ff;
+    --mint: #7dffd9;
+    --amber: #facc15;
+    --line: rgba(0, 240, 255, 0.16);
+    --glass: rgba(8, 18, 28, 0.72);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: #e6f6ff;
+    font-family: 'JetBrains Mono', monospace;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  #ambient { position: fixed; inset: 0; z-index: 0; opacity: .55; }
+  #vignette {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 38%, transparent 40%, rgba(0,0,0,.55) 100%);
+  }
+  .shell { position: relative; z-index: 2; height: 100%; display: flex; flex-direction: column; }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 22px; border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(14px); background: rgba(2, 6, 12, 0.6);
+  }
+  .wordmark {
+    font-family: 'Chakra Petch', sans-serif; font-weight: 700;
+    font-size: 16px; letter-spacing: .34em; color: #eafff8;
+  }
+  .wordmark small { display: block; font-family: 'JetBrains Mono', monospace; font-weight: 400;
+    font-size: 8.5px; letter-spacing: .3em; color: rgba(125,255,217,.5); margin-top: 2px; }
+  .hud-right { display: flex; align-items: center; gap: 12px; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #37474f; flex-shrink: 0; }
+  .status-dot.on { background: var(--mint); box-shadow: 0 0 10px var(--mint); animation: pulse 2s infinite; }
+  @keyframes pulse { 50% { opacity: .55; } }
+  .model-pick {
+    display: flex; align-items: center; gap: 9px; padding: 7px 12px;
+    background: rgba(8,18,28,.6); border: 1px solid var(--line); border-radius: 11px;
+  }
+  #model-pick {
+    appearance: none; -webkit-appearance: none; background: transparent; border: none; outline: none;
+    color: #d9fbff; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; letter-spacing: .06em;
+    cursor: pointer; max-width: 240px;
+  }
+  #model-pick option, #model-pick optgroup { background: #071019; color: #d9fbff; }
+  .hud-link { color: #628793; text-decoration: none; font-size: 9.5px; letter-spacing: .2em;
+    padding: 8px 11px; border-radius: 9px; transition: all .2s; }
+  .hud-link:hover { color: var(--cyan); background: rgba(0,240,255,.06); }
+
+  /* NIM key row (shown only when a NIM model is picked without a key) */
+  #key-row {
+    display: flex; align-items: center; gap: 10px; padding: 9px 22px;
+    border-bottom: 1px solid rgba(250,204,21,.22); background: rgba(38,30,4,.5);
+    font-size: 10px; letter-spacing: .18em; color: var(--amber);
+  }
+  #key-row input {
+    flex: 1; max-width: 360px; background: rgba(0,0,0,.4); border: 1px solid rgba(250,204,21,.3);
+    border-radius: 8px; outline: none; color: #ffe9a3; font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; padding: 7px 10px;
+  }
+  #key-row button {
+    cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .18em;
+    padding: 7px 14px; border-radius: 8px; border: 1px solid rgba(250,204,21,.4);
+    background: rgba(250,204,21,.12); color: var(--amber);
+  }
+  #key-row button.ghost { background: transparent; border-color: rgba(125,255,217,.25); color: #7a95a1; }
+
+  /* ── Stream ─────────────────────────────────────────────── */
+  #stream { flex: 1; overflow-y: auto; padding: 34px 24px 12px; scroll-behavior: smooth; }
+  #stream::-webkit-scrollbar { width: 8px; }
+  #stream::-webkit-scrollbar-thumb { background: rgba(0,240,255,.14); border-radius: 8px; }
+
+  #intro { max-width: 860px; margin: 4vh auto 0; text-align: center; transition: opacity .5s, transform .5s; }
+  #intro.gone { opacity: 0; transform: translateY(-24px); pointer-events: none; height: 0; margin: 0; overflow: hidden; }
+  #intro .over { font-size: 10.5px; letter-spacing: .42em; color: var(--mint); opacity: .8; }
+  #intro h1 {
+    font-family: 'Chakra Petch', sans-serif; font-weight: 700; letter-spacing: .1em;
+    font-size: clamp(38px, 7vw, 84px); line-height: 1.02; margin: 18px 0 14px;
+    background: linear-gradient(180deg, #eafff8 55%, rgba(0,240,255,.75));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  #intro p { max-width: 520px; margin: 0 auto; font-size: 12px; line-height: 1.9; color: #7a95a1; }
+
+  .wrap { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  .row { display: flex; }
+  .row.user { justify-content: flex-end; }
+  .row.bot { justify-content: flex-start; }
+  .bubble {
+    max-width: 78%; padding: 14px 18px; border-radius: 16px; font-size: 12.5px; line-height: 1.85;
+    animation: rise .3s ease both; position: relative;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  .row.user .bubble {
+    background: rgba(0, 240, 255, 0.09); border: 1px solid rgba(0,240,255,.32);
+    color: #d9fbff; border-bottom-right-radius: 5px; box-shadow: 0 6px 24px rgba(0,240,255,.08);
+  }
+  .row.bot .bubble {
+    background: var(--glass); border: 1px solid var(--line); color: #cfe9e4;
+    border-bottom-left-radius: 5px; box-shadow: 0 10px 34px rgba(0,0,0,.5);
+  }
+  /* opencode-style faint reasoning block */
+  .bubble .thinking-block { margin: 2px 0 9px; padding: 8px 10px; border-left: 2px solid rgba(0,240,255,.22); background: rgba(0,240,255,.04); border-radius: 6px; }
+  .thinking-label { font-size: 8.5px; letter-spacing: .22em; text-transform: uppercase; color: rgba(0,240,255,.4); margin-bottom: 4px; }
+  .thinking-body { font-size: 10px; line-height: 1.65; color: #5a6b62; max-height: 120px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+  .meta { font-size: 9px; letter-spacing: .22em; color: #54707c; margin-bottom: 7px; display: flex; gap: 10px; align-items: center; }
+  .row.user .meta { justify-content: flex-end; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip {
+    font-size: 9px; letter-spacing: .14em; padding: 4px 9px; border-radius: 999px;
+    border: 1px solid rgba(125,255,217,.28); color: var(--mint); background: rgba(125,255,217,.05);
+  }
+  .chip.tool { border-color: rgba(0,240,255,.3); color: var(--cyan); background: rgba(0,240,255,.05); }
+
+  .typing { display: inline-flex; gap: 5px; padding: 4px 2px; }
+  .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); animation: blink 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: .18s; }
+  .typing i:nth-child(3) { animation-delay: .36s; }
+  @keyframes blink { 0%, 70%, 100% { opacity: .25; transform: none; } 35% { opacity: 1; transform: translateY(-3px); } }
+
+  /* ── Quick prompts (numbered, agency-style) ─────────────── */
+  #quick { max-width: 860px; margin: 18px auto 0; display: flex; flex-wrap: wrap; gap: 10px; padding: 0 24px; }
+  .qp {
+    cursor: pointer; display: flex; align-items: baseline; gap: 8px;
+    padding: 7px 13px; border-radius: 10px; font-size: 10.5px; letter-spacing: .05em;
+    color: #7a95a1; background: rgba(8,18,28,.4); border: 1px solid rgba(0,240,255,.1);
+    transition: all .2s; user-select: none;
+  }
+  .qp:hover { color: #eafff8; border-color: rgba(0,240,255,.4); transform: translateY(-1px); }
+  .qp .no { font-size: 8.5px; color: var(--cyan); letter-spacing: .2em; opacity: .8; }
+
+  /* ── Composer ───────────────────────────────────────────── */
+  #composer {
+    padding: 14px 24px 22px; border-top: 1px solid var(--line);
+    background: rgba(2, 6, 12, 0.72); backdrop-filter: blur(14px);
+  }
+  .bar { max-width: 860px; margin: 0 auto; display: flex; align-items: flex-end; gap: 10px;
+    background: rgba(8,18,28,.7); border: 1px solid var(--line); border-radius: 18px; padding: 10px 12px; }
+  .bar:focus-within { border-color: rgba(0,240,255,.5); box-shadow: 0 0 24px rgba(0,240,255,.12); }
+  #input {
+    flex: 1; background: transparent; border: none; outline: none; resize: none;
+    color: #eafff8; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.6;
+    max-height: 140px; padding: 6px 4px;
+  }
+  #input::placeholder { color: #4d6570; }
+  .icon-btn {
+    width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.04); border: 1px solid var(--line); color: #7a95a1;
+    cursor: pointer; transition: all .2s; flex-shrink: 0; font-size: 14px;
+  }
+  .icon-btn:hover { color: var(--cyan); border-color: rgba(0,240,255,.4); }
+  .icon-btn.rec { color: #ff6b6b; border-color: rgba(255,107,107,.5); box-shadow: 0 0 14px rgba(255,80,80,.3); animation: pulse 1.1s infinite; }
+  .icon-btn.on { color: var(--mint); border-color: rgba(125,255,217,.5); }
+  #send {
+    height: 38px; padding: 0 20px; border-radius: 12px; border: none; cursor: pointer;
+    font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 11.5px; letter-spacing: .22em;
+    color: #001318; background: linear-gradient(90deg, var(--cyan), var(--mint));
+    box-shadow: 0 0 22px rgba(0,240,255,.3); transition: all .2s; flex-shrink: 0;
+  }
+  #send:hover { filter: brightness(1.12); }
+  #send:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
+  .hint { max-width: 860px; margin: 8px auto 0; text-align: center; font-size: 9px; letter-spacing: .2em; color: #3f545e; }
+  .hint b { color: #628793; font-weight: 500; }
+
+  @media (max-width: 640px) {
+    header { padding: 14px 16px; } #stream { padding: 20px 14px 8px; }
+    .bubble { max-width: 92%; } #composer { padding: 10px 14px 16px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="ambient"></canvas>
+<div id="vignette"></div>
+
+<div class="shell">
+  <header>
+    <div class="wordmark">NEXUS<small>COGNITIVE OS</small></div>
+    <div class="hud-right">
+      <label class="model-pick" title="Active model — local or NVIDIA NIM">
+        <span class="status-dot" id="status-dot"></span>
+        <select id="model-pick"></select>
+      </label>
+      <a class="hud-link" href="/holo.html">GALAXY</a>
+    </div>
+  </header>
+
+  <div id="key-row" hidden>
+    <span>NVIDIA NIM API KEY</span>
+    <input type="password" id="nim-key" placeholder="nvapi-..." autocomplete="off" spellcheck="false" />
+    <button id="key-save">SAVE</button>
+    <button id="key-cancel" class="ghost">CANCEL</button>
+  </div>
+
+  <div id="stream">
+    <div id="intro">
+      <div class="over">J.A.R.V.I.S. CORTEX ONLINE</div>
+      <h1>Talk to the Brain</h1>
+      <p>A ReAct reasoning cortex with live tools — it reads the knowledge graph, checks the
+         swarm, runs diagnostics, and answers with evidence. Ask anything, or start with a prompt below.</p>
+    </div>
+    <div class="wrap" id="messages"></div>
+  </div>
+
+  <div id="quick">
+    <button class="qp"><span class="no">01</span>Map the knowledge graph</button>
+    <button class="qp"><span class="no">02</span>Report system status</button>
+    <button class="qp"><span class="no">03</span>What can you do?</button>
+    <button class="qp"><span class="no">04</span>Search the notes for blueprints</button>
+  </div>
+
+  <div id="composer">
+    <div class="bar">
+      <button class="icon-btn" id="mic" title="Voice input">&#127908;</button>
+      <textarea id="input" rows="1" placeholder="Ask the brain anything..."></textarea>
+      <button class="icon-btn" id="voice-out" title="Spoken replies">&#128266;</button>
+      <button id="send">SEND</button>
+    </div>
+    <div class="hint">ENTER to send &nbsp;·&nbsp; SHIFT+ENTER newline &nbsp;·&nbsp; <b id="latency">cortex ready</b></div>
+  </div>
+</div>
+
+<script>
+/* ── Ambient particle field (original implementation) ─────────────── */
+(function () {
+  const c = document.getElementById('ambient'), x = c.getContext('2d');
+  let W, H, pts = [];
+  function resize() {
+    W = c.width = innerWidth; H = c.height = innerHeight;
+    const n = Math.min(120, Math.floor(W * H / 16000));
+    pts = Array.from({ length: n }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - .5) * .18, vy: (Math.random() - .5) * .18,
+      r: Math.random() * 1.6 + .4, tw: Math.random() * Math.PI * 2
+    }));
+  }
+  function frame(t) {
+    x.clearRect(0, 0, W, H);
+    for (const p of pts) {
+      p.x += p.vx; p.y += p.vy; p.tw += .02;
+      if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+      if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
+      const a = .25 + .3 * Math.abs(Math.sin(p.tw));
+      x.beginPath(); x.arc(p.x, p.y, p.r, 0, 6.283);
+      x.fillStyle = 'rgba(0,240,255,' + a.toFixed(3) + ')'; x.fill();
+    }
+    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
+      const a = pts[i], b = pts[j], dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy;
+      if (d2 < 13000) {
+        x.strokeStyle = 'rgba(125,255,217,' + (0.05 * (1 - d2 / 13000)).toFixed(3) + ')';
+        x.beginPath(); x.moveTo(a.x, a.y); x.lineTo(b.x, b.y); x.stroke();
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  addEventListener('resize', resize); resize(); requestAnimationFrame(frame);
+})();
+
+/* ── Model registry + status ───────────────────────────────────────── */
+const dot = document.getElementById('status-dot'),
+      pick = document.getElementById('model-pick'),
+      keyRow = document.getElementById('key-row'),
+      nimKey = document.getElementById('nim-key');
+let activeModel = { provider: 'local', model: '' };
+
+function setActiveLabel(reachable) {
+  dot.classList.toggle('on', !!reachable);
+  const label = activeModel.provider === 'nim' ? 'NIM · ' + activeModel.model : (activeModel.model || 'local');
+  lat.textContent = (reachable === false ? 'unreachable · ' : '') + label;
+}
+
+async function loadModels() {
+  try {
+    const d = await fetch('/api/llm/models').then(r => r.json());
+    activeModel = d.active || activeModel;
+    const locals = (d.local && d.local.models) || [];
+    const nim = (d.nim && d.nim.models) || [];
+    let html = locals.length
+      ? '<optgroup label="LOCAL">' + locals.map(m => '<option value="local|' + m + '">' + m + '</option>').join('') + '</optgroup>'
+      : '<optgroup label="LOCAL"><option value="local|">local server offline</option></optgroup>';
+    html += '<optgroup label="NVIDIA NIM">' +
+      nim.map(m => '<option value="nim|' + m.id + '">' + (m.name || m.id) + '</option>').join('') +
+      '</optgroup>';
+    pick.innerHTML = html;
+    pick.value = activeModel.provider + '|' + activeModel.model;
+    if (pick.selectedIndex < 0) pick.selectedIndex = 0;
+    setActiveLabel(!!(d.local && d.local.reachable));
+  } catch (e) {
+    dot.classList.remove('on');
+    lat.textContent = 'backend offline';
+  }
+}
+
+async function switchModel(provider, model) {
+  const prev = pick.value;
+  try {
+    const d = await fetch('/api/llm/model', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: provider, model: model })
+    }).then(r => r.json());
+    if (d.needs_key) {
+      keyRow.hidden = false; nimKey.focus();
+      pick.value = prev;
+      lat.textContent = 'NIM needs an API key (nvapi-...)';
+      return;
+    }
+    if (!d.ok) { lat.textContent = d.error || 'switch failed'; pick.value = prev; return; }
+    activeModel = d.active;
+    setActiveLabel(d.reachable !== false);
+    lat.textContent = (d.reachable ? 'switched to ' : 'switched (endpoint unreachable) ') + activeModel.model;
+  } catch (e) {
+    pick.value = prev;
+    lat.textContent = 'switch failed: ' + e;
+  }
+}
+
+pick.addEventListener('change', () => {
+  const parts = pick.value.split('|');
+  switchModel(parts[0], parts[1] || '');
+});
+
+document.getElementById('key-save').addEventListener('click', async () => {
+  const key = nimKey.value.trim();
+  if (!key) return;
+  const parts = (pick.value || 'nim|').split('|');
+  try {
+    const d = await fetch('/api/llm/model', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: 'nim', model: parts[1] || '', api_key: key })
+    }).then(r => r.json());
+    if (d.ok) {
+      keyRow.hidden = true; nimKey.value = '';
+      activeModel = d.active;
+      setActiveLabel(d.reachable !== false);
+      lat.textContent = 'NIM key saved · ' + activeModel.model;
+    } else {
+      lat.textContent = d.error || 'key rejected';
+    }
+  } catch (e) {
+    lat.textContent = 'key save failed: ' + e;
+  }
+});
+document.getElementById('key-cancel').addEventListener('click', () => { keyRow.hidden = true; });
+loadModels();
+
+/* ── Chat ──────────────────────────────────────────────────────────── */
+const stream = document.getElementById('stream'), box = document.getElementById('messages'),
+      input = document.getElementById('input'), sendBtn = document.getElementById('send'),
+      intro = document.getElementById('intro'), lat = document.getElementById('latency'),
+      voiceOut = { on: false, el: document.getElementById('voice-out') };
+let busy = false;
+
+function scrollDown() { stream.scrollTop = stream.scrollHeight; }
+function now() { return new Date().toLocaleTimeString([], { hour12: false }); }
+
+function addMsg(role, text, extras) {
+  const row = document.createElement('div');
+  row.className = 'row ' + (role === 'user' ? 'user' : 'bot');
+  const who = role === 'user' ? 'OPERATOR' : 'NEXUS · J.A.R.V.I.S.';
+  let chips = '';
+  if (extras) {
+    const bits = [];
+    (extras.tools_used || []).forEach(t => bits.push('<span class="chip tool">' + t + '</span>'));
+    if (extras.memories_recalled) bits.push('<span class="chip">' + extras.memories_recalled + ' memories</span>');
+    if (extras.nodes && extras.nodes.length) bits.push('<span class="chip">' + extras.nodes.length + ' nodes</span>');
+    if (bits.length) chips = '<div class="chips">' + bits.join('') + '</div>';
+  }
+  let think = '';
+  if (extras && extras.reasoning) {
+    think = '<div class="thinking-block"><div class="thinking-label">reasoning</div><div class="thinking-body"></div></div>';
+  }
+  row.innerHTML =
+    '<div class="bubble"><div class="meta"><span>' + who + '</span><span>' + now() + '</span></div>' +
+    think +
+    '<div class="txt"></div>' + chips + '</div>';
+  if (think) row.querySelector('.thinking-body').textContent = extras.reasoning;
+  row.querySelector('.txt').textContent = text;
+  box.appendChild(row);
+  scrollDown();
+  return row;
+}
+
+function typing() {
+  const row = document.createElement('div');
+  row.className = 'row bot';
+  row.innerHTML = '<div class="bubble"><div class="meta"><span>NEXUS · J.A.R.V.I.S.</span><span>reasoning</span></div>' +
+    '<div class="typing"><i></i><i></i><i></i></div></div>';
+  box.appendChild(row); scrollDown();
+  return row;
+}
+
+/* Preferred clear voices: Windows natural voices first, then Google en-US. */
+function pickVoice() {
+  const vs = speechSynthesis.getVoices() || [];
+  const score = v => {
+    const n = (v.name || '').toLowerCase();
+    if (/natural|online/.test(n) && /en[-_ ]us|english/.test(n + ' ' + v.lang)) return 0;
+    if (/aria|guy|emma|jenny/.test(n)) return 1;
+    if (v.lang === 'en-US' && /google/.test(n)) return 2;
+    if (v.lang === 'en-US') return 3;
+    if (/^en/.test(v.lang)) return 4;
+    return 9;
+  };
+  return vs.slice().sort((a, b) => score(a) - score(b))[0] || null;
+}
+
+/* Strip markdown/table noise so the voice reads clean sentences. */
+function speakable(text) {
+  return String(text || '')
+    .replace(/```[\s\S]*?```/g, ' code block ')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/https?:\/\/\S+/g, ' a link ')
+    .replace(/[|#>~_*]/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .slice(0, 420);
+}
+
+function speak(text) {
+  if (!voiceOut.on || !('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(speakable(text));
+  const v = pickVoice();
+  if (v) { u.voice = v; u.lang = v.lang; }
+  u.rate = 0.98; u.pitch = 1.0;
+  speechSynthesis.speak(u);
+}
+if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => {};
+
+async function ask(text) {
+  text = (text || '').trim();
+  if (!text || busy) return;
+  busy = true; sendBtn.disabled = true;
+  intro.classList.add('gone');
+  document.querySelectorAll('.qp').forEach(q => q.style.display = 'none');
+  addMsg('user', text);
+  input.value = ''; input.style.height = 'auto';
+  lat.textContent = 'cortex thinking...';
+  const t0 = performance.now();
+  const trow = typing();
+  try {
+    const r = await fetch('/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    trow.remove();
+    const answer = d.answer || d.response || 'The cortex returned no content.';
+    addMsg('bot', answer, d);
+    speak(answer);
+    lat.textContent = 'answered in ' + ((performance.now() - t0) / 1000).toFixed(1) + 's';
+  } catch (err) {
+    trow.remove();
+    addMsg('bot', 'Link to the cortex failed (' + err.message + '). Is the backend running? Try: python backend/main.py');
+    lat.textContent = 'link error';
+  } finally {
+    busy = false; sendBtn.disabled = false; input.focus();
+  }
+}
+
+sendBtn.addEventListener('click', () => ask(input.value));
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(input.value); }
+});
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+});
+document.querySelectorAll('.qp').forEach(q =>
+  q.addEventListener('click', () => ask(q.textContent.replace(/^\s*\d+\s*/, '')))
+);
+voiceOut.el.addEventListener('click', () => {
+  voiceOut.on = !voiceOut.on;
+  voiceOut.el.classList.toggle('on', voiceOut.on);
+  if (!voiceOut.on && 'speechSynthesis' in window) speechSynthesis.cancel();
+});
+
+/* ── Voice input (Web Speech API) ──────────────────────────────────── */
+const micBtn = document.getElementById('mic');
+let rec = null, listening = false;
+function getRec() {
+  if (rec) return rec;
+  const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Ctor) return null;
+  rec = new Ctor();
+  rec.continuous = false; rec.interimResults = true; rec.lang = 'en-US';
+  rec.onresult = e => {
+    let t = '';
+    for (const res of e.results) t += res[0].transcript;
+    input.value = t;
+  };
+  rec.onend = () => { listening = false; micBtn.classList.remove('rec'); };
+  rec.onerror = () => { listening = false; micBtn.classList.remove('rec'); };
+  return rec;
+}
+micBtn.addEventListener('click', () => {
+  const r = getRec();
+  if (!r) { lat.textContent = 'voice input unsupported here (use Chrome/Edge)'; return; }
+  if (listening) { r.stop(); return; }
+  try { r.start(); listening = true; micBtn.classList.add('rec'); lat.textContent = 'listening...'; }
+  catch (e) { /* already running */ }
+});
+
+input.focus();
+</script>
+</body>
+</html>
