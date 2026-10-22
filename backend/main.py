@@ -594,6 +594,116 @@ def _clean_markdown_excerpt(text: str) -> str:
     return " ".join(lines)[:380]
 
 
+# ─── Repo / file inspection tool (safe, clamped to the repo root) ────────────
+
+_TEXT_HINT_EXTS = {".md", ".txt", ".py", ".json", ".yaml", ".yml", ".toml", ".cfg"}
+_BINARY_EXTS = {
+    ".exe", ".dll", ".node", ".pyd", ".so", ".dylib", ".zip", ".7z", ".png",
+    ".jpg", ".jpeg", ".gif", ".ico", ".pdf", ".woff", ".woff2", ".db", ".sqlite",
+}
+_SECRET_NAMES = {".env", ".dev.vars"}
+
+
+def _safe_repo_path(raw: str) -> Path | None:
+    """Resolve a user-supplied path to inside ROOT_DIR; None when refused."""
+    raw = (raw or "").strip().strip('"').strip("'")
+    if not raw:
+        return None
+    try:
+        p = Path(raw)
+        if not p.is_absolute():
+            p = ROOT_DIR / p
+        resolved = p.resolve()
+    except OSError:
+        return None
+    root = ROOT_DIR.resolve()
+    if root != resolved and root not in resolved.parents:
+        return None
+    if resolved.name.lower() in _SECRET_NAMES:
+        return None
+    if resolved.suffix.lower() in _BINARY_EXTS:
+        return None
+    return resolved
+
+
+def _extract_path_hint(query: str) -> str:
+    """Pull the most path-like token out of a natural-language request."""
+    m = re.search(r"[A-Za-z]:\\[^\s\"']*", query)
+    if m:
+        return m.group(0)
+    m = re.search(r"[\w./\\-]+\.[A-Za-z0-9]{1,6}\b", query)
+    if m:
+        return m.group(0)
+    return ""
+
+
+def tool_read_repo(query: str) -> dict:
+    """Read a file or list a directory inside the repo, or give an overview."""
+    hint = _extract_path_hint(query)
+    target = _safe_repo_path(hint) if hint else None
+    lowered = query.lower()
+
+    if target and target.is_file():
+        try:
+            size = target.stat().st_size
+            text = target.read_text(encoding="utf-8", errors="replace")[:8000]
+            return {
+                "kind": "file",
+                "path": str(target.relative_to(ROOT_DIR)),
+                "bytes": size,
+                "truncated": size > 8000,
+                "excerpt": text,
+            }
+        except OSError as exc:
+            return {"kind": "error", "path": str(target), "error": str(exc)[:200]}
+
+    if target and target.is_dir():
+        try:
+            entries = []
+            for child in sorted(target.iterdir())[:60]:
+                try:
+                    entries.append(
+                        {
+                            "name": child.name,
+                            "type": "dir" if child.is_dir() else "file",
+                            "bytes": child.stat().st_size if child.is_file() else 0,
+                        }
+                    )
+                except OSError:
+                    continue
+            return {
+                "kind": "directory",
+                "path": str(target.relative_to(ROOT_DIR)),
+                "count": len(entries),
+                "entries": entries,
+            }
+        except OSError as exc:
+            return {"kind": "error", "path": str(target), "error": str(exc)[:200]}
+
+    if not target and any(
+        kw in lowered for kw in ("project", "repo", "repository", "structure", "overview")
+    ):
+        try:
+            top = sorted(
+                (
+                    {"name": c.name, "type": "dir" if c.is_dir() else "file"}
+                    for c in ROOT_DIR.iterdir()
+                    if not c.name.startswith(".") and c.name not in {"node_modules", "__pycache__"}
+                ),
+                key=lambda e: (e["type"] != "dir", e["name"].lower()),
+            )[:40]
+        except OSError:
+            top = []
+        return {
+            "kind": "overview",
+            "path": ".",
+            "note": "repo root listing - ask to read a specific file for analysis",
+            "entries": top,
+        }
+
+    return {"kind": "refused", "hint": hint[:120]}
+
+
 def _synthesize_jarvis_answer(
     query: str,
     intent: str,
@@ -618,6 +728,40 @@ def _synthesize_jarvis_answer(
             "request git status, examine active swarm tasks, run Python code, or trigger Cosmos cycles."
         )
         return ans, [], ["system_diagnostics", "cosmos_mesh"]
+
+    # 1b. REPO / FILE INSPECTION
+    if intent == "repo":
+        repo = tool_data.get("repo", {})
+        kind = repo.get("kind")
+        if kind == "file":
+            excerpt = (repo.get("excerpt", "") or "")[:700]
+            ans = (
+                f"Opened **{repo.get('path')}** ({repo.get('bytes')} bytes"
+                f"{', truncated to 8KB' if repo.get('truncated') else ''}):\n\n{excerpt}"
+            )
+            return ans, [], ["repo_read"]
+        if kind == "directory":
+            names = ", ".join(
+                f"{e['name']}{'/' if e['type'] == 'dir' else ''}"
+                for e in repo.get("entries", [])[:25]
+            )
+            ans = (
+                f"Listing of **{repo.get('path')}** ({repo.get('count')} entries), sir:\n\n{names}"
+            )
+            return ans, [], ["repo_read"]
+        if kind == "overview":
+            names = ", ".join(e["name"] for e in repo.get("entries", [])[:30])
+            ans = (
+                f"Repo root overview, sir:\n\n{names}\n\n"
+                "Ask me to read any specific file for a focused analysis."
+            )
+            return ans, [], ["repo_read"]
+        ans = (
+            "I could not access that path safely, sir. It may sit outside the "
+            "repository, be a binary, or be a protected file. Name a path inside "
+            "the NEXUS repo and I will read it directly."
+        )
+        return ans, [], ["repo_read"]
 
     # 2. GIT STATUS & COMMITS
     if intent == "git":
@@ -1432,6 +1576,25 @@ async def chat_endpoint(req: Request):
     ):
         intent = "greeting"
         tool_data["diag"] = tool_system_diagnostics()
+
+    # 1b. Repo / File Inspection (explicit reads, a path in the query, or a
+    # question about the project/repo itself)
+    elif bool(_extract_path_hint(query)) or (
+        any(
+            kw in q_lower
+            for kw in (
+                "read", "see", "look at", "open", "inspect", "show me",
+                "project file", "the repo", "repository", "directory",
+                "folder", "source code",
+            )
+        )
+        and any(
+            kw in q_lower
+            for kw in ("file", "repo", "project", "directory", "folder", "code", "path")
+        )
+    ):
+        intent = "repo"
+        tool_data["repo"] = tool_read_repo(query)
 
     # 2. Git & Working Tree
     elif any(
