@@ -1,0 +1,330 @@
+"""J.A.R.V.I.S. tool suite: git, swarm, calculator, sandbox, memory, repo reads.
+
+Extracted from backend/main.py (strangler refactor, Upgrade 1). GRAPH-dependent
+tools (system diagnostics, cosmos trigger) stay in main.py until the knowledge
+service lands.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import io
+import json
+import math
+import re
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+ROOT_DIR = BACKEND_DIR.parent
+
+# agent_comm lives in scripts/ - make the import work regardless of entrypoint.
+if str(ROOT_DIR / "scripts") not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR / "scripts"))
+
+
+def tool_git_status() -> dict[str, Any]:
+    """Execute real git status and recent commit history."""
+    try:
+        status_res = subprocess.run(
+            ["git", "status", "--short", "--branch"],
+            capture_output=True,
+            text=True,
+            cwd=str(ROOT_DIR),
+            timeout=5,
+        )
+        log_res = subprocess.run(
+            ["git", "log", "-n", "4", "--oneline"],
+            capture_output=True,
+            text=True,
+            cwd=str(ROOT_DIR),
+            timeout=5,
+        )
+        lines = status_res.stdout.splitlines()
+        branch_line = lines[0] if lines else "## unknown"
+        branch_name = branch_line.replace("##", "").strip()
+        changes = [line.strip() for line in lines[1:] if line.strip()]
+        commits = [c.strip() for c in log_res.stdout.splitlines() if c.strip()]
+        return {
+            "branch": branch_name,
+            "changes_count": len(changes),
+            "changes": changes[:6],
+            "recent_commits": commits,
+            "clean": len(changes) == 0,
+        }
+    except Exception as exc:
+        return {
+            "branch": "master",
+            "changes_count": 0,
+            "changes": [],
+            "recent_commits": [],
+            "error": str(exc),
+            "clean": True,
+        }
+
+
+def tool_list_tasks(status_filter: str = "all") -> dict[str, Any]:
+    """Inspect the shared swarm task queue from agent_comm."""
+    try:
+        import agent_comm
+
+        st = agent_comm.load_state()
+        queue = st.get("task_queue", [])
+        if status_filter != "all":
+            queue = [t for t in queue if t.get("status") == status_filter]
+        pending = [t for t in queue if t.get("status") == "pending"]
+        claimed = [t for t in queue if t.get("status") == "claimed"]
+        resolved = [t for t in queue if t.get("status") == "resolved"]
+        return {
+            "total": len(queue),
+            "pending_count": len(pending),
+            "claimed_count": len(claimed),
+            "resolved_count": len(resolved),
+            "tasks": queue[:6],
+        }
+    except Exception as exc:
+        return {
+            "total": 0,
+            "pending_count": 0,
+            "claimed_count": 0,
+            "resolved_count": 0,
+            "tasks": [],
+            "error": str(exc),
+        }
+
+
+def tool_agent_status() -> dict[str, Any]:
+    """Inspect swarm agent liveness, roles, and current activities."""
+    agent_roles = {
+        "astra": "Application / Eval / Docs Researcher",
+        "tron": "Domain / Core Logic / TDD Engineer",
+        "xenom": "Infra / Web / Sandbox / Security Architect",
+        "ceo": "Strategic Orchestrator & Consensus Overseer",
+    }
+    try:
+        import agent_comm
+
+        st = agent_comm.load_state()
+        agents_data = st.get("agents", {})
+        now = time.time()
+        agent_list = []
+        for name, role in agent_roles.items():
+            info = agents_data.get(name, {})
+            last_hb = info.get("last_heartbeat", 0)
+            idle_sec = max(0, int(now - last_hb)) if last_hb else 99999
+            agent_list.append(
+                {
+                    "name": name.upper(),
+                    "role": role,
+                    "status": "online" if idle_sec < 300 else "standby",
+                    "idle_sec": idle_sec,
+                    "current_task": info.get("current_task") or "Awaiting dispatch",
+                }
+            )
+        return {"agents": agent_list, "count": len(agent_list)}
+    except Exception as exc:
+        fallback = [
+            {"name": k.upper(), "role": v, "status": "standby", "current_task": "Idle"}
+            for k, v in agent_roles.items()
+        ]
+        return {"agents": fallback, "count": len(fallback), "error": str(exc)}
+
+
+def tool_calculator(expr: str) -> dict[str, Any]:
+    """Evaluate mathematical expression safely."""
+    safe_dict = {
+        "abs": abs,
+        "round": round,
+        "min": min,
+        "max": max,
+        "sum": sum,
+        "pow": pow,
+        "sqrt": math.sqrt,
+        "sin": math.sin,
+        "cos": math.cos,
+        "tan": math.tan,
+        "log": math.log,
+        "log10": math.log10,
+        "exp": math.exp,
+        "pi": math.pi,
+        "e": math.e,
+        "factorial": math.factorial,
+        "floor": math.floor,
+        "ceil": math.ceil,
+    }
+    clean = re.sub(r"(?i)\b(calculate|what\s+is|evaluate|compute|eval|math)\b", "", expr)
+    clean = clean.replace("^", "**")
+    clean = re.sub(r"[^0-9a-zA-Z_\+\-\*\/\(\)\.\,\s\%]", "", clean).strip()
+    try:
+        res = eval(clean, {"__builtins__": None}, safe_dict)  # nosec
+        return {"expression": clean, "result": res, "ok": True}
+    except Exception as exc:
+        return {"expression": expr, "error": str(exc), "ok": False}
+
+
+def tool_run_python(code: str) -> dict[str, Any]:
+    """Execute Python snippet safely and return output."""
+    stdout_buf = io.StringIO()
+    stderr_buf = io.StringIO()
+    start_t = time.perf_counter()
+    ok = True
+    try:
+        with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(stderr_buf):
+            exec_globals = {
+                "__name__": "__main__",
+                "math": math,
+                "time": time,
+                "json": json,
+            }
+            exec(code, exec_globals)
+    except Exception as exc:
+        ok = False
+        stderr_buf.write(str(exc))
+    elapsed_ms = round((time.perf_counter() - start_t) * 1000, 2)
+    return {
+        "ok": ok,
+        "stdout": stdout_buf.getvalue().strip(),
+        "stderr": stderr_buf.getvalue().strip(),
+        "elapsed_ms": elapsed_ms,
+    }
+
+
+def tool_memory_query(query: str, k: int = 5) -> dict[str, Any]:
+    """Query content-addressable memory chunks."""
+    try:
+        from nexus.infrastructure.adapters.persistence.agent_memory_store import (
+            AgentMemoryStore,
+        )
+
+        store = AgentMemoryStore(ROOT_DIR / "agent_memory.json")
+        chunks = store.search(query, k=k) if hasattr(store, "search") else store.latest(n=k)
+        return {
+            "count": len(chunks),
+            "chunks": [c.to_dict() if hasattr(c, "to_dict") else str(c) for c in chunks],
+        }
+    except Exception as exc:
+        return {"error": str(exc), "chunks": []}
+
+
+_BINARY_EXTS = {
+    ".exe",
+    ".dll",
+    ".node",
+    ".pyd",
+    ".so",
+    ".dylib",
+    ".zip",
+    ".7z",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".ico",
+    ".pdf",
+    ".woff",
+    ".woff2",
+    ".db",
+    ".sqlite",
+}
+_SECRET_NAMES = {".env", ".dev.vars"}
+
+
+def _safe_repo_path(raw: str) -> Path | None:
+    """Resolve a user-supplied path to inside ROOT_DIR; None when refused."""
+    raw = (raw or "").strip().strip('"').strip("'")
+    if not raw:
+        return None
+    try:
+        p = Path(raw)
+        if not p.is_absolute():
+            p = ROOT_DIR / p
+        resolved = p.resolve()
+    except OSError:
+        return None
+    root = ROOT_DIR.resolve()
+    if root != resolved and root not in resolved.parents:
+        return None
+    if resolved.name.lower() in _SECRET_NAMES:
+        return None
+    if resolved.suffix.lower() in _BINARY_EXTS:
+        return None
+    return resolved
+
+
+def _extract_path_hint(query: str) -> str:
+    """Pull the most path-like token out of a natural-language request."""
+    m = re.search(r"[A-Za-z]:\\[^\s\"']*", query)
+    if m:
+        return m.group(0)
+    m = re.search(r"[\w./\\-]+\.[A-Za-z0-9]{1,6}\b", query)
+    if m:
+        return m.group(0)
+    return ""
+
+
+def tool_read_repo(query: str) -> dict[str, Any]:
+    """Read a file or list a directory inside the repo, or give an overview."""
+    hint = _extract_path_hint(query)
+    target = _safe_repo_path(hint) if hint else None
+    lowered = query.lower()
+
+    if target and target.is_file():
+        try:
+            size = target.stat().st_size
+            text = target.read_text(encoding="utf-8", errors="replace")[:8000]
+            return {
+                "kind": "file",
+                "path": str(target.relative_to(ROOT_DIR)),
+                "bytes": size,
+                "truncated": size > 8000,
+                "excerpt": text,
+            }
+        except OSError as exc:
+            return {"kind": "error", "path": str(target), "error": str(exc)[:200]}
+
+    if target and target.is_dir():
+        try:
+            entries = []
+            for child in sorted(target.iterdir())[:60]:
+                try:
+                    entries.append(
+                        {
+                            "name": child.name,
+                            "type": "dir" if child.is_dir() else "file",
+                            "bytes": child.stat().st_size if child.is_file() else 0,
+                        }
+                    )
+                except OSError:
+                    continue
+            return {
+                "kind": "directory",
+                "path": str(target.relative_to(ROOT_DIR)),
+                "count": len(entries),
+                "entries": entries,
+            }
+        except OSError as exc:
+            return {"kind": "error", "path": str(target), "error": str(exc)[:200]}
+
+    if not target and any(kw in lowered for kw in ("project", "repo", "repository", "structure", "overview")):
+        try:
+            top = sorted(
+                (
+                    {"name": c.name, "type": "dir" if c.is_dir() else "file"}
+                    for c in ROOT_DIR.iterdir()
+                    if not c.name.startswith(".") and c.name not in {"node_modules", "__pycache__"}
+                ),
+                key=lambda e: (e["type"] != "dir", e["name"].lower()),
+            )[:40]
+        except OSError:
+            top = []
+        return {
+            "kind": "overview",
+            "path": ".",
+            "note": "repo root listing - ask to read a specific file for analysis",
+            "entries": top,
+        }
+
+    return {"kind": "refused", "hint": hint[:120]}

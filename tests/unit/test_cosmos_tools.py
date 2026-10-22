@@ -36,6 +36,7 @@ def repo_root(be, monkeypatch, tmp_path):
     (tmp_path / ".env").write_text("SECRET=1\n", encoding="utf-8")
     (tmp_path / "binary.dll").write_bytes(b"MZ\x00\x00")
     monkeypatch.setattr(be, "ROOT_DIR", tmp_path)
+    monkeypatch.setattr(be.tools_service, "ROOT_DIR", tmp_path)
     return tmp_path
 
 

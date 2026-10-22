@@ -47,7 +47,7 @@ class TestJudge:
         async def fake_llm(system, messages):
             return "SCORE: 8.5\nCRITIQUE: covers the rubric well", ""
 
-        monkeypatch.setattr(be, "_call_llm", fake_llm)
+        monkeypatch.setattr(be.llm_service, "_call_llm", fake_llm)
         verdict = await be._judge_answer("q", "a" * 80, ["point one", "point two"])
         assert verdict["score"] == 8.5
         assert verdict["judge"] == "llm"
@@ -58,7 +58,7 @@ class TestJudge:
         async def fake_llm(system, messages):
             return "SCORE: 42\nCRITIQUE: overconfident", ""
 
-        monkeypatch.setattr(be, "_call_llm", fake_llm)
+        monkeypatch.setattr(be.llm_service, "_call_llm", fake_llm)
         verdict = await be._judge_answer("q", "a", ["p"])
         assert verdict["score"] == 10.0
 
@@ -67,7 +67,7 @@ class TestJudge:
         async def broken_llm(system, messages):
             raise RuntimeError("LLM offline")
 
-        monkeypatch.setattr(be, "_call_llm", broken_llm)
+        monkeypatch.setattr(be.llm_service, "_call_llm", broken_llm)
         verdict = await be._judge_answer("q", "word " * 100, ["p"])
         assert verdict["judge"] == "heuristic"
         assert verdict["score"] > 3.0
@@ -76,7 +76,7 @@ class TestJudge:
 class TestExemplars:
     def test_only_high_scores_with_overlap(self, be, monkeypatch):
         monkeypatch.setattr(
-            be,
+            be.training_service,
             "RL_STATE",
             {
                 "pairs": [
@@ -92,21 +92,21 @@ class TestExemplars:
         assert picks[0]["score"] == 9.5
 
     def test_empty_when_no_pairs(self, be, monkeypatch):
-        monkeypatch.setattr(be, "RL_STATE", {"pairs": [], "daily": {}})
+        monkeypatch.setattr(be.training_service, "RL_STATE", {"pairs": [], "daily": {}})
         assert be._pick_exemplars("anything") == []
 
 
 class TestRewardStore:
     def test_record_pair_updates_daily_log(self, be, monkeypatch, tmp_path):
         path = tmp_path / "rl_state.json"
-        monkeypatch.setattr(be, "RL_STATE_PATH", path)
-        monkeypatch.setattr(be, "RL_STATE", {"pairs": [], "daily": {}})
+        monkeypatch.setattr(be.training_service, "RL_STATE_PATH", path)
+        monkeypatch.setattr(be.training_service, "RL_STATE", {"pairs": [], "daily": {}})
 
         entry = be._record_training_pair("q?", "a" * 60, 7.5, "decent", "test", "m1")
         assert entry["score"] == 7.5
         assert path.is_file(), "state must persist"
         saved = path.read_text(encoding="utf-8")
         assert "rl" in saved or "score" in saved
-        assert len(be.RL_STATE["pairs"]) == 1
+        assert len(be.training_service.RL_STATE["pairs"]) == 1
         today = entry["ts"][:10]
-        assert be.RL_STATE["daily"][today]["count"] == 1
+        assert be.training_service.RL_STATE["daily"][today]["count"] == 1
