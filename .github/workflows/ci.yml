@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -60,7 +60,7 @@ jobs:
           python-version: "3.11"
       - run: pip install import-linter
       - name: Check dependency rules (domain and application must not import infrastructure)
-        run: lint-imports --config ../.github/workflows/importlinter.toml
+        run: lint-imports --config ../pyproject.toml
         working-directory: src
 
   security:

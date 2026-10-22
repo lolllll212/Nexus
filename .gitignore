@@ -133,3 +133,8 @@ backend/llm_state.json
 
 # RL training reward store (accumulated scored pairs)
 backend/rl_training_state.json
+
+# Frontend build output (web/ vite -> frontend/dist) - built by CI/Vercel, never committed.
+# The vanilla cosmos pages (frontend/*.html) intentionally stay buildless; a Vite
+# multi-page migration was evaluated and deferred (see repo upgrade notes).
+frontend/dist/

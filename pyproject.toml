@@ -72,3 +72,18 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
 ignore = ["E501"]
+
+[tool.importlinter]
+root_package = "nexus"
+
+[[tool.importlinter.contracts]]
+name = "domain-is-independent"
+type = "forbidden"
+source_modules = ["nexus.domain"]
+forbidden_modules = ["nexus.infrastructure"]
+
+[[tool.importlinter.contracts]]
+name = "application-is-independent"
+type = "forbidden"
+source_modules = ["nexus.application"]
+forbidden_modules = ["nexus.infrastructure"]
