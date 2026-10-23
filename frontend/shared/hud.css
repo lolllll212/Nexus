@@ -1,0 +1,29 @@
+/* NEXUS shared HUD styles — the opencode-style faint reasoning block, shared by
+   index.html, holo.html and chat.html. */
+
+.bubble .thinking-block {
+  margin: 2px 0 9px;
+  padding: 8px 10px;
+  border-left: 2px solid rgba(125, 255, 217, 0.25);
+  background: rgba(125, 255, 217, 0.04);
+  border-radius: 6px;
+  text-align: left;
+}
+
+.thinking-label {
+  font-size: 8.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(125, 255, 217, 0.45);
+  margin-bottom: 4px;
+}
+
+.thinking-body {
+  font-size: 10px;
+  line-height: 1.6;
+  color: #5a6b62;
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

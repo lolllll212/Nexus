@@ -138,3 +138,7 @@ backend/rl_training_state.json
 # The vanilla cosmos pages (frontend/*.html) intentionally stay buildless; a Vite
 # multi-page migration was evaluated and deferred (see repo upgrade notes).
 frontend/dist/
+
+# Cosmos MPA pipeline (frontend/)
+frontend/node_modules/
+frontend/dist-cosmos/

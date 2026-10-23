@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <title>NEXUS â€” COGNITIVE OS</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="shared/hud.css">
+<script type="module" src="shared/voice.js"></script>
 <style>
   :root {
     --bg-deep: #04060a;
@@ -1567,18 +1569,7 @@ if (document.readyState === 'loading') {
   loadDockModels();
 }
 
-/* opencode-style faint reasoning block */
-(function ensureThinkingStyles() {
-  if (document.getElementById('nexus-thinking-styles')) return;
-  const st = document.createElement('style');
-  st.id = 'nexus-thinking-styles';
-  st.textContent = [
-    '.bubble .thinking-block{margin:2px 0 9px;padding:8px 10px;border-left:2px solid rgba(125,255,217,.25);background:rgba(125,255,217,.04);border-radius:6px;text-align:left;}',
-    '.thinking-label{font-size:8.5px;letter-spacing:.22em;text-transform:uppercase;color:rgba(125,255,217,.45);margin-bottom:4px;}',
-    '.thinking-body{font-size:10px;line-height:1.6;color:#5a6b62;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;}'
-  ].join('');
-  document.head.appendChild(st);
-})();
+
 
 async function sendChat(raw) {
   const text = (raw || $('msg').value || '').trim();
@@ -1729,53 +1720,10 @@ function caption(text, holdMs) {
   caption._tm = setTimeout(() => c.classList.remove('show'), holdMs || 3000);
 }
 
-/* Preferred clear voices: Windows natural voices first, then Google en-US. */
-function pickVoice() {
-  const vs = speechSynthesis.getVoices() || [];
-  const score = v => {
-    const n = (v.name || '').toLowerCase();
-    if (/natural|online/.test(n) && /en[-_ ]us|english/.test(n + ' ' + v.lang)) return 0;
-    if (/aria|guy|emma|jenny/.test(n)) return 1;
-    if (v.lang === 'en-US' && /google/.test(n)) return 2;
-    if (v.lang === 'en-US') return 3;
-    if (/^en/.test(v.lang)) return 4;
-    return 9;
-  };
-  return vs.slice().sort((a, b) => score(a) - score(b))[0] || null;
-}
+/* Voice helpers moved to /shared/voice.js (single source of truth). */
+const pickVoice = () => NEXUS_VOICE.pickVoice();
+const speakable = t => NEXUS_VOICE.speakable(t);
 
-/* Strip markdown/table noise so the voice reads clean sentences. */
-function speakable(text) {
-  return String(text || '')
-    .replace(/```[\s\S]*?```/g, ' code block ')
-    .replace(/^\s*FINAL ANSWER:\s*/i, '')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\*([^*]+)\*/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/https?:\/\/\S+/g, ' a link ')
-    .replace(/[|#>~_*]/g, ' ')
-    .replace(/\s{2,}/g, ' ')
-    .trim()
-    .slice(0, 420);
-}
-
-function speak(text) {
-  caption(speakable(text));
-  if (isMuted || !window.speechSynthesis) return;
-  try {
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(speakable(text));
-    const v = pickVoice();
-    if (v) { u.voice = v; u.lang = v.lang; }
-    u.rate = 0.98; u.pitch = 1.0;
-    u.onstart = () => setDockStatus('SPEAKING');
-    u.onend = () => setDockStatus('IDLE');
-    u.onerror = () => setDockStatus('IDLE');
-    speechSynthesis.speak(u);
-  } catch (_) {}
-}
-if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => {};
 
 /* Two-Way Buffered Voice Recognition */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;

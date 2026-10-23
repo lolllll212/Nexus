@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="stylesheet" href="shared/hud.css">
+<script type="module" src="shared/voice.js"></script>
 <title>NEXUS — Talk to the Brain</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300f0ff'><circle cx='12' cy='12' r='10' stroke='%2300f0ff' stroke-width='2' fill='none'/><circle cx='12' cy='12' r='4' fill='%2300f0ff'/></svg>" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -114,10 +116,6 @@
     background: var(--glass); border: 1px solid var(--line); color: #cfe9e4;
     border-bottom-left-radius: 5px; box-shadow: 0 10px 34px rgba(0,0,0,.5);
   }
-  /* opencode-style faint reasoning block */
-  .bubble .thinking-block { margin: 2px 0 9px; padding: 8px 10px; border-left: 2px solid rgba(0,240,255,.22); background: rgba(0,240,255,.04); border-radius: 6px; }
-  .thinking-label { font-size: 8.5px; letter-spacing: .22em; text-transform: uppercase; color: rgba(0,240,255,.4); margin-bottom: 4px; }
-  .thinking-body { font-size: 10px; line-height: 1.65; color: #5a6b62; max-height: 120px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
   .meta { font-size: 9px; letter-spacing: .22em; color: #54707c; margin-bottom: 7px; display: flex; gap: 10px; align-items: center; }
   .row.user .meta { justify-content: flex-end; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
@@ -403,46 +401,10 @@ function typing() {
   return row;
 }
 
-/* Preferred clear voices: Windows natural voices first, then Google en-US. */
-function pickVoice() {
-  const vs = speechSynthesis.getVoices() || [];
-  const score = v => {
-    const n = (v.name || '').toLowerCase();
-    if (/natural|online/.test(n) && /en[-_ ]us|english/.test(n + ' ' + v.lang)) return 0;
-    if (/aria|guy|emma|jenny/.test(n)) return 1;
-    if (v.lang === 'en-US' && /google/.test(n)) return 2;
-    if (v.lang === 'en-US') return 3;
-    if (/^en/.test(v.lang)) return 4;
-    return 9;
-  };
-  return vs.slice().sort((a, b) => score(a) - score(b))[0] || null;
-}
+/* Voice helpers moved to /shared/voice.js (single source of truth). */
+const pickVoice = () => NEXUS_VOICE.pickVoice();
+const speakable = t => NEXUS_VOICE.speakable(t);
 
-/* Strip markdown/table noise so the voice reads clean sentences. */
-function speakable(text) {
-  return String(text || '')
-    .replace(/```[\s\S]*?```/g, ' code block ')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\*([^*]+)\*/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/https?:\/\/\S+/g, ' a link ')
-    .replace(/[|#>~_*]/g, ' ')
-    .replace(/\s{2,}/g, ' ')
-    .trim()
-    .slice(0, 420);
-}
-
-function speak(text) {
-  if (!voiceOut.on || !('speechSynthesis' in window)) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(speakable(text));
-  const v = pickVoice();
-  if (v) { u.voice = v; u.lang = v.lang; }
-  u.rate = 0.98; u.pitch = 1.0;
-  speechSynthesis.speak(u);
-}
-if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => {};
 
 async function ask(text) {
   text = (text || '').trim();

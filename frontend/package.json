@@ -1,0 +1,17 @@
+{
+  "name": "nexus-cosmos-frontend",
+  "private": true,
+  "type": "module",
+  "description": "Cosmos MPA pipeline for index/holo/chat (python backend serves them buildless; vite adds HMR + optimized builds)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^8.3.1"
+  },
+  "dependencies": {
+    "nexus-ai-workshop-os": "file:.."
+  }
+}
