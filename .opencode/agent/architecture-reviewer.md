@@ -43,3 +43,27 @@ Never edit files. Report findings as a numbered list, each with file:line, sever
 
 ## Related
 - [[Native, managed, and packaged artifacts]]
+
+## Related
+- [[handoff]]
+
+## Related
+- [[NEXUS Blueprints]]
+
+## Related
+- [[Connection and task recovery]]
+
+## Related
+- [[Browser and Electron runtime observation]]
+
+## Related
+- [[REA]]
+
+## Related
+- [[Agent Onboarding]]
+
+## Related
+- [[Architecture Map]]
+
+## Related
+- [[Autonomous Goals - Self-Directed Work with Guardrails]]

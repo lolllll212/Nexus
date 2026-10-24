@@ -302,6 +302,26 @@ def _synthesize_jarvis_answer(
         )
         return ans, [], ["repo_read"]
 
+    # 1c. DEEP RESEARCH
+    if intent == "research":
+        res = tool_data.get("research", {})
+        if res.get("ok"):
+            srcs = ", ".join(res.get("sources", [])) or "repository knowledge"
+            ans = (
+                f"Research complete, sir. The full note is saved to **{res['note_path']}** "
+                f"and the knowledge graph has been re-indexed.\n\n"
+                f"{res.get('summary', '')[:500]}\n\n"
+                f"Sub-questions explored: {'; '.join(res.get('sub_queries', [])[:3])}. "
+                f"Sources: {srcs}."
+            )
+            return ans, [], ["deep_research"]
+        ans = (
+            "The research pipeline hit a snag, sir: "
+            + str(res.get("error", "unknown failure"))
+            + " I can still answer from repository knowledge in the meantime."
+        )
+        return ans, [], ["deep_research"]
+
     # 2. GIT STATUS & COMMITS
     if intent == "git":
         git = tool_data.get("git", {})
@@ -1078,6 +1098,11 @@ async def chat_endpoint(req: Request):
         intent = "repo"
         tool_data["repo"] = tools_service.tool_read_repo(query)
 
+    # 1c. Deep Research (broad multi-source investigation)
+    elif any(kw in q_lower for kw in ("research", "deep dive", "investigate", "look up")):
+        intent = "research"
+        tool_data["research"] = await tools_service.deep_research(query)
+
     # 2. Git & Working Tree
     elif any(
         kw in q_lower
@@ -1232,11 +1257,15 @@ async def chat_endpoint(req: Request):
 
 # ── Routers (Upgrade 1): chat + cosmos remain in main; the rest are modular ──
 
+from backend.routers import holo as holo_router  # noqa: E402
 from backend.routers import models as models_router  # noqa: E402
 from backend.routers import rea as rea_router  # noqa: E402
+from backend.routers import research as research_router  # noqa: E402
 from backend.routers import training as training_router  # noqa: E402
 
+app.include_router(holo_router.router)
 app.include_router(models_router.router)
+app.include_router(research_router.router)
 app.include_router(training_router.router)
 app.include_router(rea_router.router)
 

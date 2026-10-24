@@ -85,7 +85,7 @@ Run `python scripts/ceo_loop.py --interval 300` to enter continuous mode:
 
 Never dispatch tasks without a plan. The workflow:
 
-1. **Plan**: write a JSON plan file (copy `docs/plan-template.json`). One line per task. Each task lists its `files` — scopes must not overlap between agents.
+1. **Plan**: write a JSON plan file (copy `config/plans/plan-template.json`). One line per task. Each task lists its `files` — scopes must not overlap between agents.
 2. **Validate**: `python scripts/agent_comm.py plan --agent ceo --plan-file <file> --check-only`. Fix overlaps before proceeding.
 3. **Dispatch**: same command without `--check-only`. All subtasks enter the queue atomically.
 4. **Monitor**: `python scripts/agent_comm.py plan-status --plan-id <id>` or `watch`.

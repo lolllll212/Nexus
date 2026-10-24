@@ -31,3 +31,11 @@ class BlueprintSaveRequest(BaseModel):
     verify: list[str] = []
     tools: list[str] = []
     tags: str = "rea"
+
+
+class ResearchRequest(BaseModel):
+    query: str
+
+
+class ExtractExamplesRequest(BaseModel):
+    note_path: str = ""

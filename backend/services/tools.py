@@ -328,3 +328,115 @@ def tool_read_repo(query: str) -> dict[str, Any]:
         }
 
     return {"kind": "refused", "hint": hint[:120]}
+
+
+# ─── Deep research (research-and-train pipeline) ─────────────────────────────
+
+_URL_RE = re.compile(r"https?://[^\s\"')\]]+")
+
+
+def _fetch_reader_text(url: str, timeout: float = 25.0) -> str:
+    """Fetch a page as clean text via the free Jina Reader (no API key)."""
+    import httpx
+
+    try:
+        with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+            resp = client.get(f"https://r.jina.ai/{url}", headers={"Accept": "text/plain"})
+            if resp.status_code == 200:
+                return resp.text[:6000]
+    except Exception:
+        pass
+    return ""
+
+
+def _trigger_indexer() -> bool:
+    """Regenerate graph-data.js + holo.json so new notes hit RAG + the graph."""
+    try:
+        subprocess.run(
+            [sys.executable, str(BACKEND_DIR / "indexer.py")],
+            cwd=str(ROOT_DIR),
+            timeout=120,
+            capture_output=True,
+        )
+        return True
+    except Exception:
+        return False
+
+
+async def deep_research(query: str, max_depth: int = 3) -> dict:
+    """Break a question into sub-queries, fetch any provided URLs via the free
+    Jina Reader, synthesize a cited Markdown note into docs/notes/, and
+    re-index so the knowledge is immediately RAG-searchable.
+
+    No search API key is configured here, so live fetching is URL-driven
+    (links found in the query); planning and synthesis use the active LLM.
+    """
+    from backend.services import llm as llm_service
+
+    # 1. Plan sub-queries with the LLM.
+    sub_queries: list[str] = []
+    try:
+        content, _r = await llm_service._call_llm(
+            "You are a research planner. Break the user's question into at most "
+            f"{max_depth} focused sub-questions. Reply ONLY with a JSON array of "
+            "strings, no prose.",
+            [{"role": "user", "content": query}],
+        )
+        match = re.search(r"\[.*\]", content or "", re.S)
+        arr = json.loads(match.group(0)) if match else []
+        if isinstance(arr, list):
+            sub_queries = [str(q) for q in arr][:max_depth]
+    except Exception:
+        pass
+    if not sub_queries:
+        sub_queries = [query]
+
+    # 2. Fetch live sources when the query carries URLs (reader, no key).
+    urls = [u.rstrip(".,;)") for u in _URL_RE.findall(query)][:3]
+    sources: list[dict] = []
+    for u in urls:
+        text = _fetch_reader_text(u)
+        if text.strip():
+            sources.append({"url": u, "excerpt": text[:300]})
+
+    # 3. Synthesize the research note.
+    sources_ctx = "\n\n".join(f"[{s['url']}]\n{s['excerpt']}" for s in sources) or "(no live sources)"
+    try:
+        note_md, _r = await llm_service._call_llm(
+            "You are NEXUS's deep-research analyst. Write a structured Markdown "
+            "research note answering the question: a short summary, one section "
+            "per sub-question, a 'Key findings' bullet list, then 'Sources'. "
+            "Cite provided live excerpts where used. Max ~60 lines.\n\n"
+            f"QUESTION: {query}\n\nSUB-QUESTIONS:\n"
+            + "\n".join(f"- {q}" for q in sub_queries)
+            + f"\n\nLIVE SOURCE EXCERPTS:\n{sources_ctx}",
+            [{"role": "user", "content": "Write the research note now."}],
+        )
+    except Exception as exc:
+        return {"ok": False, "error": f"research synthesis failed: {exc}"}
+
+    if not (note_md or "").strip():
+        return {"ok": False, "error": "empty research synthesis"}
+
+    # 4. Save under docs/notes/ - the indexed knowledge home.
+    slug = re.sub(r"[^a-z0-9]+", "-", query.lower()).strip("-")[:40] or "note"
+    notes_dir = ROOT_DIR / "docs" / "notes"
+    notes_dir.mkdir(parents=True, exist_ok=True)
+    note_path = notes_dir / f"research-{slug}.md"
+    counter = 1
+    while note_path.exists():
+        note_path = notes_dir / f"research-{slug}-{counter}.md"
+        counter += 1
+    note_path.write_text(f"# Research: {query}\n\n{note_md.strip()}\n", encoding="utf-8")
+
+    # 5. Refresh the knowledge graph so the note is searchable immediately.
+    indexed = _trigger_indexer()
+
+    return {
+        "ok": True,
+        "note_path": str(note_path.relative_to(ROOT_DIR)),
+        "sub_queries": sub_queries,
+        "sources": [s["url"] for s in sources],
+        "indexed": indexed,
+        "summary": note_md.strip()[:400],
+    }

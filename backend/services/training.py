@@ -278,3 +278,87 @@ def _pick_exemplars(query: str, k: int = 2) -> list[dict]:
 
     best.sort(key=lambda p: (overlap(p), p.get("score", 0)), reverse=True)
     return [p for p in best[:k] if overlap(p) > 0]
+
+
+# ─── Self-training: extract coding examples from research notes ─────────────
+
+EXAMPLES_PATH = ROOT_DIR / "data" / "coding_examples.json"
+
+
+def _load_examples() -> list[dict]:
+    try:
+        if EXAMPLES_PATH.is_file():
+            data = json.loads(EXAMPLES_PATH.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                return data
+    except Exception:
+        pass
+    return []
+
+
+def _save_examples(examples: list[dict]) -> None:
+    EXAMPLES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    EXAMPLES_PATH.write_text(json.dumps(examples, indent=2), encoding="utf-8")
+
+
+async def extract_examples(note_path: str = "") -> dict:
+    """Pull structured {instruction, input, output} coding examples from a
+    research note (newest research note when no path given) and append them,
+    deduplicated, to data/coding_examples.json - the self-training dataset."""
+    notes_dir = ROOT_DIR / "docs" / "notes"
+    if note_path:
+        candidate = ROOT_DIR / note_path
+        target = candidate if candidate.is_file() else notes_dir / note_path
+    else:
+        research_notes = sorted(notes_dir.glob("research-*.md")) if notes_dir.is_dir() else []
+        if not research_notes:
+            return {"ok": False, "error": "no research notes found to extract from"}
+        target = research_notes[-1]
+
+    try:
+        note_text = target.read_text(encoding="utf-8")[:6000]
+    except OSError as exc:
+        return {"ok": False, "error": f"cannot read note: {exc}"}
+
+    try:
+        content, _r = await llm_service._call_llm(
+            "You are a training-data curator. From the research note below, extract "
+            "up to 4 concrete, high-value coding/question examples as a JSON array "
+            'of objects {"instruction": str, "input": str, "output": str}. Reply '
+            "ONLY with the JSON array.",
+            [{"role": "user", "content": note_text}],
+        )
+        match = re.search(r"\[.*\]", content or "", re.S)
+        arr = json.loads(match.group(0)) if match else []
+    except Exception as exc:
+        return {"ok": False, "error": f"extraction synthesis failed: {exc}"}
+
+    if not isinstance(arr, list):
+        return {"ok": False, "error": "extraction returned a non-list payload"}
+
+    known = {e.get("instruction") for e in _load_examples()}
+    added = []
+    for item in arr[:4]:
+        if (
+            isinstance(item, dict)
+            and item.get("instruction")
+            and item.get("output")
+            and item["instruction"] not in known
+        ):
+            known.add(item["instruction"])
+            added.append(
+                {
+                    "instruction": str(item["instruction"])[:400],
+                    "input": str(item.get("input", ""))[:400],
+                    "output": str(item["output"])[:800],
+                }
+            )
+
+    if added:
+        _save_examples(_load_examples() + added)
+    return {
+        "ok": True,
+        "note": str(target),
+        "added": len(added),
+        "total": len(_load_examples()),
+    }

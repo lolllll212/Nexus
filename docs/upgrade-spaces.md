@@ -2,7 +2,7 @@
 
 The multi-agent upgrade plan: ten spaces that turn NEXUS from a system with
 coordination scripts into one that operates autonomously around the clock. The
-plan of record is [`plan-upgrade-spaces.json`](plan-upgrade-spaces.json) — the
+plan of record is [`plan-upgrade-spaces.json`](../config/plans/plan-upgrade-spaces.json) — the
 CEO dispatched it as 11 subtasks (task-027..task-037) with no scope overlap, and
 every acceptance criterion includes the rule learned during the dispatch: **new
 `NEXUS_*` vars land documented in the same commit as the code that reads them**
@@ -91,7 +91,7 @@ python -m nexus.training.cli lora --run-eval   # evaluate now, not from a report
 observability adapter, enabled by `NEXUS_OTEL_ENABLED=true`), but nothing in
 `heal_loop.py` or the consensus protocol emits spans for heal iterations and
 consensus verdicts, and no Prometheus counters are exported. Owner: Xenom,
-dispatch in [`plan-upgrade-spaces.json`](plan-upgrade-spaces.json). This page's
+dispatch in [`plan-upgrade-spaces.json`](../config/plans/plan-upgrade-spaces.json). This page's
 status table is updated as it lands, and its env vars must arrive documented in
 the same commit as the code that reads them (the
 [ops table](architecture-map.md) + the

@@ -5,7 +5,7 @@ import asyncio
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from backend.schemas import TrainingJudgeRequest
+from backend.schemas import ExtractExamplesRequest, TrainingJudgeRequest
 from backend.services import llm as llm_service
 from backend.services import training as training_service
 
@@ -97,6 +97,15 @@ async def api_training_stats():
             "best_exemplars": [{"q": p["q"][:80], "score": p["score"]} for p in best],
         }
     )
+
+
+@router.post("/api/training/extract-examples")
+async def api_training_extract_examples(req: ExtractExamplesRequest):
+    """Extract {instruction, input, output} coding examples from a research note
+    (newest when no path given) into data/coding_examples.json - the
+    self-training dataset."""
+    result = await training_service.extract_examples(req.note_path)
+    return JSONResponse(result)
 
 
 _TRAINING_TASK: asyncio.Task | None = None
