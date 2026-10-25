@@ -265,6 +265,73 @@ def _extract_path_hint(query: str) -> str:
     return ""
 
 
+_HOME = Path.home()
+_DISCOVERY_SCAN_CAP = 2000  # entries examined per discovery call
+
+
+def _discover_sibling_root(token: str) -> Path | None:
+    """Find a sibling project directory by name under the user profile.
+
+    Read-only discovery, shallow (home + common dev folders, depth 2), capped.
+    Used when a query names a repo that is not inside NEXUS itself, e.g.
+    'look into the repo astra-x-main'.
+    """
+    token = (token or "").strip().lower().strip("\"'")
+    if len(token) < 3:
+        return None
+    candidates: list[Path] = []
+    seen: set[str] = set()
+    scanned = 0
+    try:
+        bases = [_HOME] + [
+            _HOME / n
+            for n in ("Downloads", "Documents", "Desktop", "Projects", "projects", "dev", "code", "repos")
+            if (_HOME / n).is_dir()
+        ]
+    except OSError:
+        return None
+    for base in bases:
+        try:
+            children = list(base.iterdir())
+        except OSError:
+            continue
+        for child in children:
+            if scanned >= _DISCOVERY_SCAN_CAP:
+                return candidates[0] if candidates else None
+            scanned += 1
+            if not child.is_dir() or child.name.startswith("."):
+                continue
+            if child.name.lower() == token and str(child) not in seen:
+                seen.add(str(child))
+                candidates.append(child)
+            try:
+                for grand in child.iterdir():
+                    if scanned >= _DISCOVERY_SCAN_CAP:
+                        break
+                    scanned += 1
+                    if grand.is_dir() and grand.name.lower() == token and str(grand) not in seen:
+                        seen.add(str(grand))
+                        candidates.append(grand)
+            except OSError:
+                continue
+    return candidates[0] if candidates else None
+
+
+def _extract_named_repo(query: str) -> str:
+    """Capture a bare repo/project name from phrases like 'the repo astra-x-main'."""
+    m = re.search(
+        r"(?:repo|repository|project|folder|directory)\s+(?:at\s+|called\s+|named\s+)?"
+        r"[\"']?([A-Za-z0-9][A-Za-z0-9._-]{2,60})[\"']?",
+        query,
+    )
+    if m:
+        token = m.group(1)
+        # Avoid generic words that are not repo names.
+        if token.lower() not in ("status", "structure", "root", "layout", "file", "files"):
+            return token
+    return ""
+
+
 def tool_read_repo(query: str) -> dict[str, Any]:
     """Read a file or list a directory inside the repo, or give an overview."""
     hint = _extract_path_hint(query)
@@ -307,6 +374,47 @@ def tool_read_repo(query: str) -> dict[str, Any]:
             }
         except OSError as exc:
             return {"kind": "error", "path": str(target), "error": str(exc)[:200]}
+
+    # Sibling-repo discovery: the query names a project that is not inside
+    # NEXUS (e.g. 'look into the repo astra-x-main'). Shallow, read-only scan
+    # under the user profile; inspection stays clamped under the discovered root.
+    named = _extract_named_repo(query) or (hint if hint and "." not in hint else "")
+    if named:
+        discovered = _discover_sibling_root(named)
+        if discovered is not None:
+            try:
+                entries = []
+                for child in sorted(discovered.iterdir())[:60]:
+                    try:
+                        entries.append(
+                            {
+                                "name": child.name,
+                                "type": "dir" if child.is_dir() else "file",
+                                "bytes": child.stat().st_size if child.is_file() else 0,
+                            }
+                        )
+                    except OSError:
+                        continue
+                readme = discovered / "README.md"
+                excerpt = ""
+                if readme.is_file():
+                    excerpt = readme.read_text(encoding="utf-8", errors="replace")[:800]
+                return {
+                    "kind": "directory",
+                    "external": True,
+                    "path": str(discovered),
+                    "count": len(entries),
+                    "entries": entries,
+                    "readme_excerpt": excerpt,
+                    "note": "sibling repository discovered on the local disk (read-only)",
+                }
+            except OSError as exc:
+                return {"kind": "error", "path": str(discovered), "error": str(exc)[:200]}
+        return {
+            "kind": "not-found",
+            "searched": named,
+            "note": "no directory with that name was found under the user profile",
+        }
 
     if not target and any(kw in lowered for kw in ("project", "repo", "repository", "structure", "overview")):
         try:

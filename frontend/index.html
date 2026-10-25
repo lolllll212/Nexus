@@ -1589,6 +1589,22 @@ function caption(text, holdMs) {
 const pickVoice = () => NEXUS_VOICE.pickVoice();
 const speakable = t => NEXUS_VOICE.speakable(t);
 
+function speak(text) {
+  caption(NEXUS_VOICE.speakable(text));
+  if (isMuted || !window.speechSynthesis) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(NEXUS_VOICE.speakable(text));
+    const v = NEXUS_VOICE.pickVoice();
+    if (v) { u.voice = v; u.lang = v.lang; }
+    u.rate = 0.98; u.pitch = 1.0;
+    u.onstart = () => setDockStatus('SPEAKING');
+    u.onend = () => setDockStatus('IDLE');
+    u.onerror = () => setDockStatus('IDLE');
+    speechSynthesis.speak(u);
+  } catch (_) {}
+}
+
 
 /* Two-Way Buffered Voice Recognition */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;

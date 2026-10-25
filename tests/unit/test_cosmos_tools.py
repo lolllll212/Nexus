@@ -18,9 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture(scope="module")
 def be():
-    spec = importlib.util.spec_from_file_location(
-        "nexus_cosmos_backend", REPO_ROOT / "backend" / "main.py"
-    )
+    spec = importlib.util.spec_from_file_location("nexus_cosmos_backend", REPO_ROOT / "backend" / "main.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules["nexus_cosmos_backend"] = mod
     spec.loader.exec_module(mod)
@@ -108,3 +106,42 @@ class TestRouterIntent:
 
 async def _async_false():
     return False
+
+
+class TestSiblingDiscovery:
+    def test_discovers_sibling_repo_by_name(self, be, monkeypatch, tmp_path):
+        home = tmp_path / "home"
+        (home / "Astra-X-main").mkdir(parents=True)
+        (home / "Astra-X-main" / "main.py").write_text("print(1)", encoding="utf-8")
+        monkeypatch.setattr(be.tools_service, "_HOME", home)
+        result = be.tool_read_repo("use tools to look into the repo astra-x-main in the local disk")
+        assert result["kind"] == "directory"
+        assert result["external"] is True
+        assert "Astra-X-main" in result["path"]
+
+    def test_discovery_is_case_insensitive(self, be, monkeypatch, tmp_path):
+        home = tmp_path / "home"
+        (home / "My-Project").mkdir(parents=True)
+        monkeypatch.setattr(be.tools_service, "_HOME", home)
+        result = be.tool_read_repo("look into the repo my-project please")
+        assert result["kind"] == "directory"
+
+    def test_unknown_name_reports_not_found(self, be, monkeypatch, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir(parents=True)
+        monkeypatch.setattr(be.tools_service, "_HOME", home)
+        result = be.tool_read_repo("look into the repo does-not-exist-xyz")
+        assert result["kind"] == "not-found"
+        assert "does-not-exist-xyz" in result["searched"]
+
+    def test_discovery_scan_capped(self, be, monkeypatch, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir(parents=True)
+        for i in range(50):
+            (home / f"dir{i}").mkdir()
+            for j in range(5):
+                (home / f"dir{i}" / f"sub{j}").mkdir()
+        monkeypatch.setattr(be.tools_service, "_HOME", home)
+        monkeypatch.setattr(be.tools_service, "_DISCOVERY_SCAN_CAP", 30)
+        result = be.tool_read_repo("look into the repo dir49")
+        assert result["kind"] in ("not-found", "directory")  # cap respected, no hang

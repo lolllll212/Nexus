@@ -67,3 +67,27 @@ Never edit files. Report findings as a numbered list, each with file:line, sever
 
 ## Related
 - [[Autonomous Goals - Self-Directed Work with Guardrails]]
+
+## Related
+- [[handoff]]
+
+## Related
+- [[REA]]
+
+## Related
+- [[Clean Architecture & The Dependency Rule]]
+
+## Related
+- [[MCP Server]]
+
+## Related
+- [[Synthesis: vite pipline read the nexus repo]]
+
+## Related
+- [[NEXUS Architecture Documentation]]
+
+## Related
+- [[Security & Secrets]]
+
+## Related
+- [[Multi-Agent Swarm]]

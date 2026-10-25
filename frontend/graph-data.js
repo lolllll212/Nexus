@@ -192,59 +192,73 @@ const GRAPH = {
     },
     {
       "id": 27,
+      "label": "Chat Synthesis",
+      "group": "docs",
+      "file": "docs/notes/chat-synthesis.md",
+      "excerpt": "Communication link disrupted: speak is not defined"
+    },
+    {
+      "id": 28,
       "label": "Synthesis: Hello Nexus.",
       "group": "docs",
       "file": "docs/notes/synthesis-hello-nexus.md",
       "excerpt": "Hello Nexus. Good day, sir. All N.E.X.U.S. cognitive systems are operating at nominal parameters. • **Knowledge Graph**: 31 constellations synchronized • **Cosmos Mesh**: 8 automation joints online • **Multi-Agent Swarm**: Astra, Tron, and Xenom on standby • **Inference Cortex**: Mode `connected` How may I be of assistance to you today, sir? You can inquire about repository architecture, request git status, examine active swarm tasks, run Python code, or trigger Cosmos cycles."
     },
     {
-      "id": 28,
+      "id": 29,
       "label": "Synthesis: vite pipline read the nexus repo",
       "group": "docs",
       "file": "docs/notes/synthesis-vite-pipline-read-the-nexus-repo.md",
       "excerpt": "vite pipline read the nexus repo on   C:\\Users\\Ashut\\Nexus Sir, the NEXUS repository at this path is a full-stack TypeScript project designed as an autonomous second brain. It integrates a Vite-based frontend with a Node.js backend, using CRDT state synchronization via `nexus_crdt.json` and `nexus_state.json` for distributed consistency. The repo supports multi-agent orchestration among opencode, Antigravity IDE, and GitHub Copilot, with structured planning and consensus states. It includes Docker containerization, CI/CD pipelines, and MkDocs-based documentation. Agent activity and memory are tracked through `agent_activity.jsonl` and `agent_memory.json`. Overall, it's a cohesive platform fo"
     },
     {
-      "id": 29,
+      "id": 30,
       "label": "REA (Reverse Engineer Anything)",
       "group": "docs",
       "file": "docs/rea.md",
       "excerpt": "NEXUS ships a **vendored, source-only copy of REA** under `vendor/rea/` and exposes it as a second MCP server so any connected agent (opencode, GitHub Copilot, Antigravity) gains reverse-engineering tools: inspect native binaries, Electron/JavaScript apps, .NET assemblies, Android APKs, firmware, websites, network captures, and more — with evidence attached to each finding. REA is upstream `rea-agents` v6.5.0 (MIT). See `vendor/rea/README.vendor.md` for provenance and what is / is not committed (`node_modules` and `dist` are build outputs and are git-ignored). The tool lives *inside the repo*, so a checkout is self-contained and offline after a one-time build. `vendor/rea/` is kept out of `s"
     },
     {
-      "id": 30,
+      "id": 31,
       "label": "NEXUS Architecture Documentation",
       "group": "docs",
       "file": "docs/README.md",
       "excerpt": "- [Dual-Loop Architecture](dual-loop.md) — the conscious/subconscious split - [Clean Architecture & Dependency Rule](clean-architecture.md) — the layering enforced by tests - [Memory System](memory.md) — synaptic graph + vector + working memory - [Dreaming Pipeline](dreaming.md) — the 4-phase overnight cycle - [Self-Evolution](self-evolution.md) — dynamic tool generation - [Autonomous Goals](autonomous-goals.md) — P2 budget/approval/audit guardrails - [Swarm](swarm.md) — P4 multi-agent leader/worker orchestration `/v1/chat` accepts images and audio and can reply in speech: - **Vision**: `image_urls: [\"https://.../a.png\"]` are attached to the user turn as OpenAI content blocks (`{\"type\": \"ima"
     },
     {
-      "id": 31,
+      "id": 32,
       "label": "Security & Secrets",
       "group": "docs",
       "file": "docs/security.md",
       "excerpt": "How NEXUS is hardened for production: what is enforced in code, what is a deployment responsibility, and the safe defaults to keep. Every `/v1/*` route requires a Bearer token validated against `NEXUS_API_KEYS`, a JSON map of `{key: {user_id, tenant_id, role}}`. - **Fail-closed.** `NEXUS_API_KEYS={}` means zero keys are configured, so every request is rejected with `401`. There is no \"auth disabled\" mode and no wildcard key. Configure at least one key before exposing the service. - **Roles.** `admin` and `user`. Admin-only routes additionally check the role; a valid `user` token is still rejected on admin surfaces. - **Identity → tenant.** The token's `tenant_id` scopes memory, graph, quotas"
     },
     {
-      "id": 32,
+      "id": 33,
       "label": "Self-Evolution - Dynamic Tool Generation",
       "group": "docs",
       "file": "docs/self-evolution.md",
       "excerpt": "Standard agents have fixed tools. NEXUS **builds its own**. When the ReAct loop meets a problem no tool solves, the brain can: ``` GenerateToolUseCase 1. Analyze problem -> ToolSpecRequest (name, description, examples) 2. LLM writes the Python source (a `solve(input_data) -> dict` function) 3. Test it in the Sandbox against its own example inputs 4. Deploy it through the DeploymentProvider (Local FastAPI; Railway/Vercel next) 5. Register it in the ToolRegistry -> permanently part of its toolkit ``` `DeploymentProvider` is a port. The container picks the adapter from `NEXUS_DEPLOY_PLATFORM`: | `NEXUS_DEPLOY_PLATFORM` | Adapter | |---|---| | unset / anything else | `LocalDeployer` | | `railway"
     },
     {
-      "id": 33,
+      "id": 34,
       "label": "Multi-Agent Swarm",
       "group": "docs",
       "file": "docs/swarm.md",
       "excerpt": "Sometimes one mind is not enough. A **swarm** is a leader agent plus a set of worker agents. The leader has no special powers in the code - it is just another agent - but by convention it is given the synthesis role. ``` ┌───────────────────────────────┐ │      SwarmCoordinatorUseCase   │ │        (application layer)      │ └───────────────┬───────────────┘ │ ┌───────────────┴───────────────┐ │                               │ PHASE 1: fan out              PHASE 2: synthesize bounded to max_workers        leader sees every sequential per worker         worker report │                               │ ┌─────┼─────┬─────┐                 │ ▼     ▼     ▼     ▼                 ▼ worker worker work"
     },
     {
-      "id": 34,
+      "id": 35,
       "label": "Upgrade Spaces",
       "group": "docs",
       "file": "docs/upgrade-spaces.md",
-      "excerpt": "The multi-agent upgrade plan: ten spaces that turn NEXUS from a system with coordination scripts into one that operates autonomously around the clock. The plan of record is [`plan-upgrade-spaces.json`](plan-upgrade-spaces.json) — the CEO dispatched it as 11 subtasks (task-027..task-037) with no scope overlap, and every acceptance criterion includes the rule learned during the dispatch: **new `NEXUS_*` vars land documented in the same commit as the code that reads them** (the [env-var guard](../tests/eval/test_docs_env_vars.py) enforces it). Status below is the measured state, not the plan's intent — this page is updated as each space lands on master. Nine of ten spaces are landed on master ("
+      "excerpt": "The multi-agent upgrade plan: ten spaces that turn NEXUS from a system with coordination scripts into one that operates autonomously around the clock. The plan of record is [`plan-upgrade-spaces.json`](../config/plans/plan-upgrade-spaces.json) — the CEO dispatched it as 11 subtasks (task-027..task-037) with no scope overlap, and every acceptance criterion includes the rule learned during the dispatch: **new `NEXUS_*` vars land documented in the same commit as the code that reads them** (the [env-var guard](../tests/eval/test_docs_env_vars.py) enforces it). Status below is the measured state, not the plan's intent — this page is updated as each space lands on master. Nine of ten spaces are la"
+    },
+    {
+      "id": 36,
+      "label": "NEXUS Voice Architecture (Input + Output)",
+      "group": "docs",
+      "file": "docs/voice.md",
+      "excerpt": "NEXUS speaks and listens entirely in the browser using the **Web Speech API** — no cloud speech service, no audio streaming to a server. The backend never touches audio; it only produces text, which the frontend vocalizes locally. - Engine: `SpeechRecognition` / `webkitSpeechRecognition` (Chrome, Edge). - Files: `frontend/shared/voice.js` (shared helpers), `frontend/chat.html` (standalone console), `frontend/index.html` + `frontend/holo.html` (command dock inside the Cognitive OS). - **chat.html mode — continuous conversation**: recognition runs with `continuous = true`; when the engine ends a session (silence or internal timeout) the page quietly restarts it while the mic is armed, so liste"
     }
   ],
   "links": [
@@ -294,7 +308,7 @@ const GRAPH = {
     },
     {
       "source": 0,
-      "target": 29
+      "target": 30
     },
     {
       "source": 0,
@@ -314,7 +328,31 @@ const GRAPH = {
     },
     {
       "source": 0,
+      "target": 19
+    },
+    {
+      "source": 0,
       "target": 24
+    },
+    {
+      "source": 0,
+      "target": 25
+    },
+    {
+      "source": 0,
+      "target": 29
+    },
+    {
+      "source": 0,
+      "target": 31
+    },
+    {
+      "source": 0,
+      "target": 32
+    },
+    {
+      "source": 0,
+      "target": 34
     },
     {
       "source": 1,
@@ -326,7 +364,7 @@ const GRAPH = {
     },
     {
       "source": 1,
-      "target": 29
+      "target": 30
     },
     {
       "source": 1,
@@ -342,7 +380,7 @@ const GRAPH = {
     },
     {
       "source": 2,
-      "target": 29
+      "target": 30
     },
     {
       "source": 2,
@@ -362,7 +400,7 @@ const GRAPH = {
     },
     {
       "source": 4,
-      "target": 29
+      "target": 30
     },
     {
       "source": 4,
@@ -374,7 +412,7 @@ const GRAPH = {
     },
     {
       "source": 5,
-      "target": 29
+      "target": 30
     },
     {
       "source": 5,
@@ -398,7 +436,7 @@ const GRAPH = {
     },
     {
       "source": 6,
-      "target": 29
+      "target": 30
     },
     {
       "source": 6,
@@ -410,7 +448,7 @@ const GRAPH = {
     },
     {
       "source": 6,
-      "target": 33
+      "target": 34
     },
     {
       "source": 7,
@@ -418,7 +456,7 @@ const GRAPH = {
     },
     {
       "source": 7,
-      "target": 29
+      "target": 30
     },
     {
       "source": 7,
@@ -438,7 +476,7 @@ const GRAPH = {
     },
     {
       "source": 8,
-      "target": 29
+      "target": 30
     },
     {
       "source": 8,
@@ -446,7 +484,7 @@ const GRAPH = {
     },
     {
       "source": 9,
-      "target": 29
+      "target": 30
     },
     {
       "source": 9,
@@ -454,11 +492,11 @@ const GRAPH = {
     },
     {
       "source": 9,
-      "target": 31
+      "target": 32
     },
     {
       "source": 10,
-      "target": 29
+      "target": 30
     },
     {
       "source": 10,
@@ -470,7 +508,7 @@ const GRAPH = {
     },
     {
       "source": 11,
-      "target": 29
+      "target": 30
     },
     {
       "source": 11,
@@ -486,7 +524,7 @@ const GRAPH = {
     },
     {
       "source": 12,
-      "target": 29
+      "target": 30
     },
     {
       "source": 12,
@@ -506,7 +544,7 @@ const GRAPH = {
     },
     {
       "source": 13,
-      "target": 29
+      "target": 30
     },
     {
       "source": 13,
@@ -530,7 +568,7 @@ const GRAPH = {
     },
     {
       "source": 14,
-      "target": 29
+      "target": 30
     },
     {
       "source": 14,
@@ -554,7 +592,7 @@ const GRAPH = {
     },
     {
       "source": 15,
-      "target": 29
+      "target": 30
     },
     {
       "source": 15,
@@ -562,11 +600,11 @@ const GRAPH = {
     },
     {
       "source": 15,
-      "target": 31
+      "target": 32
     },
     {
       "source": 16,
-      "target": 29
+      "target": 30
     },
     {
       "source": 16,
@@ -602,19 +640,19 @@ const GRAPH = {
     },
     {
       "source": 16,
-      "target": 31
-    },
-    {
-      "source": 16,
-      "target": 33
+      "target": 32
     },
     {
       "source": 16,
       "target": 34
     },
     {
+      "source": 16,
+      "target": 35
+    },
+    {
       "source": 17,
-      "target": 29
+      "target": 30
     },
     {
       "source": 16,
@@ -630,15 +668,15 @@ const GRAPH = {
     },
     {
       "source": 17,
-      "target": 32
-    },
-    {
-      "source": 17,
       "target": 33
     },
     {
+      "source": 17,
+      "target": 34
+    },
+    {
       "source": 18,
-      "target": 29
+      "target": 30
     },
     {
       "source": 18,
@@ -658,7 +696,7 @@ const GRAPH = {
     },
     {
       "source": 19,
-      "target": 29
+      "target": 30
     },
     {
       "source": 19,
@@ -682,27 +720,27 @@ const GRAPH = {
     },
     {
       "source": 19,
-      "target": 32
-    },
-    {
-      "source": 20,
-      "target": 29
-    },
-    {
-      "source": 20,
-      "target": 24
-    },
-    {
-      "source": 20,
-      "target": 26
-    },
-    {
-      "source": 20,
       "target": 33
     },
     {
+      "source": 20,
+      "target": 30
+    },
+    {
+      "source": 20,
+      "target": 24
+    },
+    {
+      "source": 20,
+      "target": 26
+    },
+    {
+      "source": 20,
+      "target": 34
+    },
+    {
       "source": 21,
-      "target": 29
+      "target": 30
     },
     {
       "source": 21,
@@ -714,11 +752,11 @@ const GRAPH = {
     },
     {
       "source": 21,
-      "target": 32
+      "target": 33
     },
     {
       "source": 22,
-      "target": 29
+      "target": 30
     },
     {
       "source": 20,
@@ -738,7 +776,7 @@ const GRAPH = {
     },
     {
       "source": 22,
-      "target": 33
+      "target": 34
     },
     {
       "source": 13,
@@ -746,7 +784,7 @@ const GRAPH = {
     },
     {
       "source": 23,
-      "target": 29
+      "target": 30
     },
     {
       "source": 16,
@@ -774,10 +812,6 @@ const GRAPH = {
     },
     {
       "source": 23,
-      "target": 30
-    },
-    {
-      "source": 23,
       "target": 31
     },
     {
@@ -793,8 +827,16 @@ const GRAPH = {
       "target": 34
     },
     {
+      "source": 23,
+      "target": 35
+    },
+    {
+      "source": 23,
+      "target": 36
+    },
+    {
       "source": 24,
-      "target": 29
+      "target": 30
     },
     {
       "source": 24,
@@ -806,10 +848,6 @@ const GRAPH = {
     },
     {
       "source": 24,
-      "target": 30
-    },
-    {
-      "source": 24,
       "target": 31
     },
     {
@@ -823,6 +861,14 @@ const GRAPH = {
     {
       "source": 24,
       "target": 34
+    },
+    {
+      "source": 24,
+      "target": 35
+    },
+    {
+      "source": 24,
+      "target": 36
     },
     {
       "source": 2,
@@ -830,7 +876,7 @@ const GRAPH = {
     },
     {
       "source": 25,
-      "target": 29
+      "target": 30
     },
     {
       "source": 25,
@@ -838,127 +884,135 @@ const GRAPH = {
     },
     {
       "source": 26,
-      "target": 29
+      "target": 30
     },
     {
       "source": 1,
-      "target": 27
+      "target": 28
     },
     {
       "source": 24,
-      "target": 27
-    },
-    {
-      "source": 27,
-      "target": 33
+      "target": 28
     },
     {
       "source": 28,
-      "target": 29
+      "target": 34
+    },
+    {
+      "source": 29,
+      "target": 30
     },
     {
       "source": 24,
-      "target": 28
+      "target": 29
     },
     {
       "source": 26,
-      "target": 28
+      "target": 29
     },
     {
-      "source": 29,
-      "target": 30
+      "source": 30,
+      "target": 31
     },
     {
-      "source": 29,
-      "target": 33
+      "source": 30,
+      "target": 34
     },
     {
       "source": 17,
-      "target": 30
+      "target": 31
     },
     {
       "source": 19,
-      "target": 30
+      "target": 31
     },
     {
       "source": 21,
-      "target": 30
+      "target": 31
     },
     {
       "source": 22,
-      "target": 30
+      "target": 31
     },
     {
       "source": 26,
-      "target": 30
+      "target": 31
+    },
+    {
+      "source": 31,
+      "target": 33
+    },
+    {
+      "source": 31,
+      "target": 34
+    },
+    {
+      "source": 31,
+      "target": 36
     },
     {
       "source": 30,
       "target": 32
-    },
-    {
-      "source": 30,
-      "target": 33
-    },
-    {
-      "source": 29,
-      "target": 31
     },
     {
       "source": 18,
-      "target": 31
+      "target": 32
     },
     {
       "source": 20,
-      "target": 31
+      "target": 32
     },
     {
       "source": 26,
-      "target": 31
+      "target": 32
     },
     {
-      "source": 29,
-      "target": 32
+      "source": 30,
+      "target": 33
     },
     {
       "source": 16,
-      "target": 32
+      "target": 33
     },
     {
       "source": 20,
-      "target": 32
+      "target": 33
     },
     {
       "source": 14,
-      "target": 33
+      "target": 34
     },
     {
-      "source": 31,
-      "target": 33
+      "source": 32,
+      "target": 34
     },
     {
       "source": 1,
-      "target": 34
+      "target": 35
     },
     {
       "source": 2,
-      "target": 34
+      "target": 35
     },
     {
-      "source": 29,
-      "target": 34
+      "source": 30,
+      "target": 35
     },
     {
       "source": 26,
-      "target": 34
+      "target": 35
     },
     {
-      "source": 31,
-      "target": 34
+      "source": 32,
+      "target": 35
     },
     {
-      "source": 33,
-      "target": 34
+      "source": 34,
+      "target": 35
+    },
+    {
+      "source": 30,
+      "target": 36
     }
   ]
 };
