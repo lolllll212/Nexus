@@ -1,12 +1,14 @@
 """RL training endpoints: corpus, judge, run, day-day stats."""
 
 import asyncio
+import json
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from backend.schemas import ExtractExamplesRequest, TrainingJudgeRequest
 from backend.services import llm as llm_service
+from backend.services import tools as tools_service
 from backend.services import training as training_service
 
 router = APIRouter()
@@ -41,33 +43,65 @@ async def api_training_judge(req: TrainingJudgeRequest):
 
 @router.post("/api/training/run")
 async def api_training_run(n: int = 3):
-    """Answer + judge n not-yet-scored hard questions from the corpus."""
-    target = max(1, min(n, len(training_service.TRAINING_CORPUS)))
+    """Answer + judge n not-yet-scored questions from both corpora.
+
+    Tool-grounded items (``tool`` field) exercise a live tool first and the
+    answer must be grounded in its real output - the RL round trains tool
+    calling, not just prose.
+    """
+    pool = list(training_service.TRAINING_CORPUS) + list(training_service.TOOL_GROUND_CORPUS)
+    target = max(1, min(n, len(pool)))
     scored_qs = {p.get("q") for p in training_service.RL_STATE["pairs"]}
     done = []
-    for item in training_service.TRAINING_CORPUS:
+    for item in pool:
         if len(done) >= target:
             break
         if item["q"] in scored_qs:
             continue
-        answer, _r = await llm_service._call_llm(
-            "You are J.A.R.V.I.S. Answer precisely and technically. Address the "
-            "user as 'sir'. At most 8 sentences; no preamble or meta talk.",
-            [{"role": "user", "content": item["q"]}],
-        )
-        if not (answer or "").strip():
-            continue
-        verdict = await training_service._judge_answer(item["q"], answer, item["rubric"])
-        entry = training_service._record_training_pair(
-            item["q"],
-            answer,
-            verdict["score"],
-            verdict["critique"],
-            item["category"],
-            llm_service.LLM_STATE.get("model", ""),
-            verdict.get("judge", ""),
-        )
-        done.append({"id": item["id"], "score": entry["score"], "critique": entry["critique"][:160]})
+
+        try:
+            tool_name = item.get("tool")
+            tool_ctx = ""
+            if tool_name:
+                live = tools_service.run_tool_by_name(tool_name, item["q"])
+                tools_service.bb_put("training:" + item["id"], live)
+                tool_ctx = json.dumps(live, default=str, indent=2)[:1200]
+
+            system = (
+                "You are J.A.R.V.I.S. Answer precisely and technically. Address the "
+                "user as 'sir'. At most 8 sentences; no preamble or meta talk."
+            )
+            user_msg = item["q"]
+            if tool_ctx:
+                user_msg += (
+                    "\n\nLIVE TOOL OUTPUT (ground every claim in these actual "
+                    "values — quote them verbatim):\n" + tool_ctx
+                )
+            answer, _r = await llm_service._call_llm(
+                system,
+                [{"role": "user", "content": user_msg}],
+            )
+            if not (answer or "").strip():
+                continue
+
+            rubric = list(item["rubric"])
+            if tool_name:
+                rubric.append("Answer is grounded in the live tool output values, not invented")
+            verdict = await training_service._judge_answer(item["q"], answer, rubric)
+            entry = training_service._record_training_pair(
+                item["q"],
+                answer,
+                verdict["score"],
+                verdict["critique"],
+                item["category"],
+                llm_service.LLM_STATE.get("model", ""),
+                verdict.get("judge", ""),
+            )
+            done.append({"id": item["id"], "score": entry["score"], "critique": entry["critique"][:160]})
+        except Exception as exc:
+            done.append(
+                {"id": item.get("id", "?"), "score": 0.0, "critique": "round failed: " + str(exc)[:120]}
+            )
     return JSONResponse({"ok": True, "trained": len(done), "results": done})
 
 

@@ -165,9 +165,235 @@ TRAINING_CORPUS = [
             "Centralization risks: few providers gain a global query log",
         ],
     },
+    {
+        "id": "docker-layers",
+        "category": "containerization",
+        "q": "How do Docker image layers relate to containers, and why does an unchanged layer make rebuilds fast?",
+        "rubric": [
+            "Images are read-only layer stacks; containers add one writable layer on top",
+            "Layer caching: unchanged instruction layers are reused, only later layers rebuild",
+            "Ordering matters: frequently changing files should go in later layers",
+        ],
+    },
+    {
+        "id": "k8s-probes",
+        "category": "orchestration",
+        "q": "In Kubernetes, what is the difference between a liveness probe and a readiness probe, and what breaks if you confuse them?",
+        "rubric": [
+            "Liveness failure restarts the container; readiness failure removes it from service routing",
+            "Confusing them causes restart storms instead of graceful traffic shedding",
+            "Startup probes guard slow-booting apps from liveness false positives",
+        ],
+    },
+    {
+        "id": "sql-index-writes",
+        "category": "databases",
+        "q": "Why can adding an index make SELECTs faster but UPDATEs slower?",
+        "rubric": [
+            "Indexes speed reads by avoiding full scans (B-tree lookups)",
+            "Every write must also update each index - extra B-tree maintenance cost",
+            "Over-indexing trade-off: read-heavy vs write-heavy workload tuning",
+        ],
+    },
+    {
+        "id": "http2-hol",
+        "category": "networking",
+        "q": "How does HTTP/2 multiplexing fix HTTP/1.1 head-of-line blocking, and what blocking remains?",
+        "rubric": [
+            "HTTP/1.1 blocks on one slow response per connection (HOL at request level)",
+            "HTTP/2 streams multiplex over one connection, eliminating request-level HOL",
+            "TCP-level HOL remains: one lost packet stalls all streams until HTTP/3/QUIC",
+        ],
+    },
+    {
+        "id": "tls-handshake",
+        "category": "security",
+        "q": "What does the TLS handshake actually establish, and why does an encrypted tunnel not hide the server identity from a passive observer?",
+        "rubric": [
+            "Handshake authenticates the server certificate and derives session keys (ECDHE)",
+            "Certificates chain to trusted roots; SNI and certificate details are visible pre-encryption",
+            "Passive observers still see IPs, timing, and without ECH the SNI hostname",
+        ],
+    },
+    {
+        "id": "regex-backtracking",
+        "category": "algorithms",
+        "q": "Give an example of catastrophic regex backtracking and how to defuse it.",
+        "rubric": [
+            "Nested quantifiers like (a+)+ cause exponential backtrack on near-match inputs",
+            "ReDoS: a single malicious input can hang the parser",
+            "Fixes: atomic groups or possessive quantifiers, rewriting patterns, RE2-style engines",
+        ],
+    },
+    {
+        "id": "float-precision",
+        "category": "numerics",
+        "q": "Why does 0.1 + 0.2 != 0.3 in most languages, and when does that matter in practice?",
+        "rubric": [
+            "Binary floating point (IEEE 754) cannot represent 0.1 exactly",
+            "Accumulated rounding error breaks equality checks - use epsilon or decimals",
+            "Critical domains: money (integer cents or decimal), scientific accumulation",
+        ],
+    },
+    {
+        "id": "overfitting",
+        "category": "machine-learning",
+        "q": "What is overfitting, how would you detect it, and name two mitigations?",
+        "rubric": [
+            "Model memorizes training data instead of generalizing",
+            "Detection: training loss keeps dropping while validation loss rises",
+            "Mitigations: regularization (L1/L2, dropout), more or augmented data, early stopping",
+        ],
+    },
+    {
+        "id": "git-rebase-shared",
+        "category": "version-control",
+        "q": "Why is rebasing a shared branch considered dangerous, and when is rebase the right choice?",
+        "rubric": [
+            "Rebase rewrites commits - collaborator histories diverge and collide",
+            "Merge preserves history; rebase gives linear history on private or local branches",
+            "Rule: never rebase pushed shared branches; rebase local work before a PR",
+        ],
+    },
+    {
+        "id": "eventloop-starve",
+        "category": "async",
+        "q": "How can a single CPU-bound task starve an async event loop, and what are two remedies?",
+        "rubric": [
+            "Cooperative scheduling: a task that never awaits blocks everything else",
+            "Remedies: offload to a thread or process pool, or chunk work with awaited yields",
+            "Symptom: all other requests freeze despite low per-task CPU",
+        ],
+    },
+    {
+        "id": "jwt-revocation",
+        "category": "auth",
+        "q": "Why is JWT revocation hard compared to server-side sessions, and what are two practical mitigations?",
+        "rubric": [
+            "JWTs are self-contained and stateless - the server has no list to delete from",
+            "Mitigations: short expiry with refresh rotation, or a denylist and version marker",
+            "Trade-off: statelessness vs immediate revocation control",
+        ],
+    },
+    {
+        "id": "payment-idempotency",
+        "category": "api-design",
+        "q": "Why must payment APIs be idempotent, and how is idempotency typically implemented?",
+        "rubric": [
+            "Retries and timeout duplicates must not double-charge the customer",
+            "Idempotency keys: the server stores the first response per key and replays it",
+            "Contrast naturally safe methods (GET) with unsafe ones (POST payment)",
+        ],
+    },
+    {
+        "id": "amortized-append",
+        "category": "data-structures",
+        "q": "Why is appending to a dynamic array O(1) amortized even though resizing is O(n)?",
+        "rubric": [
+            "Doubling capacity makes total copy cost across n appends O(n)",
+            "Amortized analysis spreads the occasional O(n) resize over many O(1) ops",
+            "Contrast: arbitrary mid-list insertion stays O(n) always",
+        ],
+    },
+    {
+        "id": "hash-collision-resistance",
+        "category": "crypto",
+        "q": "What makes a hash function collision-resistant, and why was MD5 abandoned?",
+        "rubric": [
+            "Collision resistance: computationally infeasible to find two inputs with the same digest",
+            "MD5: practical chosen-prefix collisions demonstrated since 2004 - broken for signatures",
+            "Modern choices: SHA-256 or BLAKE3; length-extension issues with Merkle-Damgard",
+        ],
+    },
+    {
+        "id": "vm-container-isolation",
+        "category": "infrastructure",
+        "q": "What is the fundamental difference in isolation boundary between containers and virtual machines?",
+        "rubric": [
+            "VMs virtualize hardware with a hypervisor - one kernel per guest",
+            "Containers share the host kernel - namespace and cgroup isolation, lighter but weaker",
+            "Blast radius: a container kernel vulnerability affects every container on that host",
+        ],
+    },
+    {
+        "id": "nplus1-queries",
+        "category": "databases",
+        "q": "Explain the N+1 query problem in ORMs and two concrete fixes.",
+        "rubric": [
+            "One query for the parent list, then one query per child - N+1 round trips",
+            "Detection: query logging or ORM eager-load warnings on list endpoints",
+            "Fixes: JOIN or eager loading (select_related, preloaded), or batched IN queries",
+        ],
+    },
 ]
 
 RL_STATE_PATH = BACKEND_DIR / "rl_training_state.json"
+
+
+# Tool-grounded training items: each question REQUIRES live tool output, so the
+# RL round exercises real tool calls (cortex -> tool -> grounded answer -> judge).
+TOOL_GROUND_CORPUS = [
+    {
+        "id": "tg-git-branch",
+        "tool": "git",
+        "category": "tool-grounded",
+        "q": "What branch is this repository on right now, and how many uncommitted changes exist in the working tree?",
+        "rubric": [
+            "Answer uses the live git tool output, not a guess",
+            "Names the actual branch and the actual uncommitted-change count",
+        ],
+    },
+    {
+        "id": "tg-graph-nodes",
+        "tool": "diag",
+        "category": "tool-grounded",
+        "q": "How many nodes and links are currently in the knowledge graph?",
+        "rubric": [
+            "Answer uses live system diagnostics data",
+            "States the actual node and link counts",
+        ],
+    },
+    {
+        "id": "tg-tasks-queue",
+        "tool": "tasks",
+        "category": "tool-grounded",
+        "q": "How many tasks are in the swarm queue right now, and how many are resolved?",
+        "rubric": [
+            "Answer uses live task-queue data",
+            "States actual total and resolved counts",
+        ],
+    },
+    {
+        "id": "tg-agents-online",
+        "tool": "agents",
+        "category": "tool-grounded",
+        "q": "Which swarm agents exist, and what is each one's current status?",
+        "rubric": [
+            "Answer uses live agent telemetry",
+            "Names the agents and their real statuses",
+        ],
+    },
+    {
+        "id": "tg-repo-read",
+        "tool": "repo",
+        "category": "tool-grounded",
+        "q": "List the top-level entries of this repository's docs directory.",
+        "rubric": [
+            "Answer uses the live repo-reading tool",
+            "Names real directory entries",
+        ],
+    },
+    {
+        "id": "tg-memory-blueprints",
+        "tool": "memory",
+        "category": "tool-grounded",
+        "q": "Search memory for blueprint-related entries and summarize what you find.",
+        "rubric": [
+            "Answer uses live memory-query output",
+            "Summarizes real chunk content, not invented summaries",
+        ],
+    },
+]
 
 
 def _load_rl_state() -> dict:

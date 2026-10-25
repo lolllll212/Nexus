@@ -262,6 +262,10 @@ def _extract_path_hint(query: str) -> str:
     m = re.search(r"[\w./\\-]+\.[A-Za-z0-9]{1,6}\b", query)
     if m:
         return m.group(0)
+    # 'docs directory' / 'the plugins folder' style hints
+    m = re.search(r"\b(?:directory|folder|dir)\s+([A-Za-z0-9][A-Za-z0-9_-]{1,40})\b", query, re.I)
+    if m and m.group(1).lower() not in ("directory", "folder", "dir", "name", "listing"):
+        return m.group(1)
     return ""
 
 
@@ -376,15 +380,26 @@ def tool_read_repo(query: str) -> dict[str, Any]:
             return {"kind": "error", "path": str(target), "error": str(exc)[:200]}
 
     # Sibling-repo discovery: the query names a project that is not inside
-    # NEXUS (e.g. 'look into the repo astra-x-main'). Shallow, read-only scan
-    # under the user profile; inspection stays clamped under the discovered root.
+    # NEXUS (e.g. 'look into the repo astra-x-main'). An in-repo directory of
+    # the same name always wins; the profile-wide scan is the fallback.
     named = _extract_named_repo(query) or (hint if hint and "." not in hint else "")
     if named:
-        discovered = _discover_sibling_root(named)
-        if discovered is not None:
+        in_repo = _safe_repo_path(named)
+        if in_repo is not None and (in_repo.is_dir() or in_repo.is_file()):
+            # In-repo hit wins over profile-wide discovery.
             try:
+                if in_repo.is_file():
+                    size = in_repo.stat().st_size
+                    text = in_repo.read_text(encoding="utf-8", errors="replace")[:8000]
+                    return {
+                        "kind": "file",
+                        "path": str(in_repo.relative_to(ROOT_DIR)),
+                        "bytes": size,
+                        "truncated": size > 8000,
+                        "excerpt": text,
+                    }
                 entries = []
-                for child in sorted(discovered.iterdir())[:60]:
+                for child in sorted(in_repo.iterdir())[:60]:
                     try:
                         entries.append(
                             {
@@ -395,26 +410,50 @@ def tool_read_repo(query: str) -> dict[str, Any]:
                         )
                     except OSError:
                         continue
-                readme = discovered / "README.md"
-                excerpt = ""
-                if readme.is_file():
-                    excerpt = readme.read_text(encoding="utf-8", errors="replace")[:800]
                 return {
                     "kind": "directory",
-                    "external": True,
-                    "path": str(discovered),
+                    "path": str(in_repo.relative_to(ROOT_DIR)),
                     "count": len(entries),
                     "entries": entries,
-                    "readme_excerpt": excerpt,
-                    "note": "sibling repository discovered on the local disk (read-only)",
                 }
             except OSError as exc:
-                return {"kind": "error", "path": str(discovered), "error": str(exc)[:200]}
-        return {
-            "kind": "not-found",
-            "searched": named,
-            "note": "no directory with that name was found under the user profile",
-        }
+                return {"kind": "error", "path": str(in_repo), "error": str(exc)[:200]}
+        else:
+            discovered = _discover_sibling_root(named)
+            if discovered is not None:
+                try:
+                    entries = []
+                    for child in sorted(discovered.iterdir())[:60]:
+                        try:
+                            entries.append(
+                                {
+                                    "name": child.name,
+                                    "type": "dir" if child.is_dir() else "file",
+                                    "bytes": child.stat().st_size if child.is_file() else 0,
+                                }
+                            )
+                        except OSError:
+                            continue
+                    readme = discovered / "README.md"
+                    excerpt = ""
+                    if readme.is_file():
+                        excerpt = readme.read_text(encoding="utf-8", errors="replace")[:800]
+                    return {
+                        "kind": "directory",
+                        "external": True,
+                        "path": str(discovered),
+                        "count": len(entries),
+                        "entries": entries,
+                        "readme_excerpt": excerpt,
+                        "note": "sibling repository discovered on the local disk (read-only)",
+                    }
+                except OSError as exc:
+                    return {"kind": "error", "path": str(discovered), "error": str(exc)[:200]}
+            return {
+                "kind": "not-found",
+                "searched": named,
+                "note": "no directory with that name was found under the user profile",
+            }
 
     if not target and any(kw in lowered for kw in ("project", "repo", "repository", "structure", "overview")):
         try:
@@ -471,7 +510,7 @@ def _trigger_indexer() -> bool:
         return False
 
 
-async def deep_research(query: str, max_depth: int = 3) -> dict:
+async def deep_research(query: str, max_depth: int = 3, context: str = "") -> dict:
     """Break a question into sub-queries, fetch any provided URLs via the free
     Jina Reader, synthesize a cited Markdown note into docs/notes/, and
     re-index so the knowledge is immediately RAG-searchable.
@@ -517,6 +556,7 @@ async def deep_research(query: str, max_depth: int = 3) -> dict:
             "Cite provided live excerpts where used. Max ~60 lines.\n\n"
             f"QUESTION: {query}\n\nSUB-QUESTIONS:\n"
             + "\n".join(f"- {q}" for q in sub_queries)
+            + (f"\n\nSHARED CONTEXT FROM EARLIER TOOLS:\n{context}" if context else "")
             + f"\n\nLIVE SOURCE EXCERPTS:\n{sources_ctx}",
             [{"role": "user", "content": "Write the research note now."}],
         )
@@ -548,3 +588,62 @@ async def deep_research(query: str, max_depth: int = 3) -> dict:
         "indexed": indexed,
         "summary": note_md.strip()[:400],
     }
+
+
+# ─── Tool blackboard: cross-tool data sharing ────────────────────────────────
+#
+# Every dispatched tool publishes its structured result here under a stable key.
+# Later tools (and the LLM synthesis pass) can read another tool's data instead
+# of recomputing it - e.g. deep research grounds itself in the git/repo/memory
+# context that earlier tools in the same conversation gathered.
+
+import json as _json  # noqa: E402  (tools.py previously had no json import)
+
+TOOL_BLACKBOARD: dict = {}
+_BB_MAX = 24  # rolling cap on remembered tool payloads
+
+
+def bb_put(key: str, data) -> None:
+    """Publish a tool result on the shared blackboard (rolling, newest wins)."""
+    TOOL_BLACKBOARD[key] = {"ts": time.time(), "data": data}
+    if len(TOOL_BLACKBOARD) > _BB_MAX:
+        oldest = min(TOOL_BLACKBOARD.items(), key=lambda kv: kv[1]["ts"])[0]
+        TOOL_BLACKBOARD.pop(oldest, None)
+
+
+def bb_get(key: str):
+    entry = TOOL_BLACKBOARD.get(key)
+    return entry["data"] if entry else None
+
+
+def bb_compact(max_keys: int = 8, excerpt: int = 500) -> str:
+    """Compact serialization of recent blackboard entries for LLM prompts."""
+    entries = sorted(TOOL_BLACKBOARD.items(), key=lambda kv: kv[1]["ts"], reverse=True)
+    parts = []
+    for key, entry in entries[:max_keys]:
+        try:
+            body = _json.dumps(entry["data"], default=str)[:excerpt]
+        except Exception:
+            body = str(entry["data"])[:excerpt]
+        parts.append("[" + key + "] " + body)
+    return "\n\n".join(parts) if parts else "(blackboard empty)"
+
+
+def run_tool_by_name(name: str, query: str = "") -> dict:
+    """Run one registered tool by name - the tool-grounded training and
+    cross-tool dispatch entry point."""
+    runners = {
+        "git": tool_git_status,
+        "tasks": tool_list_tasks,
+        "agents": tool_agent_status,
+        "memory": lambda: tool_memory_query(query),
+        "repo": lambda: tool_read_repo(query),
+        "calc": lambda: tool_calculator(query),
+    }
+    runner = runners.get(name)
+    if runner is None:
+        return {"error": "unknown tool '" + str(name) + "'"}
+    try:
+        return runner()
+    except Exception as exc:
+        return {"error": str(exc)[:200]}
