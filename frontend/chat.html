@@ -175,6 +175,29 @@
   .hint { max-width: 860px; margin: 8px auto 0; text-align: center; font-size: 9px; letter-spacing: .2em; color: #3f545e; }
   .hint b { color: #628793; font-weight: 500; }
 
+  /* ── Claude/Gemini-style reasoning accordion (overrides shared/hud.css) ── */
+  .bubble { position: relative; }
+  .bubble .thinking-block { margin: 2px 0 10px; padding: 0; border: 1px solid rgba(0,240,255,.14); background: rgba(0,240,255,.03); border-radius: 10px; overflow: hidden; text-align: left; }
+  .thinking-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; user-select: none; font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: rgba(125,255,217,.55); }
+  .thinking-head:hover { color: var(--mint); background: rgba(125,255,217,.05); }
+  .thinking-head .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 8px var(--mint); animation: pulse 1.6s infinite; }
+  .thinking-head .dur { color: #54707c; letter-spacing: .1em; }
+  .thinking-head .chev { margin-left: auto; transition: transform .25s; font-size: 9px; color: rgba(125,255,217,.5); }
+  .thinking-block.open .chev { transform: rotate(90deg); }
+  .thinking-body { max-height: 0; opacity: 0; overflow-y: auto; padding: 0 12px; font-size: 10px; line-height: 1.65; color: #5a6b62; white-space: pre-wrap; word-break: break-word; transition: max-height .3s ease, opacity .3s ease, padding .3s ease; }
+  .thinking-block.open .thinking-body { max-height: 150px; opacity: 1; padding: 2px 12px 10px; }
+  /* copy action (appears on hover, like Claude/Gemini) */
+  .copy-btn { position: absolute; top: 8px; right: 10px; border: 1px solid var(--line); background: rgba(8,18,28,.7); color: #628793; border-radius: 7px; font-size: 9px; padding: 3px 8px; cursor: pointer; opacity: 0; transition: all .2s; }
+  .bubble:hover .copy-btn { opacity: 1; }
+  .copy-btn:hover { color: var(--cyan); border-color: rgba(0,240,255,.4); }
+  /* composer capsule: violet->cyan pulse while busy / listening */
+  .bar.processing { border-color: rgba(224,86,253,.55); animation: capsulePulse 1.5s ease-in-out infinite; }
+  .bar.listening { border-color: rgba(0,240,255,.65); animation: capsulePulse 1.5s ease-in-out infinite; }
+  @keyframes capsulePulse { 0%,100% { box-shadow: 0 0 14px rgba(224,86,253,.18); } 50% { box-shadow: 0 0 26px rgba(0,240,255,.30); } }
+  /* shimmer thinking text */
+  .shimmer { background: linear-gradient(90deg, #5a6b62 25%, #9fd8cc 50%, #5a6b62 75%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmerMove 1.8s linear infinite; }
+  @keyframes shimmerMove { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
   @media (max-width: 640px) {
     header { padding: 14px 16px; } #stream { padding: 20px 14px 8px; }
     .bubble { max-width: 92%; } #composer { padding: 10px 14px 16px; }
@@ -379,13 +402,33 @@ function addMsg(role, text, extras) {
   }
   let think = '';
   if (extras && extras.reasoning) {
-    think = '<div class="thinking-block"><div class="thinking-label">reasoning</div><div class="thinking-body"></div></div>';
+    const dur = extras.reasoningMs ? '<span class="dur">' + extras.reasoningMs + '</span>' : '';
+    think =
+      '<div class="thinking-block"><div class="thinking-head"><span class="dot"></span>' +
+      '<span>Thinking process</span>' + dur + '<span class="chev">&#9654;</span></div>' +
+      '<div class="thinking-body"></div></div>';
   }
   row.innerHTML =
     '<div class="bubble"><div class="meta"><span>' + who + '</span><span>' + now() + '</span></div>' +
     think +
     '<div class="txt"></div>' + chips + '</div>';
-  if (think) row.querySelector('.thinking-body').textContent = extras.reasoning;
+  if (think) {
+    row.querySelector('.thinking-body').textContent = extras.reasoning;
+    const blk = row.querySelector('.thinking-block');
+    row.querySelector('.thinking-head').addEventListener('click', () => blk.classList.toggle('open'));
+  }
+  if (role !== 'user') {
+    const cp = document.createElement('button');
+    cp.className = 'copy-btn';
+    cp.textContent = 'Copy';
+    cp.onclick = () => {
+      navigator.clipboard.writeText(text).then(() => {
+        cp.textContent = 'Copied';
+        setTimeout(() => { cp.textContent = 'Copy'; }, 1200);
+      }).catch(() => {});
+    };
+    row.querySelector('.bubble').appendChild(cp);
+  }
   row.querySelector('.txt').textContent = text;
   box.appendChild(row);
   scrollDown();
@@ -396,7 +439,8 @@ function typing() {
   const row = document.createElement('div');
   row.className = 'row bot';
   row.innerHTML = '<div class="bubble"><div class="meta"><span>NEXUS · J.A.R.V.I.S.</span><span>reasoning</span></div>' +
-    '<div class="typing"><i></i><i></i><i></i></div></div>';
+    '<div class="typing"><i></i><i></i><i></i></div>' +
+    '<div class="shimmer" style="margin-top:8px;">Reasoning through the knowledge graph…</div></div>';
   box.appendChild(row); scrollDown();
   return row;
 }
@@ -414,9 +458,11 @@ async function ask(text) {
   document.querySelectorAll('.qp').forEach(q => q.style.display = 'none');
   addMsg('user', text);
   input.value = ''; input.style.height = 'auto';
+  finalBase = '';
   lat.textContent = 'cortex thinking...';
   const t0 = performance.now();
   const trow = typing();
+  document.querySelector('.bar').classList.add('processing');
   try {
     const r = await fetch('/chat', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -424,6 +470,7 @@ async function ask(text) {
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
+    d.reasoningMs = ((performance.now() - t0) / 1000).toFixed(1) + 's';
     trow.remove();
     const answer = d.answer || d.response || 'The cortex returned no content.';
     addMsg('bot', answer, d);
@@ -435,6 +482,7 @@ async function ask(text) {
     lat.textContent = 'link error';
   } finally {
     busy = false; sendBtn.disabled = false; input.focus();
+    document.querySelector('.bar').classList.remove('processing');
   }
 }
 
@@ -457,28 +505,69 @@ voiceOut.el.addEventListener('click', () => {
 
 /* ── Voice input (Web Speech API) ──────────────────────────────────── */
 const micBtn = document.getElementById('mic');
-let rec = null, listening = false;
+let rec = null, listening = false, finalBase = '', restartTimer = null;
 function getRec() {
   if (rec) return rec;
   const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!Ctor) return null;
   rec = new Ctor();
-  rec.continuous = false; rec.interimResults = true; rec.lang = 'en-US';
+  rec.continuous = true;          // stay hot through short pauses
+  rec.interimResults = true;
+  rec.lang = 'en-US';
+  rec.maxAlternatives = 1;
   rec.onresult = e => {
-    let t = '';
-    for (const res of e.results) t += res[0].transcript;
-    input.value = t;
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const res = e.results[i];
+      const t = res[0].transcript;
+      if (res.isFinal) finalBase += t.trim() + ' ';
+      else interim += t;
+    }
+    input.value = (finalBase + interim).replace(/\s+/g, ' ').trimStart();
   };
-  rec.onend = () => { listening = false; micBtn.classList.remove('rec'); };
-  rec.onerror = () => { listening = false; micBtn.classList.remove('rec'); };
+  rec.onend = () => {
+    // Engines end the session on silence or periodically - if the mic is
+    // still armed, quietly restart so listening never cuts off on the user.
+    if (!listening) { micBtn.classList.remove('rec'); return; }
+    clearTimeout(restartTimer);
+    restartTimer = setTimeout(() => {
+      if (!listening) return;
+      try { rec.start(); } catch (_) { /* already running */ }
+    }, 120);
+  };
+  rec.onerror = e => {
+    if (e.error === 'no-speech' || e.error === 'aborted') return; // grace: onend restarts
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      listening = false; micBtn.classList.remove('rec');
+      document.querySelector('.bar').classList.remove('listening');
+      lat.textContent = 'mic blocked - allow microphone access for this page';
+    } else if (e.error === 'audio-capture') {
+      listening = false; micBtn.classList.remove('rec');
+      document.querySelector('.bar').classList.remove('listening');
+      lat.textContent = 'no microphone found';
+    }
+    // network / other transient errors: onend restarts us
+  };
   return rec;
 }
 micBtn.addEventListener('click', () => {
   const r = getRec();
   if (!r) { lat.textContent = 'voice input unsupported here (use Chrome/Edge)'; return; }
-  if (listening) { r.stop(); return; }
-  try { r.start(); listening = true; micBtn.classList.add('rec'); lat.textContent = 'listening...'; }
-  catch (e) { /* already running */ }
+  if (listening) {                    // second click = disarm + keep the words
+    listening = false;
+    clearTimeout(restartTimer);
+    try { r.stop(); } catch (_) {}
+    micBtn.classList.remove('rec');
+    document.querySelector('.bar').classList.remove('listening');
+    lat.textContent = 'voice ready - press ENTER to send';
+    return;
+  }
+  finalBase = input.value ? input.value.replace(/\s+$/, ' ') : '';
+  try {
+    r.start(); listening = true; micBtn.classList.add('rec');
+    document.querySelector('.bar').classList.add('listening');
+    lat.textContent = 'listening... click mic when done';
+  } catch (e) { /* already running */ }
 });
 
 input.focus();

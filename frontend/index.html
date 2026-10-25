@@ -292,6 +292,7 @@
   #fallback { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center;
     background:rgba(4,6,10,.95); color:#c9d6d2; font-size:13px; text-align:center; line-height:1.8; }
 </style>
+<script>window.process = window.process || { env: { NODE_ENV: "production" } };</script>
 <script src="/vendor/three.0.152.2.min.js"></script>
 <script>window.THREE || document.write('<script src="https://unpkg.com/three@0.152.2/build/three.min.js"><\/script>');</script>
 <script src="/vendor/3d-force-graph.1.70.8.min.js"></script>
@@ -459,7 +460,7 @@
    ============================================================ */
 const $ = id => document.getElementById(id);
 const MESH_POLL = 20000, LLM_POLL = 30000;
-const FINISH_MS = 900; // Pause buffering threshold
+const FINISH_MS = 1500; // Pause buffering threshold - natural sentence pause
 
 /* API client */
 const API = {
@@ -686,6 +687,9 @@ function initGraph() {
   if (typeof ForceGraph3D === 'undefined') { $('fallback').style.display = 'flex'; return; }
 
   GRAPH = ForceGraph3D({ controlType: 'orbit' })($('graph'))
+    .graphData({ nodes: [], links: [] }) // seed synchronously: the animation
+    // cycle ticks before loadAll()'s async data arrives; without a layout the
+    // first frame crashes on `#layout.tick()` and kills rendering forever.
     .backgroundColor('rgba(0,0,0,0)')
     .showNavInfo(false)
     .nodeThreeObject(nodeObject)
@@ -712,6 +716,10 @@ function initGraph() {
     .onNodeClick(onNodeClick)
     .onBackgroundClick(clearSelection);
 
+  // Digest-race guard: the first animation frame can fire before the async
+  // graphData digest creates the d3 layout (crash: reading 'tick' of undefined,
+  // loop dies, canvas stays black forever). Pause now, resume when data lands.
+  GRAPH.pauseAnimation();
   applyForces();
   READY = true;
   setTimeout(() => GRAPH.zoomToFit(800, 60), 1200);
@@ -870,6 +878,7 @@ function refresh() {
       return visSet.has(s) && visSet.has(t);
     })
   });
+  if (!window.__graphResumed) { window.__graphResumed = true; GRAPH.resumeAnimation(); }
 }
 
 function getNeighbors(id) {
