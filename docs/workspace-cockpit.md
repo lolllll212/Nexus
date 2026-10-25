@@ -164,6 +164,7 @@ python backend/main.py            # → http://127.0.0.1:8099/workspace
 # or
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 8099
 NEXUS_WORKSPACE_PACE=2 python -m uvicorn ...   # slow the stream down for demos
+NEXUS_ROOT_PAGE=workspace python -m uvicorn ...  # bare host serves the cockpit
 ```
 
 ```bash
