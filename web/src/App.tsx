@@ -14,6 +14,7 @@ import {
   INITIAL_NEXUS_LINKS 
 } from './data/nexusGraphData';
 import { NexusCanvas } from './components/NexusCanvas';
+import { WorkspaceView } from './components/workspace/WorkspaceView';
 import { DeepResearchView } from './components/DeepResearchView';
 import { WorkflowCanvasView } from './components/WorkflowCanvasView';
 import { ArchitectureView } from './components/ArchitectureView';
@@ -43,8 +44,9 @@ import { speakWithStatus, stopAnySpeaking } from './utils/voiceManager';
 import { nexusChatStream, nexusJson } from './api';
 
 export const App: React.FC = () => {
-  // Operating Modes: 'GRAPH' | 'RESEARCH' | 'WORKFLOW' | 'ARCHITECTURE' | 'VIDEO'
-  const [currentMode, setCurrentMode] = useState<OperatingMode>('GRAPH');
+  // Operating Modes: 'WORKSPACE' | 'GRAPH' | 'RESEARCH' | 'WORKFLOW' | 'ARCHITECTURE' | 'VIDEO'
+  // WORKSPACE is the light-canvas Primary Workspace Dashboard — the app's front door.
+  const [currentMode, setCurrentMode] = useState<OperatingMode>('WORKSPACE');
   const [dashboardSubView, setDashboardSubView] = useState<'swarm' | 'system'>('swarm');
 
   // Explicit Agent Status State: 'idle' | 'listening' | 'thinking' | 'speaking'
@@ -139,6 +141,9 @@ export const App: React.FC = () => {
         playHudClick();
       } else if (e.key === 'b' || e.key === 'B' || e.key === 'v' || e.key === 'V') {
         setIsMultimodalBridgeOpen((prev) => !prev);
+        playHudClick();
+      } else if (e.key === 'w' || e.key === 'W') {
+        setCurrentMode((prev) => (prev === 'WORKSPACE' ? 'GRAPH' : 'WORKSPACE'));
         playHudClick();
       } else if (e.key === '0' || e.key === 'h' || e.key === 'H') {
         setCurrentMode((prev) => (prev === 'HUD' ? 'GRAPH' : 'HUD'));
@@ -538,7 +543,8 @@ export const App: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#030508] text-slate-100 font-sans antialiased select-none">
-      {/* ── Minimal Floating Top Bar ─────────────────────────────────────────── */}
+      {/* ── Minimal Floating Top Bar (hidden on the light Workspace surface) ──── */}
+      {currentMode !== 'WORKSPACE' && (
       <TopBar
         currentMode={currentMode}
         onModeChange={(mode) => {
@@ -561,6 +567,7 @@ export const App: React.FC = () => {
         onOpenNim={() => setIsJarvisOpen(true)}
         agentStatus={agentStatus}
       />
+      )}
 
       <JarvisModal
         isOpen={isJarvisOpen}
@@ -574,6 +581,7 @@ export const App: React.FC = () => {
       />
 
       {/* Floating JARVIS orb - always visible, mirrors listening/speaking state */}
+      {currentMode !== 'WORKSPACE' && (
       <div className="fixed bottom-5 right-5 z-40 hidden md:block">
         <JarvisHUD
           ringActive
@@ -586,8 +594,10 @@ export const App: React.FC = () => {
           }}
         />
       </div>
+      )}
 
-      {/* ── Left Sidebar: Workspaces, Search & System Telemetry ─────────────── */}
+      {/* ── Left Sidebar: Workspaces, Search & System Telemetry (hidden on Workspace) ── */}
+      {currentMode !== 'WORKSPACE' && (
       <LeftSidebar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -602,9 +612,15 @@ export const App: React.FC = () => {
         onOpenIntegrationsModal={() => setIsIntegrationsModalOpen(true)}
         onOpenMultimodalBridge={() => setIsMultimodalBridgeOpen(true)}
       />
+      )}
 
       {/* ── Center Viewport: Mode Dependent ─────────────────────────────────── */}
       <main className="flex-1 h-full relative overflow-hidden bg-[#0a0f1d]">
+        {/* ── SCREEN 1+2: Light-canvas NEXUS OS workspace — the full light
+             suite (home, graph, research, workflow, architecture, analytics,
+             agents) with the floating multi-modal Query Cockpit. */}
+        {currentMode === 'WORKSPACE' && <WorkspaceView onOpenIntegrations={() => setIsIntegrationsModalOpen(true)} />}
+
         {/* Real-time Information Flow Ticker (Cortex vs Subcortex) in Graph Mode */}
         {currentMode === 'GRAPH' && (
           <div className="absolute top-16 right-6 z-20 max-w-lg">
@@ -740,6 +756,7 @@ export const App: React.FC = () => {
       )}
 
       {/* ── Conversational Stream: Framing AI Feedback & Actions (Module 2 & 4) ─ */}
+      {currentMode !== 'WORKSPACE' && (
       <ConversationalStream
         messages={conversationalMessages}
         isOpen={isConversationalStreamOpen}
@@ -755,6 +772,7 @@ export const App: React.FC = () => {
         onSendMessage={(q) => handleExecuteCommand(q, 'GRAPH')}
         onClearMessages={() => setConversationalMessages([])}
       />
+      )}
 
       {/* ── Bottom Floating Command Center Bar (In Graph or HUD Mode) ───────── */}
       {(currentMode === 'GRAPH' || currentMode === 'HUD') && (
@@ -848,6 +866,7 @@ export const App: React.FC = () => {
       />
 
       {/* ── Mobile Application UI: High-Velocity Thumb Cockpit ──────────────── */}
+      {currentMode !== 'WORKSPACE' && (
       <MobileCompactCockpit
         agentStatus={agentStatus}
         currentMode={currentMode}
@@ -863,6 +882,7 @@ export const App: React.FC = () => {
         onOpenCodeCompiler={() => setIsCodeCompilerOpen(true)}
         onOpenCanvasBuilder={() => setIsCanvasBuilderOpen(true)}
       />
+      )}
     </div>
   );
 };

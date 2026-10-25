@@ -96,7 +96,17 @@ export const MobileCompactCockpit: React.FC<MobileCompactCockpitProps> = ({
 
         {/* Layout Mode Switcher */}
         <button
-          onClick={() => onModeChange(currentMode === 'HUD' ? 'DASHBOARD' : currentMode === 'DASHBOARD' ? 'GRAPH' : 'HUD')}
+          onClick={() =>
+            onModeChange(
+              currentMode === 'HUD'
+                ? 'DASHBOARD'
+                : currentMode === 'DASHBOARD'
+                  ? 'GRAPH'
+                  : currentMode === 'GRAPH'
+                    ? 'WORKSPACE'
+                    : 'HUD'
+            )
+          }
           className="h-12 rounded-2xl bg-[#040814] border border-amber-500/30 text-amber-300 active:scale-95 flex flex-col items-center justify-center gap-1 font-bold text-[9px] cursor-pointer"
         >
           <Activity className="w-4 h-4 text-amber-400" />

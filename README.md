@@ -22,6 +22,7 @@
 **NEXUS** is an enterprise-grade autonomous AI cognitive operating system built on strict hexagonal architecture (ports & adapters). It merges high-velocity interactive reasoning (**The Cortex**) with continuous background memory consolidation and synthesis (**The Subcortex**).
 
 The system features four dedicated spatial operating modes and interconnected frontend experiences:
+0. **PRIMARY WORKSPACE DASHBOARD (Light-Canvas Interface)**: The app's front door — a premium off-white (`#F9FAFB`) light-mode workspace with a fixed thin line-art navigation rail, the "Hi Nixtio, Ready to Achieve Great Things?" header, an animated onboarding hero (a friendly 3D robot companion, NIX-7, inside a floating translucent chat bubble), and a three-card feature matrix (Fast Start · orange geometric icon, Collaborate with Team · multi-colored collaborative grid, Planning · blue application calendar). The **Advanced System Cockpit** floats at the bottom: a dark graphite (`#0B0F19`) pill console with a textarea and four integrated action chips — **Deep Research** (`POST /api/research/execute`, dark-cyan border + background execution stream), **Make an Image** (`POST /api/workspace/image`, procedural art engine), **Search** (`POST /api/workspace/search`, unified multi-modal retrieval), and **Create music** (`POST /api/workspace/music`, generative WAV synthesis). While the server works, the console renders an active dual-layer cyan + violet pulse aura visualising the live `THINKING` / `STREAMING` states. The console also takes **whisper-flow voice input** (mic button; live Web Speech transcription with an amplitude-reactive flowing-ribbon canvas that breathes with your voice, and a real MediaRecorder → `POST /api/audio/stt` fallback) and **multimodal attachments** — images, video, audio and documents staged via picker, drag-and-drop or paste, then really uploaded (images/video/docs → `POST /api/multimodal/process`, audio → `POST /api/audio/stt`) with a rich perception dossier in the result sheet.
 1. **LIVING KNOWLEDGE GRAPH (Tactical OS)**: A full-screen graphite/near-black operating canvas featuring a real-time D3 force-directed knowledge graph, 18 node categories, 5 major enterprise clusters, 3D isometric perspective projection, animated edge data streams, holographic tooltips, and an 11-action tactical context menu.
 2. **WEB-BASED ANALYTICS DASHBOARD**: High-density widescreen command center with KPI telemetry matrix, synchronized compute/memory histograms, and autonomous agent swarm monitoring.
 3. **MOBILE COMPACT COCKPIT UI**: High-velocity thumb-accessible mobile interface with 48px touch targets, quick-switch mode dock, and ambient readability.
@@ -31,6 +32,40 @@ The system features four dedicated spatial operating modes and interconnected fr
 7. **AUTONOMOUS AGENT ORCHESTRATION LAYER**: Live telemetry HUD for 10 autonomous enterprise agents (Researcher, Coder, Planner, Browser, Vision, Data Analyst, Writer, Executor, Memory, Fact Checker) with status, tasks, models, tools, latencies, tokens, and animated inter-agent message bus.
 8. **EXTERNAL INTEGRATION UNIVERSE**: Dedicated interface for 16 enterprise integrations (GitHub, Google Drive, Google Calendar, Slack, Discord, Notion, Jira, Linear, Gmail, Postgres, REST APIs, Webhooks, Ollama, OpenAI, Anthropic, Groq).
 9. **NEXUS Coding & Research Studio**: A dedicated Claude-style coding environment featuring chain-of-thought `<thinking>` accordions, real-time tool execution cards, an isolated Python execution sandbox, interactive split-view artifacts, and GitHub/web research integration.
+
+---
+
+## NEXUS OS — Premium Workspace & Multi-Modal Cockpit
+
+A light-mode product front door for the operating system, served buildless at
+**`/workspace`** by the FastAPI backend: an off-white canvas dashboard (hero greeting,
+3D robot companion, Fast Start / Collaborate with Team / Planning feature matrix,
+today's runway, recent threads) with a floating **graphite console** pinned to the
+bottom of the viewport.
+
+The console is a real control surface, not a mockup — four chips map to four backend
+routes and stream over SSE:
+
+| Chip | Route | What the backend actually does |
+|---|---|---|
+| **Deep Research** | `/api/workspace/runs` → `deep_research` | Retrieves repository passages, grounds the briefing in citations, or streams from a live model when one is reachable |
+| **Make an Image** | …`image` | Renders a deterministic 1200×860 vector poster server-side and returns a downloadable SVG |
+| **Search** | …`search` | BM25-lite ranking across `docs/`, `README.md` and the sample notes, with per-passage match scores |
+| **Create music** | …`music` | Maps the prompt to key/tempo/mood, then synthesizes a real 8-second WAV stem |
+
+The `THINKING → STREAMING` state is driven by SSE frames landing on a single
+`data-state` attribute, which lights the console's **dual-layer cyan + violet aura**,
+ticks the execution steps, types the answer out and streams artifact cards. Works
+fully offline (grounding engine + procedural renderer/synth) with every answer
+labelled by provenance — `llm`, `local-grounding`, or `local-primer` — so nothing is
+passed off as model output when no model ran.
+
+```bash
+python backend/main.py                 # → http://127.0.0.1:8099/workspace
+pytest tests/unit/test_workspace_cockpit.py -q     # 33 cockpit API tests
+```
+
+Details: [`docs/workspace-cockpit.md`](docs/workspace-cockpit.md).
 
 ---
 
@@ -367,6 +402,53 @@ docker compose -f docker-compose.prod.yml up -d --build
 ---
 
 ## API Reference
+
+### Workspace OS (`/api/workspace/*`)
+
+Powers the light-mode Primary Workspace Dashboard and its floating Query Cockpit in the
+AI Workshop OS API (`src/nexus`, port 8000). The root knowledge-galaxy backend
+(`backend/main.py`, port 8099) serves a sibling cockpit surface at `/workspace` with its
+own `/api/workspace/*` router — see
+[docs/workspace-cockpit.md](docs/workspace-cockpit.md).
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/workspace/bootstrap` | GET | Live workspace state: personalised greeting, onboarding hero, feature-matrix cards, and system telemetry (uptime, agent roster, recent memories, NIM status) |
+| `/api/workspace/search` | POST | Unified multi-modal search across episodic memory, knowledge-graph concepts, research history, and the multimodal corpus — merged and relevance-ranked |
+| `/api/workspace/image` | POST | Deterministic procedural art synthesis (aurora / blueprint / horizon styles) seeded by the prompt hash; returns an SVG data URI + palette |
+| `/api/workspace/music` | POST | Generative audio synthesis: key/scale selection by prompt mood, chord progression, arpeggios, bass, and percussion rendered to a 16-bit WAV data URI |
+
+#### Workspace suite — six live light-mode views (React, `web/`)
+
+The primary dashboard (`web/`, Vite dev on :3000 or the prebuilt bundle in
+`frontend/`) ships its own light-mode versions of the OS's six power surfaces as
+internal workspace routes — reachable from the fixed left nav rail, wired to the
+live :8000 API, never navigating away to the legacy dark pages:
+
+| Route | View | Live backend |
+|---|---|---|
+| **Knowledge Graph** | Full-d3 force graph of the Second Brain (hub filters, node inspector, focus/relink) — "Research this topic" hands the node to the cockpit in Deep Research mode | `GET /api/graph?limit=…` |
+| **Deep Research** | Autonomous research workbench — run new queries, replay the full dossier (findings, concepts, corroborated sources) and browse prior history | `POST /api/research/execute` · `GET /api/research/history` |
+| **Workflow Canvas** | Seeded workflow cards with animated step-by-step execution log replay and per-step service/status badges | `GET /api/workflows` · `POST /api/workflows/run/{id}` |
+| **Architecture** | Hexagonal ports-and-adapters diagram where the adapter chips and route counts are read straight from the running API's own schema | `GET /openapi.json` |
+| **Analytics** | Live counters, uptime, tool inventory, graph volume and component-health panel with auto-refreshing chips | `GET /api/system/telemetry` · `GET /v1/system/health` |
+| **Agents** | Swarm roster (live registrations with a labelled standby fallback), real agent commissioning form, and a mesh-bus activity simulation | `GET /v1/agents` · `POST /v1/agents` |
+
+Every view degrades honestly: when an endpoint is unreachable the surface shows
+an offline chip plus fallback data instead of dead widgets.
+
+The cockpit itself is multi-modal on the input side too:
+
+| Input | Route | What actually happens |
+|---|---|---|
+| **Voice (whisper flow)** | `POST /api/audio/stt` | Mic button opens a Web Audio analyser that drives an amplitude-reactive flowing-ribbon canvas while Web Speech Recognition streams live interim text into the console; where recognition is unavailable, a MediaRecorder captures a real audio blob and uploads it to the server-side transcriber |
+| **Image / video attachments** | `POST /api/multimodal/process` | Real multipart upload to the perception bridge — Pillow-derived dimensions, quantized palette, luminance/contrast, extracted text and scene entities (images) or a keyframe timeline (video), answered by the LLM with an offline fallback |
+| **Audio attachments** | `POST /api/audio/stt` | Uploaded to the Whisper-1 transcriber; the transcript, confidence and engine land in the result sheet |
+| **Documents (.txt/.md/.csv/.json/.pdf)** | `POST /api/multimodal/process` | Uploaded and run through the bridge's byte-level text extraction heuristic — real file content surfaces in the extracted-text chips |
+
+Attachments stage as preview chips (thumbnails for images/video, icons for the
+rest), arrive via the picker, drag-and-drop or clipboard paste, and the typed
+question is forwarded to the bridge as the analysis question.
 
 ### Coding & Research Studio (`/api/coding/*`)
 

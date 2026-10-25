@@ -39,3 +39,12 @@ class ResearchRequest(BaseModel):
 
 class ExtractExamplesRequest(BaseModel):
     note_path: str = ""
+
+
+class WorkspaceRunRequest(BaseModel):
+    prompt: str
+    route: str = "deep_research"
+
+
+class WorkspaceUpgradeRequest(BaseModel):
+    plan: str = ""

@@ -52,6 +52,7 @@ from nexus.infrastructure.api.routes import (
     telemetry,
     tools,
     workflows,
+    workspace,
 )
 from nexus.infrastructure.di.container import Config, Container
 
@@ -162,6 +163,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(coding_assistant.router)
     app.include_router(multimodal.router)
     app.include_router(mcp.router)
+    app.include_router(workspace.router)
 
     @app.api_route("/healthz", methods=["GET", "HEAD"], tags=["meta"], include_in_schema=False)
     async def healthz() -> dict:

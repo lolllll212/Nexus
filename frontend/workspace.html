@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NEXUS OS — Workspace</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#F9FAFB">
+<meta name="description" content="NEXUS OS — a premium AI workspace with a multi-modal search cockpit.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%230B0F19'/><path d='M10 23V9l12 14V9' fill='none' stroke='%23F9FAFB' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<link rel="preload" href="workspace/fonts/plus-jakarta-sans-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="workspace/fonts/plus-jakarta-sans-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="workspace/workspace.css">
+</head>
+<body class="nx-body">
+
+<!-- ── icon sprite ─────────────────────────────────────────────────────── -->
+<svg class="nx-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-logo" viewBox="0 0 24 24"><path d="M6 18V6l12 12V6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3.5 10.4 12 3.8l8.5 6.6V20a1 1 0 0 1-1 1h-4.6v-6.2H9.1V21H4.5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-orbit" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.1" fill="none" stroke="currentColor" stroke-width="1.6"/><ellipse cx="12" cy="12" rx="9.2" ry="4.1" fill="none" stroke="currentColor" stroke-width="1.4" transform="rotate(-28 12 12)"/><circle cx="19.4" cy="8.2" r="1.5" fill="currentColor"/></symbol>
+  <symbol id="i-research" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m15.8 15.8 4.4 4.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M7.8 11.2a3.1 3.1 0 0 1 3.2-3.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-library" viewBox="0 0 24 24"><path d="M12 3.4 21 8l-9 4.6L3 8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="m3 12.4 9 4.6 9-4.6M3 16.7l9 4.6 9-4.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.4" y="5.2" width="17.2" height="15.4" rx="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.6 9.9h16.8M8.3 3.3v3.6M15.7 3.3v3.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-agents" viewBox="0 0 24 24"><circle cx="9" cy="8.6" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 20.2c.4-3.2 2.9-5.2 6-5.2s5.6 2 6 5.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M16.2 5.6a3.2 3.2 0 0 1 0 6.1M18 14.8c2 .6 3.3 2.4 3.6 4.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.1" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M19.6 14.3a7.9 7.9 0 0 0 0-4.6l1.7-1.3-1.9-3.3-2 .8a7.9 7.9 0 0 0-4-2.3L13 1.7h-3.7L9 3.6a7.9 7.9 0 0 0-4 2.3l-2-.8L1 8.4l1.7 1.3a7.9 7.9 0 0 0 0 4.6L1 15.6l1.9 3.3 2-.8a7.9 7.9 0 0 0 4 2.3l.3 1.9H13l.3-1.9a7.9 7.9 0 0 0 4-2.3l2 .8 1.9-3.3z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.9" cy="10.9" r="6.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="m15.6 15.6 4.6 4.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6.2 10a5.8 5.8 0 0 1 11.6 0c0 4 1.4 5.3 1.4 5.3H4.8S6.2 14 6.2 10Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9.7 18.6a2.4 2.4 0 0 0 4.6 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 2.8c.7 4.6 2.6 6.5 7.2 7.2-4.6.7-6.5 2.6-7.2 7.2-.7-4.6-2.6-6.5-7.2-7.2 4.6-.7 6.5-2.6 7.2-7.2Z" fill="currentColor"/><path d="M18.6 15.4c.35 2.2 1.25 3.1 3.4 3.45-2.15.35-3.05 1.25-3.4 3.45-.35-2.2-1.25-3.1-3.4-3.45 2.15-.35 3.05-1.25 3.4-3.45Z" fill="currentColor" opacity=".55"/></symbol>
+  <symbol id="i-arrow-ur" viewBox="0 0 24 24"><path d="M7 17 17 7M9.2 7H17v7.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19.2V5.4M12 5.4l-6 6M12 5.4l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2.2" fill="currentColor"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.4v13.2M5.4 12h13.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-deep" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 3.2v3.1M12 17.7v3.1M3.2 12h3.1M17.7 12h3.1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="12" r="6.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2.4 3.2"/><circle cx="18.3" cy="7.4" r="1.5" fill="currentColor"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.4" y="4.4" width="17.2" height="15.2" rx="3.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m4.6 16.8 4.1-4.3a1.7 1.7 0 0 1 2.4 0l2.3 2.3M15 12.4h.02" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M14.4 15.7c1.2-1.6 2.4-2.4 3.7-2.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="16.4" cy="8.7" r="1.5" fill="currentColor"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path d="M9.4 17.6V7.2l9.2-2.4v9.1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><ellipse cx="6.8" cy="18" rx="2.8" ry="2.4" fill="none" stroke="currentColor" stroke-width="1.6"/><ellipse cx="16" cy="14.6" rx="2.6" ry="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.6 4.4 4.4L19 6.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.4 6.4l11.2 11.2M17.6 6.4 6.4 17.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3.6 3.8 8 12 12.4 20.2 8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m3.8 12.4 8.2 4.4 8.2-4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8.4 5.6 18 12l-9.6 6.4z" fill="currentColor"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="7.4" y="5.4" width="3.4" height="13.2" rx="1.3" fill="currentColor"/><rect x="13.2" y="5.4" width="3.4" height="13.2" rx="1.3" fill="currentColor"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4.2v10.4M12 14.6 7.8 10.4M12 14.6l4.2-4.2M4.6 19.4h14.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+
+<div class="nx-app" id="app" data-state="idle" data-route="deep_research">
+
+  <!-- ambient canvas -->
+  <div class="nx-ambient" aria-hidden="true">
+    <span class="nx-ambient__wash nx-ambient__wash--a"></span>
+    <span class="nx-ambient__wash nx-ambient__wash--b"></span>
+    <span class="nx-ambient__grid"></span>
+    <span class="nx-ambient__grain"></span>
+  </div>
+
+  <!-- ── left navigation rail ─────────────────────────────────────────── -->
+  <aside class="nx-rail" aria-label="Primary navigation">
+    <a class="nx-rail__logo" href="/workspace" aria-label="NEXUS OS home">
+      <svg class="nx-icon" aria-hidden="true"><use href="#i-logo"/></svg>
+    </a>
+
+    <nav class="nx-rail__nav">
+      <a class="nx-rail__item is-active" href="/workspace" aria-current="page" data-tip="Workspace">
+        <svg class="nx-icon" aria-hidden="true"><use href="#i-home"/></svg><span class="nx-rail__label">Home</span>
+      </a>
+      <a class="nx-rail__item" href="/" data-tip="Knowledge graph">
+        <svg class="nx-icon" aria-hidden="true"><use href="#i-orbit"/></svg><span class="nx-rail__label">Graph</span>
+      </a>
+      <button class="nx-rail__item" type="button" data-tip="Research" data-focus-chips="deep_research">
+        <svg class="nx-icon" aria-hidden="true"><use href="#i-research"/></svg><span class="nx-rail__label">Research</span>
+      </button>
+      <a class="nx-rail__item" href="/holo.html" data-tip="Library">
+        <svg class="nx-icon" aria-hidden="true"><use href="#i-library"/></svg><span class="nx-rail__label">Library</span>
+      </a>
+      <button class="nx-rail__item" type="button" data-tip="Planning" data-scroll="planning">
+        <svg class="nx-icon" aria-hidden="true"><use href="#i-calendar"/></svg><span class="nx-rail__label">Planning</span>
+      </button>
+      <button class="nx-rail__item" type="button" data-tip="Agents" data-scroll="agents">
+        <svg class="nx-icon" aria-hidden="true"><use href="#i-agents"/></svg><span class="nx-rail__label">Agents</span>
+      </button>
+    </nav>
+
+    <div class="nx-rail__foot">
+      <button class="nx-rail__item" type="button" data-tip="Settings" id="settings-btn">
+        <svg class="nx-icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="nx-rail__label">Settings</span>
+      </button>
+      <button class="nx-rail__avatar" type="button" aria-label="Nixtio — account" id="account-btn">
+        <span id="avatar-initials">NX</span>
+        <i class="nx-rail__presence" aria-hidden="true"></i>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── main canvas ──────────────────────────────────────────────────── -->
+  <div class="nx-stage">
+    <header class="nx-topbar">
+      <div class="nx-crumbs">
+        <span class="nx-crumbs__workspace" id="workspace-name">Atlas Lab</span>
+        <span class="nx-crumbs__sep" aria-hidden="true">/</span>
+        <span class="nx-crumbs__page">Workspace</span>
+        <span class="nx-pill nx-pill--soft" id="plan-pill">Studio</span>
+      </div>
+
+      <div class="nx-topbar__actions">
+        <button class="nx-quickfind" type="button" id="quickfind" aria-label="Search the workspace (Command K)">
+          <svg class="nx-icon" aria-hidden="true"><use href="#i-search"/></svg>
+          <span>Search anything</span>
+          <kbd>⌘K</kbd>
+        </button>
+        <button class="nx-iconbtn" type="button" id="bell-btn" aria-label="Notifications">
+          <svg class="nx-icon" aria-hidden="true"><use href="#i-bell"/></svg>
+          <i class="nx-iconbtn__dot" aria-hidden="true"></i>
+        </button>
+      </div>
+    </header>
+
+    <main class="nx-main" id="main">
+      <!-- hero -->
+      <section class="nx-hero" aria-labelledby="hero-title">
+        <div class="nx-hero__copy">
+          <p class="nx-eyebrow nx-reveal" style="--d:0ms">
+            <i class="nx-eyebrow__dot" aria-hidden="true"></i>
+            <span id="hero-session">Session 04</span>
+            <span class="nx-eyebrow__sep" aria-hidden="true">·</span>
+            <span id="hero-engine">Grounding engine · local</span>
+          </p>
+
+          <h1 class="nx-hero__title nx-reveal" id="hero-title" style="--d:60ms">
+            <span class="nx-hero__line">Hi <span class="nx-hero__name">Nixtio</span>,</span>
+            <span class="nx-hero__line nx-hero__line--soft">Ready to Achieve Great Things?</span>
+          </h1>
+
+          <p class="nx-hero__sub nx-reveal" style="--d:120ms" id="hero-subtitle">
+            Your cockpit is warm. Three agents idle, one deep-research thread waiting for a decision.
+          </p>
+
+          <div class="nx-hero__stats nx-reveal" style="--d:180ms">
+            <div class="nx-stat">
+              <span class="nx-stat__value" id="stat-runs">6</span>
+              <span class="nx-stat__label">quick runs</span>
+            </div>
+            <div class="nx-stat">
+              <span class="nx-stat__value" id="stat-knowledge">475</span>
+              <span class="nx-stat__label">indexed passages</span>
+            </div>
+            <div class="nx-stat">
+              <span class="nx-stat__value" id="stat-credits">1,200</span>
+              <span class="nx-stat__label">credits left</span>
+            </div>
+            <button class="nx-hero__cta" type="button" data-focus-console>
+              <span>Open cockpit</span>
+              <svg class="nx-icon" aria-hidden="true"><use href="#i-arrow-ur"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- animated onboarding hero -->
+        <div class="nx-hero__figure nx-reveal" style="--d:140ms">
+          <span class="nx-orbit" aria-hidden="true"></span>
+          <div class="nx-bubble">
+            <div class="nx-bubble__stage" id="robot-stage">
+              <canvas id="robot-canvas" aria-hidden="true"></canvas>
+              <div class="nx-bubble__fallback" id="robot-fallback" aria-hidden="true">
+                <svg viewBox="0 0 220 220" role="presentation">
+                  <defs>
+                    <linearGradient id="rbBody" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#E7EAF0"/>
+                    </linearGradient>
+                    <linearGradient id="rbRing" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stop-color="#22D3EE"/><stop offset="100%" stop-color="#8B5CF6"/>
+                    </linearGradient>
+                  </defs>
+                  <ellipse cx="110" cy="196" rx="52" ry="9" fill="#0B0F19" opacity=".08"/>
+                  <ellipse cx="110" cy="192" rx="46" ry="7" fill="none" stroke="url(#rbRing)" stroke-width="1.6" opacity=".8"/>
+                  <rect x="72" y="120" width="76" height="58" rx="26" fill="url(#rbBody)" stroke="#DDE2EA"/>
+                  <circle cx="110" cy="150" r="9" fill="#22D3EE" opacity=".85"/>
+                  <rect x="58" y="132" width="17" height="36" rx="8.5" fill="#F3F5F9" stroke="#DDE2EA"/>
+                  <rect x="145" y="132" width="17" height="36" rx="8.5" fill="#F3F5F9" stroke="#DDE2EA"/>
+                  <circle cx="110" cy="82" r="42" fill="url(#rbBody)" stroke="#DDE2EA"/>
+                  <rect x="82" y="66" width="56" height="34" rx="17" fill="#0B0F19"/>
+                  <circle cx="101" cy="83" r="4.4" fill="#7DF3FF"/><circle cx="119" cy="83" r="4.4" fill="#7DF3FF"/>
+                  <path d="M104 92a8 8 0 0 0 12 0" fill="none" stroke="#22D3EE" stroke-width="2" stroke-linecap="round"/>
+                  <circle cx="66" cy="80" r="7.5" fill="#FF7A18"/><circle cx="154" cy="80" r="7.5" fill="#FF7A18"/>
+                  <path d="M110 40V27" stroke="#C9D0DB" stroke-width="3" stroke-linecap="round"/><circle cx="110" cy="23" r="5.5" fill="#FF7A18"/>
+                </svg>
+              </div>
+              <span class="nx-bubble__scan" aria-hidden="true"></span>
+            </div>
+
+            <div class="nx-say">
+              <span class="nx-say__dot" aria-hidden="true"></span>
+              <p id="bubble-text">Hey there! Need a boost?</p>
+            </div>
+
+            <div class="nx-ideas">
+              <button class="nx-idea" type="button" data-route="deep_research" data-prompt="Explain quantum computing in simple terms">Quantum, simply</button>
+              <button class="nx-idea" type="button" data-route="image" data-prompt="A luminous quantum bloom in porcelain studio light">Poster for launch</button>
+              <button class="nx-idea" type="button" data-route="music" data-prompt="A calm ambient focus loop for deep work">Focus loop</button>
+            </div>
+          </div>
+          <p class="nx-hero__caption" id="figure-caption">
+            <span class="nx-live" aria-hidden="true"></span>
+            NEXUS companion · <span id="companion-state">listening</span>
+          </p>
+        </div>
+      </section>
+
+      <!-- feature matrix -->
+      <section class="nx-features" aria-label="Workspace modules">
+
+        <article class="nx-card nx-card--fast nx-reveal" style="--d:220ms" tabindex="0">
+          <div class="nx-card__head">
+            <span class="nx-tile nx-tile--orange" aria-hidden="true">
+              <svg viewBox="0 0 32 32" role="presentation">
+                <path d="M16 3.6 26 9.4v13.2L16 28.4 6 22.6V9.4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" opacity=".55"/>
+                <path d="M17.8 8.6 10.4 17h4.9l-1.4 6.6 7.7-9H16z" fill="currentColor"/>
+              </svg>
+            </span>
+            <button class="nx-card__open" type="button" aria-label="Open Fast Start">
+              <svg class="nx-icon" aria-hidden="true"><use href="#i-arrow-ur"/></svg>
+            </button>
+          </div>
+
+          <h2 class="nx-card__title">Fast Start</h2>
+          <p class="nx-card__caption">Ship the smallest useful thing, then loop.</p>
+
+          <div class="nx-card__body nx-fast">
+            <div class="nx-fast__ring">
+              <svg viewBox="0 0 120 120" role="img" aria-label="Weekly velocity">
+                <circle cx="60" cy="60" r="47" fill="none" stroke="#EDEFF3" stroke-width="9"/>
+                <circle class="nx-fast__arc" id="fast-arc" cx="60" cy="60" r="47" fill="none" stroke="#FF7A18"
+                        stroke-width="9" stroke-linecap="round" stroke-dasharray="295" stroke-dashoffset="188"
+                        transform="rotate(-90 60 60)"/>
+              </svg>
+              <div class="nx-fast__ringtext">
+                <strong id="fast-pct">64%</strong>
+                <span>velocity</span>
+              </div>
+            </div>
+            <div class="nx-fast__meta">
+              <ul class="nx-chipstack" id="fast-items">
+                <li>Instant drafts</li>
+                <li>One-tap reruns</li>
+                <li>Auto-commit loop</li>
+              </ul>
+              <div class="nx-spark" aria-hidden="true">
+                <i style="--h:38%"></i><i style="--h:58%"></i><i style="--h:46%"></i><i style="--h:74%"></i>
+                <i style="--h:62%"></i><i style="--h:88%"></i><i style="--h:96%"></i>
+              </div>
+            </div>
+          </div>
+
+          <footer class="nx-card__foot">
+            <span class="nx-card__metric" id="fast-metric">6 quick runs this week</span>
+            <span class="nx-trend nx-trend--up" id="fast-trend">+18%</span>
+          </footer>
+        </article>
+
+        <article class="nx-card nx-card--team nx-reveal" style="--d:280ms" tabindex="0" id="agents">
+          <div class="nx-card__head">
+            <span class="nx-tile nx-tile--grid" aria-hidden="true">
+              <span class="nx-grid4">
+                <i style="--c:#8B5CF6"></i><i style="--c:#22D3EE"></i>
+                <i style="--c:#FF7A18"></i><i style="--c:#3B82F6"></i>
+              </span>
+            </span>
+            <button class="nx-card__open" type="button" aria-label="Open team orchestration">
+              <svg class="nx-icon" aria-hidden="true"><use href="#i-arrow-ur"/></svg>
+            </button>
+          </div>
+
+          <h2 class="nx-card__title">Collaborate with Team</h2>
+          <p class="nx-card__caption">Background multi-agent orchestration.</p>
+
+          <div class="nx-card__body nx-team">
+            <div class="nx-team__agents">
+              <div class="nx-face" style="--c:#8B5CF6;--c2:#C4B5FD" data-tip="Researcher · busy"><span>R</span><i></i></div>
+              <div class="nx-face" style="--c:#22D3EE;--c2:#A5F3FC" data-tip="Vision · idle"><span>V</span><i></i></div>
+              <div class="nx-face" style="--c:#FF7A18;--c2:#FDBA74" data-tip="Planner · busy"><span>P</span><i></i></div>
+              <div class="nx-face" style="--c:#3B82F6;--c2:#BFDBFE" data-tip="Writer · idle"><span>W</span><i></i></div>
+              <span class="nx-face nx-face--more">+2</span>
+            </div>
+            <div class="nx-bus" aria-hidden="true">
+              <span class="nx-bus__line"></span>
+              <span class="nx-bus__packet" style="--c:#8B5CF6"></span>
+              <span class="nx-bus__packet nx-bus__packet--b" style="--c:#22D3EE"></span>
+              <span class="nx-bus__label">mesh synced</span>
+            </div>
+          </div>
+
+          <footer class="nx-card__foot">
+            <span class="nx-card__metric" id="team-metric">4 agents in the mesh</span>
+            <span class="nx-trend nx-trend--busy" id="team-trend">2 busy</span>
+          </footer>
+        </article>
+
+        <article class="nx-card nx-card--plan nx-reveal" style="--d:340ms" tabindex="0" id="planning">
+          <div class="nx-card__head">
+            <span class="nx-tile nx-tile--blue" aria-hidden="true">
+              <svg viewBox="0 0 32 32" role="presentation">
+                <rect x="4.2" y="7" width="23.6" height="20.8" rx="5" fill="currentColor" opacity=".14"/>
+                <rect x="4.2" y="7" width="23.6" height="20.8" rx="5" fill="none" stroke="currentColor" stroke-width="1.7"/>
+                <path d="M4.6 13.4h22.8" stroke="currentColor" stroke-width="1.7"/>
+                <path d="M11.4 3.8v5M20.6 3.8v5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+                <circle cx="11.6" cy="19" r="2.1" fill="currentColor"/><circle cx="17" cy="19" r="2.1" fill="currentColor" opacity=".45"/>
+                <circle cx="22.4" cy="19" r="2.1" fill="currentColor" opacity=".45"/><circle cx="11.6" cy="24" r="2.1" fill="currentColor" opacity=".45"/>
+              </svg>
+            </span>
+            <button class="nx-card__open" type="button" aria-label="Open planning">
+              <svg class="nx-icon" aria-hidden="true"><use href="#i-arrow-ur"/></svg>
+            </button>
+          </div>
+
+          <h2 class="nx-card__title">Planning</h2>
+          <p class="nx-card__caption">Priorities, workflows and calendar in one lane.</p>
+
+          <div class="nx-card__body nx-plan">
+            <div class="nx-week" role="list" aria-label="This week">
+              <span class="nx-week__day" role="listitem"><i>M</i><b>20</b></span>
+              <span class="nx-week__day" role="listitem"><i>T</i><b>21</b></span>
+              <span class="nx-week__day" role="listitem"><i>W</i><b>22</b></span>
+              <span class="nx-week__day is-today" role="listitem"><i>T</i><b>23</b></span>
+              <span class="nx-week__day" role="listitem"><i>F</i><b>24</b></span>
+              <span class="nx-week__day" role="listitem"><i>S</i><b>25</b></span>
+              <span class="nx-week__day is-dim" role="listitem"><i>S</i><b>26</b></span>
+            </div>
+            <ul class="nx-agenda">
+              <li><i class="nx-dot" style="--c:#3B82F6"></i><span>Launch review</span><time>10:30</time></li>
+              <li><i class="nx-dot" style="--c:#8B5CF6"></i><span>Design sync</span><time>14:00</time></li>
+              <li><i class="nx-dot" style="--c:#FF7A18"></i><span>Deep work block</span><time>16:00</time></li>
+            </ul>
+          </div>
+
+          <footer class="nx-card__foot">
+            <span class="nx-card__metric" id="plan-metric">3 priorities pinned</span>
+            <span class="nx-trend nx-trend--cal" id="plan-trend">Today</span>
+          </footer>
+        </article>
+      </section>
+
+      <!-- lower split: runway + activity -->
+      <section class="nx-lower nx-reveal" style="--d:400ms" aria-label="Today">
+        <div class="nx-panel nx-runway">
+          <header class="nx-panel__head">
+            <div>
+              <h3>Today&rsquo;s runway</h3>
+              <p>Three moves that keep the loop tight.</p>
+            </div>
+            <span class="nx-pill nx-pill--ghost" id="runway-date">Fri 23 Oct</span>
+          </header>
+          <ol class="nx-runway__list" id="runway-list">
+            <li>
+              <span class="nx-runway__idx">01</span>
+              <div><strong>Decide the research brief</strong><p>One deep-research thread is waiting on you.</p></div>
+              <button class="nx-mini" type="button" data-route="deep_research" data-prompt="Recursive self-evolution guardrails for autonomous agents">Resume</button>
+            </li>
+            <li>
+              <span class="nx-runway__idx">02</span>
+              <div><strong>Ship the launch poster</strong><p>Render, review, hand off to the team.</p></div>
+              <button class="nx-mini" type="button" data-route="image" data-prompt="A luminous quantum bloom in porcelain studio light">Render</button>
+            </li>
+            <li>
+              <span class="nx-runway__idx">03</span>
+              <div><strong>Set the focus loop</strong><p>A calm 90 BPM bed for the afternoon block.</p></div>
+              <button class="nx-mini" type="button" data-route="music" data-prompt="A calm ambient focus loop for deep work">Compose</button>
+            </li>
+          </ol>
+        </div>
+
+        <div class="nx-panel nx-activity">
+          <header class="nx-panel__head">
+            <div>
+              <h3>Recent threads</h3>
+              <p>Every route lands back here.</p>
+            </div>
+            <button class="nx-ghostbtn" type="button" id="history-btn">History</button>
+          </header>
+          <ul class="nx-activity__list" id="activity-list">
+            <li><i class="nx-kind nx-kind--research" aria-hidden="true"><svg class="nx-icon"><use href="#i-deep"/></svg></i><div><strong>Recursive self-evolution guardrails</strong><p>Deep research · 4 passages cited</p></div><time>12m</time></li>
+            <li><i class="nx-kind nx-kind--image" aria-hidden="true"><svg class="nx-icon"><use href="#i-image"/></svg></i><div><strong>Quantum bloom poster</strong><p>Image · procedural render</p></div><time>48m</time></li>
+            <li><i class="nx-kind nx-kind--music" aria-hidden="true"><svg class="nx-icon"><use href="#i-music"/></svg></i><div><strong>Focus loop in A minor</strong><p>Music · 90 BPM stem</p></div><time>2h</time></li>
+            <li><i class="nx-kind nx-kind--search" aria-hidden="true"><svg class="nx-icon"><use href="#i-search"/></svg></i><div><strong>Sandbox backend defaults</strong><p>Search · 6 passages</p></div><time>Yesterday</time></li>
+          </ul>
+        </div>
+      </section>
+
+      <footer class="nx-footnote">
+        <span>NEXUS OS · build 2.4.0</span>
+        <span class="nx-footnote__dot" aria-hidden="true">•</span>
+        <span id="footnote-engine">Grounding engine · local</span>
+        <span class="nx-footnote__dot" aria-hidden="true">•</span>
+        <span>Multi-modal cockpit online</span>
+      </footer>
+    </main>
+  </div>
+
+  <!-- ── floating cockpit console ─────────────────────────────────────── -->
+  <section class="nx-dock" id="dock" aria-label="NEXUS cockpit console">
+    <div class="nx-dock__inner">
+
+      <!-- streaming result surface -->
+      <div class="nx-run" id="run-panel" hidden aria-live="polite">
+        <header class="nx-run__head">
+          <div class="nx-run__id">
+            <span class="nx-run__badge" id="run-route-badge">
+              <svg class="nx-icon" aria-hidden="true"><use href="#i-deep"/></svg>
+            </span>
+            <div>
+              <p class="nx-run__label" id="run-route-label">Deep Research</p>
+              <p class="nx-run__prompt" id="run-prompt">—</p>
+            </div>
+          </div>
+          <div class="nx-run__actions">
+            <span class="nx-run__engine" id="run-engine">local</span>
+            <button class="nx-iconbtn nx-iconbtn--flat" type="button" id="run-close" aria-label="Dismiss result">
+              <svg class="nx-icon" aria-hidden="true"><use href="#i-close"/></svg>
+            </button>
+          </div>
+        </header>
+
+        <ol class="nx-steps" id="run-steps" aria-label="Execution steps"></ol>
+
+        <div class="nx-run__scroll" id="run-scroll">
+          <div class="nx-artifacts nx-artifacts--lead" id="run-artifacts-lead"></div>
+          <div class="nx-answer" id="run-answer"></div>
+          <div class="nx-artifacts" id="run-artifacts"></div>
+        </div>
+
+        <footer class="nx-run__foot">
+          <span class="nx-run__meta" id="run-meta">streaming…</span>
+          <div class="nx-run__footactions">
+            <button class="nx-ghostbtn" type="button" id="run-copy">Copy</button>
+            <button class="nx-ghostbtn" type="button" id="run-rerun">Rerun</button>
+          </div>
+        </footer>
+      </div>
+
+      <!-- aura + console -->
+      <div class="nx-console-wrap">
+        <div class="nx-aura" aria-hidden="true">
+          <span class="nx-aura__layer nx-aura__layer--cyan"></span>
+          <span class="nx-aura__layer nx-aura__layer--violet"></span>
+          <span class="nx-aura__edge nx-aura__edge--cyan"></span>
+          <span class="nx-aura__edge nx-aura__edge--violet"></span>
+          <span class="nx-aura__floor"></span>
+        </div>
+
+        <form class="nx-console" id="console" autocomplete="off">
+          <div class="nx-console__top">
+            <span class="nx-state" id="console-state">
+              <i class="nx-state__glyph" aria-hidden="true"><b></b><b></b><b></b></i>
+              <span class="nx-state__text" id="console-state-text">READY</span>
+            </span>
+            <span class="nx-console__thread" id="console-thread">New thread · /workspace</span>
+            <span class="nx-console__credit" id="console-credit">1,200 credits</span>
+          </div>
+
+          <div class="nx-console__row">
+            <button class="nx-console__attach" type="button" id="attach-btn" aria-label="Add context">
+              <svg class="nx-icon" aria-hidden="true"><use href="#i-plus"/></svg>
+            </button>
+
+            <label class="nx-input">
+              <span class="nx-sr">Ask NEXUS anything</span>
+              <textarea id="prompt" rows="1" spellcheck="false"
+                        placeholder="Example: 'Explain quantum computing in simple terms'"></textarea>
+            </label>
+
+            <div class="nx-chips" id="chips" role="group" aria-label="Cockpit routes">
+              <button class="nx-chip nx-chip--deep" type="button" data-route="deep_research" aria-pressed="true">
+                <svg class="nx-icon" aria-hidden="true"><use href="#i-deep"/></svg>
+                <span>Deep Research</span>
+              </button>
+              <button class="nx-chip" type="button" data-route="image" aria-pressed="false">
+                <svg class="nx-icon" aria-hidden="true"><use href="#i-image"/></svg>
+                <span>Make an Image</span>
+              </button>
+              <button class="nx-chip" type="button" data-route="search" aria-pressed="false">
+                <svg class="nx-icon" aria-hidden="true"><use href="#i-search"/></svg>
+                <span>Search</span>
+              </button>
+              <button class="nx-chip" type="button" data-route="music" aria-pressed="false">
+                <svg class="nx-icon" aria-hidden="true"><use href="#i-music"/></svg>
+                <span>Create music</span>
+              </button>
+            </div>
+
+            <button class="nx-send" type="submit" id="send-btn" aria-label="Send to NEXUS">
+              <svg class="nx-icon nx-send__icon" aria-hidden="true"><use href="#i-send"/></svg>
+              <svg class="nx-icon nx-send__stop" aria-hidden="true"><use href="#i-stop"/></svg>
+            </button>
+          </div>
+
+          <div class="nx-console__hint">
+            <span><kbd>↵</kbd> send</span>
+            <span><kbd>⇧↵</kbd> newline</span>
+            <span><kbd>esc</kbd> stop</span>
+            <span class="nx-console__routehint" id="route-hint">Multi-hop briefing with grounded citations</span>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- toast -->
+  <div class="nx-toast" id="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script type="module" src="workspace/app.js"></script>
+</body>
+</html>

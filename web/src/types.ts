@@ -18,7 +18,7 @@ export type NodeCategory =
   | 'FILE'
   | 'SOURCE';
 
-export type OperatingMode = 'HUD' | 'GRAPH' | 'RESEARCH' | 'WORKFLOW' | 'ARCHITECTURE' | 'VIDEO' | 'DASHBOARD';
+export type OperatingMode = 'WORKSPACE' | 'HUD' | 'GRAPH' | 'RESEARCH' | 'WORKFLOW' | 'ARCHITECTURE' | 'VIDEO' | 'DASHBOARD';
 
 export type UiVariety = 'TACTICAL_HUD' | 'ANALYTICS_DASHBOARD' | 'MOBILE_COMPACT';
 

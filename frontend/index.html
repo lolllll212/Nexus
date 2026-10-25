@@ -49,6 +49,16 @@
   #search-box .key-hint { position:absolute; right:10px; top:8px; font-family:"SF Mono",monospace;
     font-size:9px; color:#6f8f86; border:1px solid rgba(125,255,217,.15); padding:1px 5px; border-radius:4px; }
 
+  #open-workspace { display:flex; align-items:center; justify-content:center; gap:7px;
+    margin:10px 14px 2px; padding:9px 10px; border-radius:10px; text-decoration:none;
+    font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:9.5px; letter-spacing:.14em;
+    color:#06110d; background:linear-gradient(180deg,#c9ffe8,#7dffd9); font-weight:700;
+    border:1px solid rgba(125,255,217,.5); box-shadow:0 6px 18px -10px rgba(125,255,217,.8);
+    transition:transform .2s, box-shadow .2s, filter .2s; }
+  #open-workspace:hover { transform:translateY(-1px); filter:brightness(1.06);
+    box-shadow:0 10px 24px -10px rgba(125,255,217,.9); }
+  #open-workspace span { font-size:11px; line-height:1; }
+
   .sec-label { font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:9px;
     letter-spacing:.3em; color:#6f8f86; margin:14px 18px 8px; display:flex; align-items:center; justify-content:space-between; }
 
@@ -359,6 +369,11 @@
     <input id="search" placeholder="Search knowledge..." autocomplete="off" />
     <span class="key-hint">/</span>
   </div>
+
+  <!-- Product front door: the light-mode workspace + multi-modal cockpit -->
+  <a id="open-workspace" href="/workspace" title="Open the NEXUS OS workspace cockpit">
+    <span>&#9670;</span> OPEN NEXUS OS COCKPIT
+  </a>
 
   <!-- Inspector Card (Hidden until node clicked) -->
   <div id="inspector">
