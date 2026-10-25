@@ -1101,7 +1101,9 @@ async def chat_endpoint(req: Request):
     # 1c. Deep Research (broad multi-source investigation)
     elif any(kw in q_lower for kw in ("research", "deep dive", "investigate", "look up")):
         intent = "research"
-        tool_data["research"] = await tools_service.deep_research(query)
+        tool_data["research"] = await tools_service.deep_research(
+            query, context=tools_service.bb_compact()
+        )
 
     # 2. Git & Working Tree
     elif any(
@@ -1190,6 +1192,38 @@ async def chat_endpoint(req: Request):
     elif any(kw in q_lower for kw in ["memory", "recall", "remember", "search memory"]):
         intent = "memory"
         tool_data["memory"] = tools_service.tool_memory_query(query)
+
+    # Cross-tool data sharing: any OTHER tool whose keywords also match runs
+    # too and publishes to the shared blackboard, so multi-part questions
+    # gather combined context (tool -> tool data flow).
+    _tool_data_keys = {
+        "greeting": "diag", "repo": "repo", "research": "research", "git": "git",
+        "tasks": "tasks", "agents": "agents", "python": "py", "calc": "calc",
+        "memory": "memory",
+    }
+    if intent in _tool_data_keys and intent in tool_data:
+        tools_service.bb_put(intent, tool_data[intent])
+
+    _kw_sets = {
+        "git": ("git", "branch", "commit", "working tree", "uncommitted", "repo status"),
+        "tasks": ("task", "tasks", "queue", "todo", "backlog", "in progress", "pending work"),
+        "agents": ("agent", "agents", "astra", "tron", "xenom", "ceo", "swarm"),
+        "memory": ("memory", "remember", "recall", "chunks"),
+        "diag": ("diagnostics", "system status", "health", "telemetry"),
+    }
+    _runners = {
+        "git": tools_service.tool_git_status,
+        "tasks": tools_service.tool_list_tasks,
+        "agents": tools_service.tool_agent_status,
+        "memory": lambda: tools_service.tool_memory_query(query),
+        "diag": tool_system_diagnostics,
+    }
+    for _key, _kws in _kw_sets.items():
+        if _key == intent or not any(kw in q_lower for kw in _kws):
+            continue
+        _data = _runners[_key]()
+        tool_data[_key] = _data
+        tools_service.bb_put(_key, _data)
 
     # 9. Knowledge RAG
     top_notes = _pick_top_notes(query, k=5)

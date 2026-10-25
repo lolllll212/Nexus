@@ -29,3 +29,18 @@ Verify with `pytest tests/ -q`, then hand off using the format in `docs/AGENT_CO
 Stuck, blocked, or need a decision? Send it up (kind is `question`, `blocker`, `escalation`, or `handoff`):
 `python scripts/agent_comm.py ask --agent astra --kind blocker --text "<what you need>"`
 The CEO replies via `reply`; check `inbox` for the answer. Don't sit idle — ask.
+
+## Related
+- [[ceo-triage]]
+
+## Related
+- [[handoff]]
+
+## Related
+- [[NEXUS Blueprints]]
+
+## Related
+- [[REA Workflow in NEXUS]]
+
+## Related
+- [[Connection and task recovery]]
