@@ -616,18 +616,10 @@ export const App: React.FC = () => {
 
       {/* ── Center Viewport: Mode Dependent ─────────────────────────────────── */}
       <main className="flex-1 h-full relative overflow-hidden bg-[#0a0f1d]">
-        {/* ── SCREEN 1+2: Light-canvas Primary Workspace Dashboard with the
-             floating multi-modal Query Cockpit. Fixed inset-0, covers the HUD. */}
-        {currentMode === 'WORKSPACE' && (
-          <WorkspaceView
-            onNavigate={(mode) => {
-              setCurrentMode(mode);
-              playHudClick();
-            }}
-            onOpenAgents={() => setIsAgentsModalOpen(true)}
-            onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
-          />
-        )}
+        {/* ── SCREEN 1+2: Light-canvas NEXUS OS workspace — the full light
+             suite (home, graph, research, workflow, architecture, analytics,
+             agents) with the floating multi-modal Query Cockpit. */}
+        {currentMode === 'WORKSPACE' && <WorkspaceView onOpenIntegrations={() => setIsIntegrationsModalOpen(true)} />}
 
         {/* Real-time Information Flow Ticker (Cortex vs Subcortex) in Graph Mode */}
         {currentMode === 'GRAPH' && (

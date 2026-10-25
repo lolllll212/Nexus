@@ -418,6 +418,25 @@ own `/api/workspace/*` router — see
 | `/api/workspace/image` | POST | Deterministic procedural art synthesis (aurora / blueprint / horizon styles) seeded by the prompt hash; returns an SVG data URI + palette |
 | `/api/workspace/music` | POST | Generative audio synthesis: key/scale selection by prompt mood, chord progression, arpeggios, bass, and percussion rendered to a 16-bit WAV data URI |
 
+#### Workspace suite — six live light-mode views (React, `web/`)
+
+The primary dashboard (`web/`, Vite dev on :3000 or the prebuilt bundle in
+`frontend/`) ships its own light-mode versions of the OS's six power surfaces as
+internal workspace routes — reachable from the fixed left nav rail, wired to the
+live :8000 API, never navigating away to the legacy dark pages:
+
+| Route | View | Live backend |
+|---|---|---|
+| **Knowledge Graph** | Full-d3 force graph of the Second Brain (hub filters, node inspector, focus/relink) — "Research this topic" hands the node to the cockpit in Deep Research mode | `GET /api/graph?limit=…` |
+| **Deep Research** | Autonomous research workbench — run new queries, replay the full dossier (findings, concepts, corroborated sources) and browse prior history | `POST /api/research/execute` · `GET /api/research/history` |
+| **Workflow Canvas** | Seeded workflow cards with animated step-by-step execution log replay and per-step service/status badges | `GET /api/workflows` · `POST /api/workflows/run/{id}` |
+| **Architecture** | Hexagonal ports-and-adapters diagram where the adapter chips and route counts are read straight from the running API's own schema | `GET /openapi.json` |
+| **Analytics** | Live counters, uptime, tool inventory, graph volume and component-health panel with auto-refreshing chips | `GET /api/system/telemetry` · `GET /v1/system/health` |
+| **Agents** | Swarm roster (live registrations with a labelled standby fallback), real agent commissioning form, and a mesh-bus activity simulation | `GET /v1/agents` · `POST /v1/agents` |
+
+Every view degrades honestly: when an endpoint is unreachable the surface shows
+an offline chip plus fallback data instead of dead widgets.
+
 ### Coding & Research Studio (`/api/coding/*`)
 
 | Endpoint | Method | Description |
