@@ -141,11 +141,12 @@ on its own: `find_databases` scans a tree for `.sqlite`/`.db` files and
 `docker-compose`/`.env` connection config; `query_database` speaks
 sqlite/postgres/mysql/redis.
 
-## API route modules (18)
+## API route modules (19)
 
 `infrastructure/api/routes/`: `chat`, `memory`, `tools`, `coding`, `goals`,
 `swarm`, `graph`, `system`, `telemetry`, `research`, `analyze`, `workflows`,
-`mcp`, `multimodal`, `audio`, `nim`, `integrations`, `coding_assistant`.
+`mcp`, `multimodal`, `audio`, `nim`, `integrations`, `coding_assistant`,
+`workspace`.
 
 ## Wiring summary by module
 
