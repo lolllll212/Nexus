@@ -25,6 +25,8 @@ nav:
   - Architecture:
       - Dual-Loop Architecture: dual-loop.md
       - Clean Architecture & Dependency Rule: clean-architecture.md
+  - Product:
+      - Workspace & Cockpit UI: workspace-cockpit.md
   - The Brain:
       - Memory System: memory.md
       - Dreaming Pipeline: dreaming.md

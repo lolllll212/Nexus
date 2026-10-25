@@ -45,7 +45,7 @@ from typing import Any
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 
 # ── paths ────────────────────────────────────────────────────────────────────
@@ -510,7 +510,13 @@ app.add_middleware(
 
 @app.get("/")
 async def serve_root():
-    """Serve index.html as the primary dashboard."""
+    """Serve index.html as the primary dashboard.
+
+    Opt-in for demos/embeds: ``NEXUS_ROOT_PAGE=workspace`` sends the bare host to the
+    light-mode workspace cockpit instead, leaving the graph as the default.
+    """
+    if (os.environ.get("NEXUS_ROOT_PAGE") or "").strip().lower() == "workspace":
+        return RedirectResponse("/workspace", status_code=307)
     index_file = FRONTEND_DIR / "index.html"
     if index_file.is_file():
         return FileResponse(index_file, media_type="text/html")
@@ -525,6 +531,16 @@ async def serve_index():
 @app.get("/holo.html")
 async def serve_holo():
     return FileResponse(FRONTEND_DIR / "holo.html", media_type="text/html")
+
+
+@app.get("/workspace")
+@app.get("/workspace.html")
+async def serve_workspace():
+    """NEXUS OS — premium light-mode workspace + floating cockpit console."""
+    page = FRONTEND_DIR / "workspace.html"
+    if not page.is_file():
+        return JSONResponse({"error": "workspace.html missing"}, status_code=404)
+    return FileResponse(page, media_type="text/html")
 
 
 @app.get("/api/graph")
@@ -1262,12 +1278,14 @@ from backend.routers import models as models_router  # noqa: E402
 from backend.routers import rea as rea_router  # noqa: E402
 from backend.routers import research as research_router  # noqa: E402
 from backend.routers import training as training_router  # noqa: E402
+from backend.routers import workspace as workspace_router  # noqa: E402
 
 app.include_router(holo_router.router)
 app.include_router(models_router.router)
 app.include_router(research_router.router)
 app.include_router(training_router.router)
 app.include_router(rea_router.router)
+app.include_router(workspace_router.router)
 
 
 # ── static file fallback (serve frontend/) ───────────────────────────────────
