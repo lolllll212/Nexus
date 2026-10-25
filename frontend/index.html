@@ -1,17 +1,1785 @@
-<!DOCTYPE html>
-<html lang="en" class="dark">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI WORKSHOP OS — NEXUS AI Second Brain</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300f0ff'><circle cx='12' cy='12' r='10' stroke='%2300f0ff' stroke-width='2' fill='none'/><circle cx='12' cy='12' r='4' fill='%2300f0ff'/></svg>" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="/assets/index-Dwkc2_mg.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-DnEAFSG2.css">
-  </head>
-  <body class="bg-[#020408] text-slate-100 overflow-hidden select-none antialiased">
-    <div id="root"></div>
-  </body>
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NEXUS â€” COGNITIVE OS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="shared/hud.css">
+<script type="module" src="shared/voice.js"></script>
+<style>
+  :root {
+    --bg-deep: #04060a;
+    --cyan-neon: #00f0ff;
+    --cyan-glow: #7dffd9;
+    --gold: #ffcf7d;
+    --magenta: #e056fd;
+    --danger: #ff4d4d;
+    --safe: #57ffb0;
+    --pill-bg: rgba(8, 12, 22, 0.85);
+    --border-glass: rgba(125, 255, 217, 0.18);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; overflow:hidden; background:var(--bg-deep);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"SF Pro Display",sans-serif;
+    color:#eafff8; -webkit-font-smoothing:antialiased; }
+
+  #stars { position:fixed; inset:0; z-index:1; pointer-events:none; opacity:.6; }
+  #graph { position:fixed; inset:0; z-index:2; }
+  #vignette { position:fixed; inset:0; z-index:3; pointer-events:none;
+    background:radial-gradient(ellipse at center, transparent 38%, rgba(2,4,7,.75) 100%); }
+
+  /* ---------------- Left Rail (Decluttered) ---------------- */
+  #rail { position:fixed; left:0; top:0; bottom:0; width:310px; z-index:5;
+    background:linear-gradient(180deg, rgba(7,11,15,.94), rgba(4,7,11,.92));
+    border-right:1px solid var(--border-glass); backdrop-filter:blur(18px);
+    -webkit-backdrop-filter:blur(18px); display:flex; flex-direction:column; overflow-y:auto; }
+  #rail::-webkit-scrollbar { width:4px; }
+  #rail::-webkit-scrollbar-thumb { background:rgba(125,255,217,.25); border-radius:4px; }
+
+  #rail .head { padding:18px 20px 12px; border-bottom:1px solid rgba(125,255,217,.12); }
+  #rail .head b { font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:14px;
+    letter-spacing:.28em; color:#eafff8; display:block; }
+  #rail .head .sub { font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:9.5px;
+    letter-spacing:.16em; color:#8fd8c2; margin-top:5px; }
+
+  #search-box { margin:12px 14px 6px; position:relative; }
+  #search { width:100%; background:rgba(255,255,255,.05); border:1px solid rgba(125,255,217,.18);
+    border-radius:10px; padding:9px 32px 9px 12px; color:#eafff8; font-size:12px; outline:none; transition:all .2s; }
+  #search:focus { border-color:var(--cyan-glow); box-shadow:0 0 16px rgba(125,255,217,.2); }
+  #search-box .key-hint { position:absolute; right:10px; top:8px; font-family:"SF Mono",monospace;
+    font-size:9px; color:#6f8f86; border:1px solid rgba(125,255,217,.15); padding:1px 5px; border-radius:4px; }
+
+  #open-workspace { display:flex; align-items:center; justify-content:center; gap:7px;
+    margin:10px 14px 2px; padding:9px 10px; border-radius:10px; text-decoration:none;
+    font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:9.5px; letter-spacing:.14em;
+    color:#06110d; background:linear-gradient(180deg,#c9ffe8,#7dffd9); font-weight:700;
+    border:1px solid rgba(125,255,217,.5); box-shadow:0 6px 18px -10px rgba(125,255,217,.8);
+    transition:transform .2s, box-shadow .2s, filter .2s; }
+  #open-workspace:hover { transform:translateY(-1px); filter:brightness(1.06);
+    box-shadow:0 10px 24px -10px rgba(125,255,217,.9); }
+  #open-workspace span { font-size:11px; line-height:1; }
+
+  .sec-label { font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:9px;
+    letter-spacing:.3em; color:#6f8f86; margin:14px 18px 8px; display:flex; align-items:center; justify-content:space-between; }
+
+  /* Inspector (Hidden by default, slides open) */
+  #inspector { padding:0 16px 12px; display:none; animation:fadeIn .25s ease; border-bottom:1px solid rgba(125,255,217,.1); }
+  #inspector.active { display:block; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+
+  .ins-header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  #ins-name { font-size:14px; color:#eafff8; letter-spacing:.04em; font-weight:600; line-height:1.4; }
+  #ins-name .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:8px; vertical-align:middle; }
+  .close-btn { cursor:pointer; font-size:14px; color:#8fd8c2; padding:2px 6px; border-radius:4px;
+    border:1px solid rgba(125,255,217,.18); background:transparent; }
+  .close-btn:hover { color:#fff; border-color:var(--cyan-glow); }
+
+  #ins-group { display:inline-block; font-family:"SF Mono",monospace; font-size:8.5px;
+    letter-spacing:.16em; color:#06110d; background:var(--cyan-glow); border-radius:99px;
+    padding:3px 9px; margin:7px 0 3px; font-weight:600; }
+  #ins-meta { font-family:"SF Mono",monospace; font-size:9.5px; color:#8fd8c2; line-height:1.6; word-break:break-all; }
+  
+  #ins-desc { font-size:11.5px; line-height:1.65; color:#c9d6d2; margin-top:10px;
+    max-height:220px; overflow-y:auto; white-space:pre-wrap; background:rgba(0,0,0,.25);
+    padding:10px; border-radius:8px; border:1px solid rgba(125,255,217,.08); }
+  #ins-desc::-webkit-scrollbar { width:3px; }
+  #ins-desc::-webkit-scrollbar-thumb { background:rgba(125,255,217,.2); border-radius:3px; }
+
+  /* Inline Editor */
+  #ins-editor-wrap { display:none; margin-top:10px; }
+  #ins-editor-wrap.active { display:block; }
+  #ins-editor { width:100%; height:190px; background:rgba(3,6,10,.85); border:1px solid var(--cyan-glow);
+    border-radius:8px; padding:10px; color:#eafff8; font-family:"SF Mono",monospace; font-size:11px;
+    line-height:1.5; outline:none; resize:vertical; }
+  .editor-actions { display:flex; gap:8px; margin-top:8px; }
+  .btn-sm { font-family:"SF Mono",monospace; font-size:9.5px; letter-spacing:.12em;
+    padding:6px 12px; border-radius:6px; cursor:pointer; border:1px solid var(--border-glass); }
+  .btn-save { background:linear-gradient(135deg, #7dffd9, #35e0b5); color:#06110d; font-weight:600; border:none; }
+  .btn-cancel { background:rgba(255,255,255,.05); color:#9fb4ab; }
+
+  .ins-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .act-btn { display:inline-flex; align-items:center; gap:5px; cursor:pointer;
+    font-family:"SF Mono",monospace; font-size:9.5px; letter-spacing:.14em;
+    color:#06110d; background:linear-gradient(135deg, #7dffd9, #35e0b5); border:none;
+    border-radius:7px; padding:7px 13px; font-weight:600; transition:all .2s; }
+  .act-btn:hover { box-shadow:0 0 14px rgba(125,255,217,.4); }
+  .act-btn.secondary { background:rgba(255,255,255,.07); color:#8fd8c2; border:1px solid rgba(125,255,217,.22); }
+  .act-btn.secondary:hover { color:#7dffd9; border-color:var(--cyan-glow); }
+
+  #ins-result { margin-top:10px; font-size:10.5px; line-height:1.55; color:#e8dfc8;
+    background:rgba(255,204,110,.07); border-left:2px solid rgba(255,204,110,.4);
+    border-radius:6px; padding:8px 10px; display:none; white-space:pre-wrap; }
+  #ins-result.show { display:block; }
+
+  /* Path tracer banner */
+  #path-banner { margin-top:10px; background:rgba(0,240,255,.08); border:1px solid rgba(0,240,255,.3);
+    border-radius:8px; padding:8px 10px; display:none; }
+  #path-banner.show { display:block; }
+  .path-title { font-family:"SF Mono",monospace; font-size:9.5px; color:var(--cyan-neon); font-weight:600; margin-bottom:5px; }
+  .path-chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; }
+  .path-chip { font-family:"SF Mono",monospace; font-size:9px; background:rgba(0,240,255,.15);
+    color:#eafff8; padding:3px 7px; border-radius:4px; cursor:pointer; }
+  .path-chip:hover { background:rgba(0,240,255,.3); }
+
+  /* Connections in inspector */
+  #connections { margin-top:6px; max-height:160px; overflow-y:auto; }
+  #connections::-webkit-scrollbar { width:3px; }
+  #connections::-webkit-scrollbar-thumb { background:rgba(125,255,217,.2); border-radius:3px; }
+  .conn { display:flex; align-items:center; gap:8px; padding:5px 4px; cursor:pointer;
+    border-bottom:1px solid rgba(125,255,217,.06); font-size:11px; color:#c9d6d2; transition:color .15s; }
+  .conn:hover { color:var(--cyan-glow); }
+  .conn .cdot { width:7px; height:7px; border-radius:50%; flex:none; }
+  .conn .w { margin-left:auto; font-family:"SF Mono",monospace; font-size:9px; color:#6f8f86; }
+
+  /* TOP HUBS (Deduplicated) */
+  #hubs { padding:0 16px 10px; }
+  .hub { display:flex; align-items:center; gap:8px; padding:5px 4px; cursor:pointer;
+    font-size:11.5px; color:#c9d6d2; border-radius:6px; transition:all .15s; }
+  .hub:hover { color:var(--cyan-glow); background:rgba(125,255,217,.06); }
+  .hub .hdot { width:7px; height:7px; border-radius:50%; flex:none; }
+  .hub .hc { margin-left:auto; font-family:"SF Mono",monospace; font-size:9.5px; color:#7dffd9;
+    background:rgba(125,255,217,.12); padding:1px 6px; border-radius:99px; }
+
+  /* Swarm Log */
+  #autolog { border-top:1px solid rgba(125,255,217,.1); padding:4px 16px 14px; margin-top:auto; }
+  .alog { font-size:10px; color:#9fb4ab; line-height:1.55; padding:5px 0;
+    border-bottom:1px solid rgba(125,255,217,.06); font-family:"SF Mono",monospace; }
+  .alog b { color:var(--cyan-glow); font-weight:600; }
+  .alog .bad { color:var(--danger); }
+  .alog .ago { color:#5a6b62; float:right; font-size:9px; }
+
+  /* ---------------- Top Center Toolbar ---------------- */
+  #top-toolbar { position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:10;
+    display:flex; align-items:center; gap:8px; pointer-events:auto;
+    background:rgba(7,11,15,.88); border:1px solid var(--border-glass); border-radius:99px;
+    padding:6px 14px; backdrop-filter:blur(14px); box-shadow:0 8px 32px rgba(0,0,0,.5); }
+
+  .tbtn { cursor:pointer; user-select:none; font-family:"SF Mono",monospace; font-size:10px;
+    letter-spacing:.12em; color:#8fd8c2; background:rgba(255,255,255,.04);
+    border:1px solid rgba(125,255,217,.2); border-radius:99px; padding:6px 13px;
+    display:inline-flex; align-items:center; gap:5px; transition:all .2s; }
+  .tbtn:hover { color:var(--cyan-glow); border-color:var(--cyan-glow); box-shadow:0 0 12px rgba(125,255,217,.2); }
+  .tbtn.active { color:#06110d; background:var(--cyan-glow); font-weight:600; border-color:var(--cyan-glow); }
+  .tbtn.gold { color:var(--gold); border-color:rgba(255,204,110,.35); }
+  .tbtn.magenta { color:var(--magenta); border-color:rgba(224,86,253,.35); }
+  .tbtn.danger { color:var(--danger); border-color:rgba(255,77,77,.35); }
+
+  #focus-name { font-size:13px; font-weight:600; color:#eafff8; letter-spacing:.06em;
+    max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 6px; }
+
+  /* Popover Panels (Forces & Shortcuts) */
+  .popover-menu { position:absolute; top:48px; background:rgba(7,11,15,.96); border:1px solid var(--border-glass);
+    border-radius:12px; padding:14px; width:260px; backdrop-filter:blur(18px); box-shadow:0 12px 40px rgba(0,0,0,.7);
+    display:none; flex-direction:column; gap:10px; z-index:20; }
+  .popover-menu.open { display:flex; }
+  #forces-popover { right:50px; }
+  #help-popover { right:0; width:270px; }
+
+  .fslider { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .fslider span { font-size:10.5px; color:#9fb4ab; width:78px; font-family:"SF Mono",monospace; }
+  .fslider input[type=range] { flex:1; appearance:none; height:3px; background:rgba(125,255,217,.2); border-radius:2px; outline:none; }
+  .fslider input[type=range]::-webkit-slider-thumb { appearance:none; width:12px; height:12px; border-radius:50%; background:var(--cyan-glow); cursor:pointer; }
+
+  .dpills { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+  .dpill { font-family:"SF Mono",monospace; font-size:8.5px; letter-spacing:.12em; color:#6f8f86;
+    background:rgba(255,255,255,.04); border:1px solid rgba(125,255,217,.16); border-radius:7px;
+    padding:4px 9px; cursor:pointer; user-select:none; }
+  .dpill.on { color:var(--cyan-glow); border-color:var(--cyan-glow); background:rgba(125,255,217,.1); }
+
+  .help-row { display:flex; justify-content:space-between; font-size:10.5px; color:#c9d6d2; padding:3px 0; }
+  .help-key { font-family:"SF Mono",monospace; color:var(--cyan-glow); background:rgba(125,255,217,.1);
+    padding:1px 6px; border-radius:4px; font-size:9.5px; }
+
+  /* ---------------- Right Rail (Streamlined HUD) ---------------- */
+  #rrail { position:fixed; right:16px; top:16px; z-index:5; width:164px; display:flex; flex-direction:column; gap:10px; }
+  
+  #filter { background:rgba(7,11,15,.88); border:1px solid var(--border-glass); border-radius:14px;
+    backdrop-filter:blur(14px); padding:12px 14px; max-height:240px; overflow-y:auto; }
+  #filter::-webkit-scrollbar { width:3px; }
+  #filter::-webkit-scrollbar-thumb { background:rgba(125,255,217,.2); border-radius:3px; }
+  #filter h4 { font-family:"SF Mono",monospace; font-size:9px; letter-spacing:.3em; color:#6f8f86; margin-bottom:8px; }
+  .frow { display:flex; align-items:center; gap:8px; font-size:11px; color:#c9d6d2; padding:3px 2px; cursor:pointer; user-select:none; }
+  .frow .fdot { width:7px; height:7px; border-radius:50%; flex:none; }
+  .frow .fc { margin-left:auto; font-family:"SF Mono",monospace; font-size:9px; color:#6f8f86; }
+  .frow.off { opacity:.32; }
+
+  /* Hologram Mode 4-way Segmented Pill */
+  .mode-pill { background:rgba(7,11,15,.88); border:1px solid var(--border-glass); border-radius:10px;
+    padding:4px; display:grid; grid-template-columns:repeat(4, 1fr); gap:3px; backdrop-filter:blur(10px); }
+  .mode-pill button { font-family:"SF Mono",monospace; font-size:8.5px; letter-spacing:.08em;
+    background:transparent; color:#6f8f86; border:none; border-radius:6px; padding:6px 2px; cursor:pointer; text-align:center; transition:all .15s; }
+  .mode-pill button:hover { color:#eafff8; }
+  .mode-pill button.on { color:#06110d; background:var(--cyan-glow); font-weight:600; }
+
+  /* Compact Icon Toggles */
+  .hud-toggles { display:flex; gap:6px; }
+  .hud-tog { flex:1; font-family:"SF Mono",monospace; font-size:9px; letter-spacing:.1em;
+    background:rgba(7,11,15,.88); color:#6f8f86; border:1px solid var(--border-glass); border-radius:8px;
+    padding:7px 4px; cursor:pointer; text-align:center; user-select:none; transition:all .15s; }
+  .hud-tog.on { color:var(--cyan-glow); border-color:var(--cyan-glow); background:rgba(125,255,217,.12); }
+
+  /* EYES webcam PiP */
+  #eyes { position:fixed; right:16px; bottom:84px; z-index:6; width:200px; display:none;
+    border:1px solid rgba(125,255,217,.3); border-radius:12px; overflow:hidden;
+    box-shadow:0 14px 44px rgba(0,0,0,.7); }
+  #eyes video { width:100%; display:block; transform:scaleX(-1); }
+  #eyes .tag { position:absolute; top:6px; left:8px; font-family:"SF Mono",monospace;
+    font-size:8px; letter-spacing:.2em; color:#eafff8; background:rgba(0,0,0,.6); padding:2px 8px; border-radius:99px; }
+
+  /* ---------------- Command Dock & Chat ---------------- */
+  #dock-container { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:20;
+    width:min(660px, 86vw); display:flex; flex-direction:column; gap:8px; align-items:center; }
+
+  /* Expandable Chat Drawer */
+  #chat-drawer { width:100%; max-height:220px; overflow-y:auto; display:flex; flex-direction:column;
+    gap:8px; padding:0 4px; pointer-events:auto; }
+  #chat-drawer::-webkit-scrollbar { width:4px; }
+  #chat-drawer::-webkit-scrollbar-thumb { background:rgba(125,255,217,.25); border-radius:4px; }
+  .bubble { font-size:12px; line-height:1.55; padding:10px 14px; border-radius:12px; max-width:92%;
+    backdrop-filter:blur(12px); box-shadow:0 4px 20px rgba(0,0,0,.3); }
+  .bubble.user { align-self:flex-end; color:#e8fff7; background:rgba(125,255,217,.12);
+    border:1px solid rgba(125,255,217,.28); }
+  .bubble.nexus { align-self:flex-start; color:#ffe9c4; background:rgba(15,22,30,.88);
+    border:1px solid rgba(255,204,110,.25); }
+
+  .bubble-footer { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px;
+    padding-top:6px; border-top:1px solid rgba(255,204,110,.15); font-family:"SF Mono",monospace; font-size:9.5px; }
+  .bubble-citations { display:flex; flex-wrap:wrap; gap:5px; }
+  .cite-chip { cursor:pointer; color:var(--cyan-glow); background:rgba(125,255,217,.12);
+    border:1px solid rgba(125,255,217,.25); border-radius:99px; padding:2px 8px; font-size:9px; }
+  .cite-chip:hover { border-color:var(--cyan-glow); background:rgba(125,255,217,.25); }
+  .save-note-btn { cursor:pointer; color:var(--gold); background:rgba(255,204,110,.1);
+    border:1px solid rgba(255,204,110,.3); border-radius:99px; padding:3px 9px; font-size:9px; }
+  .save-note-btn:hover { background:rgba(255,204,110,.25); }
+
+  /* Floating Glassmorphic Command Dock */
+  #command-dock { width:100%; display:flex; align-items:center; gap:10px;
+    background:rgba(8,12,18,.9); border:1px solid var(--border-glass); border-radius:99px;
+    padding:6px 12px; backdrop-filter:blur(20px); box-shadow:0 10px 40px rgba(0,0,0,.6); }
+
+  /* Live Status Gem */
+  .status-gem-wrap { display:flex; align-items:center; gap:6px; padding:4px 8px; border-radius:99px;
+    background:rgba(255,255,255,.04); border:1px solid rgba(125,255,217,.12); }
+  .status-gem { width:8px; height:8px; border-radius:50%; background:var(--cyan-glow);
+    box-shadow:0 0 10px var(--cyan-glow); transition:all .3s; }
+  .status-gem.listening { background:var(--danger); box-shadow:0 0 12px var(--danger); animation:pulse 1s infinite; }
+  .status-gem.thinking { background:var(--gold); box-shadow:0 0 12px var(--gold); animation:pulse 1.2s infinite; }
+  .status-gem.speaking { background:var(--magenta); box-shadow:0 0 14px var(--magenta); animation:pulse 0.7s infinite; }
+  @keyframes pulse { 50% { transform:scale(1.3); opacity:.7; } }
+  .status-text { font-family:"SF Mono",monospace; font-size:9.5px; letter-spacing:.12em; color:#8fd8c2; }
+
+  /* Active Model Badge */
+  .model-badge { font-family:"SF Mono",monospace; font-size:9px; letter-spacing:.14em; color:var(--gold);
+    background:rgba(255,204,110,.08); border:1px solid rgba(255,204,110,.25); border-radius:99px;
+    padding:4px 9px; white-space:nowrap; }
+
+  #msg { flex:1; background:transparent; border:none; outline:none; color:#eafff8;
+    font-size:12.5px; padding:6px 4px; }
+  #msg::placeholder { color:#5a6b62; }
+
+  .dock-btn { width:36px; height:36px; border-radius:50%; cursor:pointer; user-select:none;
+    display:flex; align-items:center; justify-content:center; font-size:14px;
+    background:rgba(255,255,255,.05); border:1px solid rgba(125,255,217,.25); color:var(--cyan-glow);
+    transition:all .2s; }
+  .dock-btn:hover { border-color:var(--cyan-glow); box-shadow:0 0 14px rgba(125,255,217,.3); }
+  #mic.live { background:var(--danger); color:#fff; border-color:var(--danger); animation:pulse 1s infinite; }
+
+  /* Audio-Reactive Voice Caption */
+  #caption { position:fixed; left:50%; bottom:78px; transform:translateX(-50%); z-index:15;
+    max-width:min(680px,80vw); padding:9px 20px; border-radius:99px; text-align:center;
+    font-family:"SF Mono",monospace; font-size:12px; letter-spacing:.06em;
+    color:var(--gold); background:rgba(8,12,18,.9); border:1px solid rgba(255,204,110,.3);
+    backdrop-filter:blur(10px); opacity:0; pointer-events:none; transition:opacity .2s; }
+  #caption.show { opacity:1; }
+
+  /* Notification Toast */
+  #toast { position:fixed; top:74px; left:50%; transform:translateX(-50%); z-index:30;
+    padding:8px 18px; border-radius:99px; font-family:"SF Mono",monospace; font-size:11px;
+    letter-spacing:.08em; color:#eafff8; background:rgba(7,11,15,.95); border:1px solid var(--cyan-glow);
+    box-shadow:0 8px 30px rgba(0,0,0,.6); opacity:0; pointer-events:none; transition:opacity .25s, transform .25s; }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(4px); }
+
+  #fallback { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center;
+    background:rgba(4,6,10,.95); color:#c9d6d2; font-size:13px; text-align:center; line-height:1.8; }
+</style>
+<script src="/vendor/three.0.152.2.min.js"></script>
+<script>window.THREE || document.write('<script src="https://unpkg.com/three@0.152.2/build/three.min.js"><\/script>');</script>
+<script src="/vendor/3d-force-graph.1.70.8.min.js"></script>
+<script>window.ForceGraph3D || document.write('<script src="https://unpkg.com/3d-force-graph/dist/3d-force-graph.min.js"><\/script>');</script>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<div id="graph"></div>
+<div id="vignette"></div>
+
+<!-- Top-Center Unified Toolbar -->
+<div id="top-toolbar">
+  <button class="tbtn" id="btn-view-mode" title="Toggle 2D / 3D Layout">3D</button>
+  <button class="tbtn" id="btn-fit" title="Fit Camera (F)">âŠ™ FIT</button>
+  <span id="focus-name">NEXUS GALAXY</span>
+  <button class="tbtn gold" id="btn-reset" title="Reset Selection (Esc)">â†º RESET</button>
+  <button class="tbtn magenta" id="btn-dream" title="Dream Mode: Auto-Link Discovery">âœ§ DREAM</button>
+  <button class="tbtn danger" id="btn-shield" title="Shield Radar: Security Audit">ðŸ›¡ SHIELD</button>
+  
+  <div style="position:relative;">
+    <button class="tbtn" id="btn-forces" title="Physics & Forces">âš™ FORCES</button>
+    <div class="popover-menu" id="forces-popover">
+      <div class="fslider">
+        <span>Repel (<b id="lbl-repel">80</b>)</span>
+        <input type="range" id="f-repel" min="10" max="600" value="80">
+      </div>
+      <div class="fslider">
+        <span>Link (<b id="lbl-link">60</b>)</span>
+        <input type="range" id="f-link" min="20" max="220" value="60">
+      </div>
+      <div class="sec-label" style="margin:4px 0;">DISPLAY</div>
+      <div class="dpills">
+        <span class="dpill on" id="dp-labels">LABELS</span>
+        <span class="dpill on" id="dp-glow">GLOW</span>
+        <span class="dpill on" id="dp-links">LINKS</span>
+        <span class="dpill" id="dp-hubs">HUBS ONLY</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="position:relative;">
+    <button class="tbtn" id="btn-help" title="Keyboard Shortcuts">?</button>
+    <div class="popover-menu" id="help-popover">
+      <div class="sec-label" style="margin:0 0 4px;">KEYBOARD SHORTCUTS</div>
+      <div class="help-row"><span>Search brain</span><span class="help-key">/</span></div>
+      <div class="help-row"><span>Fit camera</span><span class="help-key">F</span></div>
+      <div class="help-row"><span>Toggle 2D / 3D</span><span class="help-key">3</span></div>
+      <div class="help-row"><span>Reset view / Deselect</span><span class="help-key">Esc</span></div>
+      <div class="help-row"><span>Toggle voice mic</span><span class="help-key">M</span></div>
+      <div class="help-row"><span>Trace shortest path</span><span class="help-key">Shift + Click</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Left Rail: Cleaned up & Actionable Inspector -->
+<div id="rail">
+  <div class="head">
+    <b>NEXUS COGNITIVE OS</b>
+    <!-- Single source of truth for counts -->
+    <div class="sub" id="counts">â€” nodes Â· â€” connections</div>
+  </div>
+
+  <div id="search-box">
+    <input id="search" placeholder="Search knowledge..." autocomplete="off" />
+    <span class="key-hint">/</span>
+  </div>
+
+  <!-- Product front door: the light-mode workspace + multi-modal cockpit -->
+  <a id="open-workspace" href="/workspace" title="Open the NEXUS OS workspace cockpit">
+    <span>&#9670;</span> OPEN NEXUS OS COCKPIT
+  </a>
+
+  <!-- Inspector Card (Hidden until node clicked) -->
+  <div id="inspector">
+    <div class="ins-header">
+      <div id="ins-name"><span class="dot"></span><span>Node Name</span></div>
+      <button class="close-btn" id="btn-close-ins" title="Close Inspector">âœ•</button>
+    </div>
+    <div id="ins-group">CORE</div>
+    <div id="ins-meta">â€”</div>
+
+    <div id="path-banner">
+      <div class="path-title">âš¡ SHORTEST PATH TRACER</div>
+      <div id="path-summary" style="font-size:10.5px; color:#c9d6d2;"></div>
+      <div class="path-chips" id="path-chips"></div>
+      <button class="btn-sm btn-cancel" id="btn-clear-path" style="margin-top:6px;">Clear Trace</button>
+    </div>
+
+    <div id="ins-desc"></div>
+
+    <!-- Inline Note Editor -->
+    <div id="ins-editor-wrap">
+      <textarea id="ins-editor" placeholder="Markdown note content..."></textarea>
+      <div class="editor-actions">
+        <button class="btn-sm btn-save" id="btn-save-note">Save Changes</button>
+        <button class="btn-sm btn-cancel" id="btn-cancel-edit">Cancel</button>
+      </div>
+    </div>
+
+    <div class="ins-actions">
+      <button class="act-btn secondary" id="btn-edit-note">âœŽ Edit Note</button>
+      <span id="ins-dynamic-run"></span>
+    </div>
+
+    <div id="ins-result"></div>
+
+    <div class="sec-label" id="conn-label" style="margin:12px 0 4px;">CONNECTED NEIGHBORS</div>
+    <div id="connections"></div>
+  </div>
+
+  <!-- Deduplicated Top Hubs -->
+  <div class="sec-label">TOP HUBS</div>
+  <div id="hubs"></div>
+
+  <!-- Swarm Events Log -->
+  <div id="autolog">
+    <div class="sec-label" style="margin:8px 0 4px; padding:0;">SWARM PULSE & EVENTS</div>
+    <div id="alog-rows"><div class="alog">System listening on event bus...</div></div>
+  </div>
+</div>
+
+<!-- Right Rail: Streamlined Filter & Segmented Mode Pill -->
+<div id="rrail">
+  <div id="filter">
+    <h4>GROUPS</h4>
+    <div id="filter-rows"></div>
+  </div>
+
+  <!-- Hologram Mode 4-way Segmented Pill -->
+  <div class="mode-pill">
+    <button data-m="ring" class="on" title="Spherical Ring">RING</button>
+    <button data-m="cube" title="3D Cube Grid">CUBE</button>
+    <button data-m="face" title="2.5D Planar Face">FACE</button>
+    <button data-m="eyes" title="Toggle Cam PiP">EYES</button>
+  </div>
+
+  <!-- Compact Icon Toggles -->
+  <div class="hud-toggles">
+    <div class="hud-tog" id="tog-watch" title="Watch Swarm Activity">ðŸ‘ Watch</div>
+    <div class="hud-tog" id="tog-hold" title="Hold Force Simulation">â¸ Hold</div>
+    <div class="hud-tog" id="tog-focus" title="1-Hop Isolation">ðŸŽ¯ Focus</div>
+  </div>
+</div>
+
+<!-- EYES webcam PiP -->
+<div id="eyes"><span class="tag">EYES Â· LOCAL CAM</span><video id="eyesvid" autoplay playsinline muted></video></div>
+
+<!-- Bottom Floating Glassmorphic Command Dock -->
+<div id="dock-container">
+  <div id="chat-drawer"></div>
+  <div id="command-dock">
+    <div class="status-gem-wrap">
+      <div class="status-gem" id="dock-gem"></div>
+      <span class="status-text" id="dock-status">IDLE</span>
+    </div>
+    <select class="model-badge" id="dock-model" title="Active model - local or NVIDIA NIM" style="appearance:none;-webkit-appearance:none;cursor:pointer;background:transparent;border:none;outline:none;max-width:200px;"></select>
+    <input id="msg" placeholder="Ask NEXUS or press M to speak..." autocomplete="off" />
+    <div class="dock-btn" id="mic" title="Voice (M)">ðŸŽ™</div>
+    <div class="dock-btn" id="send" title="Send (Enter)">âž¤</div>
+  </div>
+</div>
+
+<div id="caption"></div>
+<div id="toast"></div>
+<div id="fallback"><div>âš  3D libraries failed to load.<br/>Please ensure three.js and 3d-force-graph CDN connections are reachable.</div></div>
+
+<script>
+/* ============================================================
+   NEXUS COGNITIVE OS â€” 3D Cosmos & ReAct Agent Brain
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const MESH_POLL = 20000, LLM_POLL = 30000;
+const FINISH_MS = 900; // Pause buffering threshold
+
+/* API client */
+const API = {
+  key: localStorage.getItem('nexus_api_key') || '',
+  session: localStorage.getItem('nexus_session') || ('cosmos-' + Math.random().toString(36).slice(2, 10)),
+};
+localStorage.setItem('nexus_session', API.session);
+
+async function nexusFetch(path, opts = {}) {
+  const headers = Object.assign({}, opts.headers || {});
+  if (API.key) headers['Authorization'] = 'Bearer ' + API.key;
+  if (opts.json) headers['Content-Type'] = 'application/json';
+  return fetch(path, Object.assign({}, opts, { headers }));
+}
+const jget = async p => { const r = await nexusFetch(p); if (!r.ok) throw new Error(p + ' â†’ ' + r.status); return r.json(); };
+const jpost = (p, body) => nexusFetch(p, { method: 'POST', json: true, body: JSON.stringify(body || {}) });
+const jput = (p, body) => nexusFetch(p, { method: 'PUT', json: true, body: JSON.stringify(body || {}) });
+
+/* Group Palettes */
+const GROUP_STYLE = {
+  'core':           { color: '#ffcf7d', label: 'Core' },
+  'ui':             { color: '#7dffd9', label: 'UI' },
+  'memory':         { color: '#a9ffe6', label: 'Memory' },
+  'concept':        { color: '#c9ffe6', label: 'Concepts' },
+  'swarm':          { color: '#d9fff2', label: 'Swarms' },
+  'subconscious':   { color: '#ffe9c4', label: 'Subconscious' },
+  'self-evolution': { color: '#9dffe4', label: 'Skills' },
+  'integration':    { color: '#8fb8ff', label: 'Integrations' },
+  'tools':          { color: '#57c8ff', label: 'Tools' },
+  'topic':          { color: '#b6a6ff', label: 'Topics' },
+  'folder':         { color: '#f9c74f', label: 'Folders' },
+  'note':           { color: '#89b4fa', label: 'Notes' },
+  'docs':           { color: '#74c0fc', label: 'Docs' },
+  'opencode':       { color: '#b197fc', label: 'OpenCode' },
+};
+const gstyle = g => GROUP_STYLE[g] || { color: '#8fd8c2', label: (g || 'mesh').toUpperCase() };
+
+/* Application State */
+let GRAPH = null, READY = false;
+let FULL = { nodes: [], links: [] };
+let SELECTED = null, FOCUS_MODE = false, HOLD_SIM = false;
+let IS_2D = false;
+let HIDDEN = new Set();
+let SHOW = { labels: true, glow: true, links: true, hubsOnly: false };
+let FORCES = { repel: 80, linkLen: 60 };
+let PULSES = new Map();
+let DEGREE = new Map();
+let ACTIVE_PATH = [];
+let DREAM_LINKS = [];
+let SHIELD_MODE = false;
+let SHIELD_AUDIT = new Map();
+let micRec = null, listening = false;
+let silenceTimer = null;
+let STATE = 'IDLE';
+let eyesStream = null;
+
+/* Toast helper */
+function showToast(msg, duration = 3000) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._tm);
+  t._tm = setTimeout(() => t.classList.remove('show'), duration);
+}
+
+/* Stars Canvas */
+const SC = $('stars'), SCTX = SC.getContext('2d');
+let SW = innerWidth, SH = innerHeight;
+function sizeStars() {
+  SW = innerWidth; SH = innerHeight;
+  SC.width = SW * devicePixelRatio; SC.height = SH * devicePixelRatio;
+  SCTX.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+}
+sizeStars(); addEventListener('resize', sizeStars);
+const STARLIST = Array.from({ length: 220 }, () => ({
+  x: Math.random() * 2400, y: Math.random() * 2400,
+  r: Math.random() * 1.2 + 0.2, tw: Math.random() * 6.28
+}));
+function drawStars(t) {
+  SCTX.clearRect(0, 0, SW, SH);
+  for (const s of STARLIST) {
+    SCTX.globalAlpha = 0.12 + 0.38 * Math.abs(Math.sin(t / 1800 + s.tw));
+    SCTX.fillStyle = '#9fd8c8';
+    SCTX.beginPath(); SCTX.arc(s.x % SW, s.y % SH, s.r, 0, 7); SCTX.fill();
+  }
+  SCTX.globalAlpha = 1;
+  requestAnimationFrame(drawStars);
+}
+requestAnimationFrame(drawStars);
+
+/* Rounded Rectangle Helper for Canvas */
+function fillRoundedRect(ctx, x, y, width, height, radius) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+/* Node Text Sprite: Dark Translucent Pill (rgba(8, 12, 22, 0.85)) */
+function makeTextTexture(text, { size = 32, color = '#eafff8' } = {}) {
+  const cv = document.createElement('canvas'); const ctx = cv.getContext('2d');
+  ctx.font = `600 ${size}px "SF Mono", Menlo, monospace`;
+  const textWidth = Math.ceil(ctx.measureText(text).width);
+  const padX = 18, padY = 10;
+  cv.width = textWidth + padX * 2;
+  cv.height = size + padY * 2;
+
+  const c = cv.getContext('2d');
+  c.font = `600 ${size}px "SF Mono", Menlo, monospace`;
+  // Translucent pill background
+  c.fillStyle = 'rgba(8, 12, 22, 0.85)';
+  c.strokeStyle = 'rgba(125, 255, 217, 0.35)';
+  c.lineWidth = 2;
+  fillRoundedRect(c, 2, 2, cv.width - 4, cv.height - 4, 8);
+
+  // Text
+  c.fillStyle = color;
+  c.textBaseline = 'middle';
+  c.fillText(text, padX, cv.height / 2);
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.minFilter = THREE.LinearFilter;
+  return { tex, w: cv.width, h: cv.height };
+}
+
+function makeGlowTexture(colorCss) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const c = cv.getContext('2d');
+  const g = c.createRadialGradient(64,64,4, 64,64,64);
+  g.addColorStop(0, colorCss); g.addColorStop(0.4, colorCss + '77'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = g; c.fillRect(0,0,128,128);
+  const tex = new THREE.CanvasTexture(cv); tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+const glowCache = {};
+function glowSprite(colorCss, scale) {
+  if (!glowCache[colorCss]) glowCache[colorCss] = makeGlowTexture(colorCss);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowCache[colorCss], transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  sp.scale.set(scale, scale, 1); return sp;
+}
+
+function ringSprite(colorCss, scale) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const c = cv.getContext('2d');
+  c.strokeStyle = colorCss; c.lineWidth = 5;
+  c.shadowColor = colorCss; c.shadowBlur = 12;
+  c.beginPath(); c.arc(64,64,52,0,6.283); c.stroke();
+  const tex = new THREE.CanvasTexture(cv); tex.minFilter = THREE.LinearFilter;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sp.scale.set(scale, scale, 1); return sp;
+}
+
+function nodeColor(n) {
+  if (SHIELD_MODE && SHIELD_AUDIT.has(n.id)) {
+    const risk = SHIELD_AUDIT.get(n.id).score || 0;
+    if (risk >= 0.7) return '#ff4d4d';
+    if (risk >= 0.3) return '#ffcf7d';
+    return '#57ffb0';
+  }
+  return n.color || gstyle(n.group).color;
+}
+
+/* 3D Node Object */
+function nodeObject(n) {
+  const grp = new THREE.Group();
+  const col = nodeColor(n);
+  const r = Math.max(2.2, Math.min(10, (n.val || 5) * (n.__cosmos ? 0.75 : 0.5)));
+
+  // Audio-reactive modulation scale
+  const isSpeaking = window.speechSynthesis && window.speechSynthesis.speaking;
+  const audioScale = isSpeaking ? (1.0 + 0.25 * Math.sin(Date.now() * 0.012)) : 1.0;
+
+  if (SHOW.glow) grp.add(glowSprite(col, r * (n.__cosmos ? 7 : 5) * audioScale));
+  grp.add(new THREE.Mesh(new THREE.SphereGeometry(r, 16, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(col) })));
+
+  if (n.__selected) grp.add(ringSprite('#ffffff', r * 4.8 * audioScale));
+  if (ACTIVE_PATH.includes(n.id)) grp.add(ringSprite('#00f0ff', r * 4.4));
+
+  const isHub = (DEGREE.get(n.id) || 0) >= 4;
+  const wantLabel = n.__cosmos || n.__selected || ACTIVE_PATH.includes(n.id) || (SHOW.labels && (isHub || n.group === 'folder'));
+  const label = n.__label != null ? n.__label : (n.label || String(n.id));
+
+  if (wantLabel && label) {
+    const { tex, w, h } = makeTextTexture(label, { size: n.__cosmos ? 36 : 28, color: '#eafff8' });
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    const k = 0.11;
+    sp.scale.set(w * k, h * k, 1);
+    sp.position.set(0, r + 7, 0);
+    grp.add(sp);
+  }
+  return grp;
+}
+
+/* Link Key */
+const linkKey = l => `${typeof l.source === 'object' ? l.source.id : l.source}â†’${typeof l.target === 'object' ? l.target.id : l.target}`;
+
+/* Link Resting Opacity: 0.05 cross-group, 0.15 same-group, 0.85 on highlight */
+function getLinkOpacity(l) {
+  if (l.__dream) return 0.85;
+  if (l.__path) return 0.9;
+  if (l.__hot) return 0.85;
+
+  if (SELECTED != null) {
+    const sId = typeof l.source === 'object' ? l.source.id : l.source;
+    const tId = typeof l.target === 'object' ? l.target.id : l.target;
+    if (sId === SELECTED || tId === SELECTED) return 0.85;
+    return 0.02; // dim unrelated links
+  }
+
+  const sGrp = typeof l.source === 'object' ? l.source.group : nodeBy(l.source)?.group;
+  const tGrp = typeof l.target === 'object' ? l.target.group : nodeBy(l.target)?.group;
+  return (sGrp && tGrp && sGrp === tGrp) ? 0.15 : 0.05;
+}
+
+/* Initialize 3D Force Graph */
+function initGraph() {
+  if (typeof ForceGraph3D === 'undefined') { $('fallback').style.display = 'flex'; return; }
+
+  GRAPH = ForceGraph3D({ controlType: 'orbit' })($('graph'))
+    .backgroundColor('rgba(0,0,0,0)')
+    .showNavInfo(false)
+    .nodeThreeObject(nodeObject)
+    .nodeLabel(n => `${n.__label || n.label || n.id} â€” ${gstyle(n.group).label}`)
+    .linkColor(l => {
+      if (l.__dream) return '#e056fd';
+      if (l.__path) return '#00f0ff';
+      if (l.__hot) return '#ffcf7d';
+      return 'rgba(125,255,217,0.4)';
+    })
+    .linkWidth(l => (l.__path ? 2.4 : l.__dream ? 2.0 : l.__hot ? 1.8 : 0.6))
+    .linkOpacity(getLinkOpacity)
+    .linkVisibility(() => SHOW.links)
+    .linkCurvature(l => l.__dream ? 0.25 : 0.08)
+    .linkDirectionalParticles(l => {
+      if (l.__dream) return 4;
+      if (l.__path) return 6;
+      if (l.__hot) return 5;
+      return PULSES.get(linkKey(l)) || 0;
+    })
+    .linkDirectionalParticleWidth(2.6)
+    .linkDirectionalParticleSpeed(l => l.__path ? 0.025 : 0.012)
+    .linkDirectionalParticleColor(l => l.__dream ? '#e056fd' : l.__path ? '#00f0ff' : '#ffcf7d')
+    .onNodeClick(onNodeClick)
+    .onBackgroundClick(clearSelection);
+
+  applyForces();
+  READY = true;
+  setTimeout(() => GRAPH.zoomToFit(800, 60), 1200);
+}
+
+function applyForces() {
+  if (!GRAPH) return;
+  GRAPH.d3Force('charge').strength(-FORCES.repel);
+  GRAPH.d3Force('link').distance(() => FORCES.linkLen);
+  if (!HOLD_SIM) GRAPH.d3ReheatSimulation && GRAPH.d3ReheatSimulation();
+}
+
+$('f-repel').addEventListener('input', e => {
+  FORCES.repel = +e.target.value;
+  $('lbl-repel').textContent = e.target.value;
+  applyForces();
+});
+$('f-link').addEventListener('input', e => {
+  FORCES.linkLen = +e.target.value;
+  $('lbl-link').textContent = e.target.value;
+  applyForces();
+});
+
+/* Popover Toggles */
+$('btn-forces').onclick = (e) => {
+  e.stopPropagation();
+  $('forces-popover').classList.toggle('open');
+  $('help-popover').classList.remove('open');
+};
+$('btn-help').onclick = (e) => {
+  e.stopPropagation();
+  $('help-popover').classList.toggle('open');
+  $('forces-popover').classList.remove('open');
+};
+document.addEventListener('click', () => {
+  $('forces-popover').classList.remove('open');
+  $('help-popover').classList.remove('open');
+});
+$('forces-popover').onclick = e => e.stopPropagation();
+$('help-popover').onclick = e => e.stopPropagation();
+
+/* Display Pills */
+function setupDpill(id, key) {
+  $(id).addEventListener('click', () => {
+    SHOW[key] = !SHOW[key]; $(id).classList.toggle('on', SHOW[key]);
+    if (key === 'hubsOnly') refresh();
+    else { GRAPH.nodeThreeObject(nodeObject); GRAPH.refresh(); }
+  });
+}
+setupDpill('dp-labels', 'labels');
+setupDpill('dp-glow', 'glow');
+setupDpill('dp-links', 'links');
+setupDpill('dp-hubs', 'hubsOnly');
+
+/* 2D / 3D Unified Toggle */
+$('btn-view-mode').onclick = () => {
+  IS_2D = !IS_2D;
+  $('btn-view-mode').textContent = IS_2D ? '2D' : '3D';
+  $('btn-view-mode').classList.toggle('active', IS_2D);
+  if (GRAPH && GRAPH.numDimensions) {
+    GRAPH.numDimensions(IS_2D ? 2 : 3);
+  }
+  showToast(IS_2D ? 'Switched to 2D Planar Mode' : 'Switched to 3D Cosmos Mode');
+};
+
+/* Data Merge */
+function mergeData(cosmos, graph, tree) {
+  const nodes = [], links = [], seen = new Set();
+
+  for (const n of (cosmos.nodes || [])) {
+    if (seen.has(n.id)) continue; seen.add(n.id);
+    nodes.push(Object.assign({ __cosmos: true }, n));
+  }
+  for (const l of (cosmos.links || [])) links.push(Object.assign({ __cosmos: true }, l));
+
+  for (const n of (graph.nodes || [])) {
+    const id = n.id;
+    if (seen.has(id)) continue; seen.add(id);
+    nodes.push({
+      id, __knowledge: true,
+      group: n.group || 'docs',
+      val: 4.5,
+      __label: n.label || String(n.id),
+      label: n.label || String(n.id),
+      file: n.file,
+      excerpt: n.excerpt,
+      desc: n.excerpt
+    });
+  }
+  for (const l of (graph.links || [])) {
+    links.push({ source: l.source, target: l.target, weight: 0.4 });
+  }
+
+  return { nodes, links };
+}
+
+async function loadAll() {
+  let cosmos = null, graph = null, tree = null;
+  try { cosmos = await jget('/api/cosmos'); } catch (e) { console.warn('cosmos err', e); }
+  try { graph = await jget('/api/graph'); } catch (e) {}
+  try { tree = await jget('/api/tree'); } catch (e) {}
+
+  if (!cosmos) {
+    cosmos = {
+      nodes: [{ id: 'N.E.X.U.S', group: 'core', val: 18, status: 'online', triggerable: true, desc: 'Central Nexus Brain' }],
+      links: [], activity: []
+    };
+  }
+
+  FULL = mergeData(cosmos, graph || { nodes: [], links: [] }, tree || []);
+  computeDegree();
+  refresh();
+  renderCounts();
+  renderFilter();
+  renderHubs();
+  renderAutolog(cosmos.activity || []);
+  updateLlmBadge(cosmos.llm);
+}
+
+function computeDegree() {
+  DEGREE = new Map();
+  for (const l of FULL.links) {
+    const s = l.source.id != null ? l.source.id : l.source;
+    const t = l.target.id != null ? l.target.id : l.target;
+    DEGREE.set(s, (DEGREE.get(s) || 0) + 1);
+    DEGREE.set(t, (DEGREE.get(t) || 0) + 1);
+  }
+}
+
+/* Single source of truth for counters in top-left subtitle */
+function renderCounts() {
+  $('counts').textContent = `${FULL.nodes.length} nodes Â· ${FULL.links.length} connections`;
+}
+
+function refresh() {
+  if (!READY) return;
+  let visNodes = FULL.nodes.filter(n => !HIDDEN.has(n.group));
+  if (SHOW.hubsOnly) visNodes = visNodes.filter(n => n.__cosmos || (DEGREE.get(n.id) || 0) >= 3);
+
+  if (SELECTED != null && FOCUS_MODE) {
+    const adj = getNeighbors(SELECTED);
+    adj.add(SELECTED);
+    visNodes = visNodes.filter(n => adj.has(n.id));
+  }
+
+  FULL.nodes.forEach(n => { n.__selected = (n.id === SELECTED); });
+  const visSet = new Set(visNodes.map(n => n.id));
+
+  const allLinks = [...FULL.links, ...DREAM_LINKS];
+
+  GRAPH.graphData({
+    nodes: visNodes,
+    links: allLinks.filter(l => {
+      const s = l.source.id != null ? l.source.id : l.source;
+      const t = l.target.id != null ? l.target.id : l.target;
+      return visSet.has(s) && visSet.has(t);
+    })
+  });
+}
+
+function getNeighbors(id) {
+  const neighbors = new Set();
+  for (const l of FULL.links) {
+    const s = l.source.id != null ? l.source.id : l.source;
+    const t = l.target.id != null ? l.target.id : l.target;
+    if (s === id) neighbors.add(t);
+    else if (t === id) neighbors.add(s);
+  }
+  return neighbors;
+}
+
+/* Groups Filter */
+function renderFilter() {
+  const counts = {};
+  for (const n of FULL.nodes) counts[n.group] = (counts[n.group] || 0) + 1;
+  const order = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+  const box = $('filter-rows'); box.innerHTML = '';
+  for (const g of order) {
+    const row = document.createElement('div');
+    row.className = 'frow' + (HIDDEN.has(g) ? ' off' : '');
+    row.innerHTML = `<span class="fdot" style="background:${gstyle(g).color}"></span><span>${gstyle(g).label}</span><span class="fc">${counts[g]}</span>`;
+    row.onclick = () => {
+      HIDDEN.has(g) ? HIDDEN.delete(g) : HIDDEN.add(g);
+      row.classList.toggle('off');
+      refresh();
+    };
+    box.appendChild(row);
+  }
+}
+
+/* Deduplicate TOP HUBS: Normalize titles and calculate true combined connections */
+function normalizeHubTitle(raw) {
+  if (!raw) return 'Unknown';
+  let t = String(raw).trim().replace(/^(k:|note:|folder:)/i, '').replace(/\.md$/i, '').replace(/[_-]+/g, ' ').trim();
+  const low = t.toLowerCase();
+  if (low.includes('nexus') && (low.includes('core') || low.includes('os') || low === 'n.e.x.u.s' || low === 'nexus')) return 'NEXUS Core';
+  if (low.includes('swarm') || low.includes('agent swarm')) return 'Agent Swarm';
+  if (low.includes('cortex') || low.includes('react loop')) return 'Cortex Engine';
+  if (low.includes('memory') || low.includes('knowledge')) return 'Memory & Recall';
+  if (low.includes('mcp') || low.includes('tools') || low.includes('extended tools')) return 'Tools & MCP';
+  return t.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
+
+function renderHubs() {
+  const groups = new Map();
+  for (const n of FULL.nodes) {
+    const norm = normalizeHubTitle(n.__label || n.label || n.id);
+    if (!groups.has(norm)) groups.set(norm, { title: norm, nodes: [], neighborIds: new Set() });
+    const g = groups.get(norm);
+    g.nodes.push(n);
+    const nbs = getNeighbors(n.id);
+    nbs.forEach(nb => g.neighborIds.add(nb));
+  }
+
+  const hubs = [...groups.values()]
+    .map(g => ({
+      title: g.title,
+      count: g.neighborIds.size,
+      primaryNode: g.nodes.sort((a, b) => (DEGREE.get(b.id) || 0) - (DEGREE.get(a.id) || 0))[0]
+    }))
+    .filter(h => h.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+
+  const box = $('hubs'); box.innerHTML = '';
+  for (const h of hubs) {
+    const row = document.createElement('div'); row.className = 'hub';
+    row.innerHTML = `<span class="hdot" style="background:${nodeColor(h.primaryNode)}"></span><span>${h.title}</span><span class="hc">${h.count}</span>`;
+    row.onclick = () => {
+      selectNode(h.primaryNode.id);
+      focusNode(h.primaryNode.id);
+      pulseAround(h.primaryNode.id, 10);
+    };
+    box.appendChild(row);
+  }
+}
+
+/* Node Lookup */
+function nodeBy(id) { return FULL.nodes.find(n => n.id === id || String(n.id) === String(id)); }
+
+function connectionsOf(id) {
+  const out = [];
+  for (const l of FULL.links) {
+    const s = l.source.id != null ? l.source.id : l.source;
+    const t = l.target.id != null ? l.target.id : l.target;
+    if (s === id || t === id) out.push({ id: s === id ? t : s, weight: l.weight || 0.5 });
+  }
+  return out;
+}
+
+/* Breadth-First Shortest Path Tracer */
+function findShortestPath(startId, endId) {
+  if (startId === endId) return [startId];
+  const queue = [[startId]];
+  const visited = new Set([startId]);
+
+  while (queue.length > 0) {
+    const path = queue.shift();
+    const curr = path[path.length - 1];
+    const nbs = getNeighbors(curr);
+
+    for (const nb of nbs) {
+      if (nb === endId) return [...path, nb];
+      if (!visited.has(nb)) {
+        visited.add(nb);
+        queue.push([...path, nb]);
+      }
+    }
+  }
+  return null;
+}
+
+/* Shift+Click Path Tracer Logic */
+let pathPendingStart = null;
+function handlePathTracing(node) {
+  if (!pathPendingStart) {
+    pathPendingStart = node.id;
+    showToast(`Path Start: ${node.__label || node.id}. Shift+Click target node to trace.`);
+    return;
+  }
+  const start = pathPendingStart;
+  const end = node.id;
+  pathPendingStart = null;
+
+  const path = findShortestPath(start, end);
+  if (!path) {
+    showToast(`No connection path found between nodes.`, 4000);
+    return;
+  }
+
+  ACTIVE_PATH = path;
+  // Mark path links
+  FULL.links.forEach(l => {
+    const s = l.source.id != null ? l.source.id : l.source;
+    const t = l.target.id != null ? l.target.id : l.target;
+    l.__path = false;
+    for (let i = 0; i < path.length - 1; i++) {
+      if ((s === path[i] && t === path[i+1]) || (s === path[i+1] && t === path[i])) {
+        l.__path = true;
+      }
+    }
+  });
+
+  // Display in inspector
+  $('path-banner').classList.add('show');
+  $('path-summary').textContent = `Path: ${path.length - 1} hops`;
+  const chipBox = $('path-chips'); chipBox.innerHTML = '';
+  path.forEach((pId, idx) => {
+    const pNode = nodeBy(pId);
+    const chip = document.createElement('span'); chip.className = 'path-chip';
+    chip.textContent = `${idx + 1}. ${pNode ? (pNode.__label || pNode.id) : pId}`;
+    chip.onclick = () => { selectNode(pId); focusNode(pId); };
+    chipBox.appendChild(chip);
+  });
+
+  selectNode(end);
+  refresh();
+  showToast(`âš¡ Path traced: ${path.length} nodes linked.`);
+}
+
+$('btn-clear-path').onclick = () => {
+  ACTIVE_PATH = [];
+  FULL.links.forEach(l => l.__path = false);
+  $('path-banner').classList.remove('show');
+  refresh();
+  showToast('Path cleared.');
+};
+
+/* Node Selection & Inspector */
+function onNodeClick(n, event) {
+  if (event && event.shiftKey) {
+    handlePathTracing(n);
+    return;
+  }
+  selectNode(n.id);
+  focusNode(n.id);
+}
+
+function selectNode(id) {
+  const n = nodeBy(id); if (!n) return;
+  SELECTED = id;
+  $('focus-name').textContent = String(n.__label || n.label || n.id);
+
+  // Open inspector
+  const ins = $('inspector');
+  ins.classList.add('active');
+
+  const st = gstyle(n.group);
+  $('ins-name').innerHTML = `<span class="dot" style="background:${nodeColor(n)}"></span><span>${n.__label || n.label || n.id}</span>`;
+  $('ins-group').textContent = st.label.toUpperCase();
+  $('ins-group').style.background = nodeColor(n);
+
+  const metaBits = [];
+  if (n.file) metaBits.push(n.file);
+  const conns = connectionsOf(id);
+  metaBits.push(`${conns.length} connection${conns.length === 1 ? '' : 's'}`);
+  if (n.status) metaBits.push(`status: ${n.status}`);
+  $('ins-meta').textContent = metaBits.join(' Â· ');
+
+  // Full excerpt / desc
+  const excerptText = n.full || n.excerpt || n.desc || 'No documentation excerpt available.';
+  $('ins-desc').textContent = excerptText;
+  $('ins-editor').value = n.full || n.excerpt || n.desc || '';
+  $('ins-editor-wrap').classList.remove('active');
+  $('ins-desc').style.display = 'block';
+
+  // Connected neighbors rows
+  const rows = $('connections'); rows.innerHTML = '';
+  for (const c of conns.slice(0, 30)) {
+    const cn = nodeBy(c.id); if (!cn) continue;
+    const row = document.createElement('div'); row.className = 'conn';
+    row.innerHTML = `<span class="cdot" style="background:${nodeColor(cn)}"></span><span>${cn.__label || cn.label || cn.id}</span><span class="w">${c.weight.toFixed(1)}</span>`;
+    row.onclick = () => { selectNode(c.id); focusNode(c.id); };
+    rows.appendChild(row);
+  }
+
+  // Triggerable button
+  renderRunButton(n);
+  refresh();
+}
+
+function clearSelection() {
+  SELECTED = null;
+  $('focus-name').textContent = 'NEXUS GALAXY';
+  $('inspector').classList.remove('active');
+  refresh();
+}
+$('btn-close-ins').onclick = clearSelection;
+$('btn-reset').onclick = () => {
+  clearSelection();
+  ACTIVE_PATH = [];
+  DREAM_LINKS = [];
+  SHIELD_MODE = false;
+  FULL.links.forEach(l => { l.__path = false; l.__dream = false; });
+  $('path-banner').classList.remove('show');
+  GRAPH && GRAPH.zoomToFit(800, 60);
+  showToast('Cosmos view reset');
+};
+
+function focusNode(id) {
+  if (!READY) return;
+  const n = nodeBy(id); if (!n || n.x == null) return;
+  const dist = 140;
+  const ratio = 1 + dist / Math.hypot(n.x || 1, n.y || 1, n.z || 1);
+  GRAPH.cameraPosition({ x: n.x * ratio, y: n.y * ratio, z: n.z * ratio }, n, 850);
+}
+
+/* Actionable Inline Note Editor */
+$('btn-edit-note').onclick = () => {
+  const isEditing = $('ins-editor-wrap').classList.contains('active');
+  if (isEditing) {
+    $('ins-editor-wrap').classList.remove('active');
+    $('ins-desc').style.display = 'block';
+  } else {
+    $('ins-editor-wrap').classList.add('active');
+    $('ins-desc').style.display = 'none';
+    $('ins-editor').focus();
+  }
+};
+$('btn-cancel-edit').onclick = () => {
+  $('ins-editor-wrap').classList.remove('active');
+  $('ins-desc').style.display = 'block';
+};
+$('btn-save-note').onclick = async () => {
+  if (SELECTED == null) return;
+  const newContent = $('ins-editor').value;
+  const n = nodeBy(SELECTED);
+  const nodeId = n.file || n.id;
+
+  try {
+    const res = await jput(`/api/nodes/${encodeURIComponent(nodeId)}`, { content: newContent });
+    const j = await res.json();
+    if (j.ok) {
+      n.excerpt = newContent.slice(0, 700);
+      n.full = newContent;
+      n.desc = n.excerpt;
+      $('ins-desc').textContent = newContent;
+      $('ins-editor-wrap').classList.remove('active');
+      $('ins-desc').style.display = 'block';
+      showToast('âœ“ Note saved to disk and re-indexed live.');
+      loadAll();
+    } else {
+      alert('Save failed: ' + (j.error || 'Unknown error'));
+    }
+  } catch (err) {
+    alert('Save request error: ' + err.message);
+  }
+};
+
+/* Actionable Trigger Run Panel */
+function renderRunButton(n) {
+  const box = $('ins-dynamic-run'); box.innerHTML = '';
+  if (!n.triggerable) return;
+  const btn = document.createElement('button'); btn.className = 'act-btn';
+  btn.textContent = { dream: 'â–¶ DREAM CYCLE', run: 'â–¶ RUN SWARM', generate: 'â–¶ GENERATE TOOL' }[n.action || n.id] || 'â–¶ RUN';
+  btn.onclick = async () => {
+    btn.textContent = 'WORKING...';
+    try {
+      const r = await jpost('/api/cosmos/trigger', { node: n.id, params: {} });
+      const j = await r.json();
+      $('ins-result').className = 'show';
+      $('ins-result').textContent = (j.ok ? 'âœ“ ' : 'âœ— ') + (j.summary || 'Trigger executed');
+      pulseAround(n.id, 14);
+    } catch (e) {
+      $('ins-result').className = 'show';
+      $('ins-result').textContent = 'âœ— ' + e.message;
+    }
+    btn.textContent = 'â–¶ RUN';
+  };
+  box.appendChild(btn);
+}
+
+/* Pulses Animation */
+function pulseAround(id, amount = 12) {
+  for (const l of FULL.links) {
+    const s = l.source.id != null ? l.source.id : l.source;
+    const t = l.target.id != null ? l.target.id : l.target;
+    if (s === id || t === id) { PULSES.set(linkKey(l), amount); l.__hot = true; }
+  }
+  tickPulses();
+}
+let pulseTimer = null;
+function tickPulses() {
+  if (pulseTimer) return;
+  pulseTimer = setInterval(() => {
+    let alive = false;
+    for (const [k, v] of PULSES) {
+      const nv = v - 1.5;
+      if (nv <= 1) {
+        PULSES.delete(k);
+        const l = FULL.links.find(x => linkKey(x) === k);
+        if (l) l.__hot = false;
+      } else {
+        PULSES.set(k, nv);
+        alive = true;
+      }
+    }
+    if (READY) GRAPH.refresh();
+    if (!alive && PULSES.size === 0) { clearInterval(pulseTimer); pulseTimer = null; }
+  }, 240);
+}
+
+/* Sequential Thought Trail for Returned Nodes */
+function animateThoughtTrail(nodeIds) {
+  if (!nodeIds || nodeIds.length === 0) return;
+  let delay = 0;
+  for (let i = 0; i < nodeIds.length; i++) {
+    const currId = nodeIds[i];
+    setTimeout(() => {
+      pulseAround(currId, 16);
+      if (i < nodeIds.length - 1) {
+        const nextId = nodeIds[i + 1];
+        const matchLink = FULL.links.find(l => {
+          const s = l.source.id != null ? l.source.id : l.source;
+          const t = l.target.id != null ? l.target.id : l.target;
+          return (s === currId && t === nextId) || (s === nextId && t === currId);
+        });
+        if (matchLink) {
+          matchLink.__hot = true;
+          PULSES.set(linkKey(matchLink), 18);
+        }
+      }
+    }, delay);
+    delay += 250;
+  }
+}
+
+/* Dreaming (Auto-Link Discovery) */
+$('btn-dream').onclick = async () => {
+  setDockStatus('THINKING');
+  showToast('âœ§ Dreaming: scanning repository for conceptual links...');
+  try {
+    const res = await jpost('/api/dream', {});
+    const data = await res.json();
+    const suggestions = data.suggestions || [];
+    if (!suggestions.length) {
+      showToast('No unlinked conceptual overlaps discovered.');
+      setDockStatus('IDLE');
+      return;
+    }
+
+    DREAM_LINKS = suggestions.map(s => ({
+      source: s.source, target: s.target,
+      __dream: true, reason: s.reason, score: s.score,
+      source_label: s.source_label, target_label: s.target_label
+    }));
+
+    refresh();
+    openDreamApprovalList(suggestions);
+    showToast(`âœ§ Discovered ${suggestions.length} dream links! Inspect to approve.`);
+  } catch (err) {
+    showToast('Dream scan failed: ' + err.message);
+  }
+  setDockStatus('IDLE');
+};
+
+function openDreamApprovalList(suggestions) {
+  const ins = $('inspector'); ins.classList.add('active');
+  $('ins-name').innerHTML = `<span class="dot" style="background:#e056fd"></span><span>DREAM DISCOVERY</span>`;
+  $('ins-group').textContent = 'SUB-CONSCIOUS'; $('ins-group').style.background = '#e056fd';
+  $('ins-meta').textContent = `${suggestions.length} suggestions found`;
+  $('ins-desc').innerHTML = 'Approve connections to automatically write [[wikilinks]] into source markdown files.';
+  $('ins-editor-wrap').classList.remove('active');
+
+  const rows = $('connections'); rows.innerHTML = '';
+  suggestions.forEach(s => {
+    const item = document.createElement('div');
+    item.style.padding = '8px 4px';
+    item.style.borderBottom = '1px solid rgba(224,86,253,.2)';
+    item.innerHTML = `
+      <div style="font-size:11px; color:#eafff8; font-weight:600;">${s.source_label} â†” ${s.target_label}</div>
+      <div style="font-size:9.5px; color:#8fd8c2; margin:2px 0;">${s.reason} (${Math.round(s.score * 100)}% match)</div>
+      <button class="btn-sm btn-save" style="margin-top:4px; font-size:8.5px; padding:3px 9px;">Approve Link</button>
+    `;
+    item.querySelector('button').onclick = async (e) => {
+      e.stopPropagation();
+      try {
+        const r = await jpost('/api/dream/approve', { source: s.source, target: s.target });
+        const j = await r.json();
+        if (j.ok) {
+          showToast(`âœ“ Link approved: ${s.source_label} â†” ${s.target_label}`);
+          item.remove();
+          loadAll();
+        }
+      } catch (err) { alert('Approval failed: ' + err.message); }
+    };
+    rows.appendChild(item);
+  });
+}
+
+/* Shield Security Radar */
+$('btn-shield').onclick = async () => {
+  SHIELD_MODE = !SHIELD_MODE;
+  $('btn-shield').classList.toggle('active', SHIELD_MODE);
+
+  if (!SHIELD_MODE) {
+    SHIELD_AUDIT.clear();
+    refresh();
+    showToast('Shield Radar disengaged.');
+    return;
+  }
+
+  showToast('ðŸ›¡ Auditing repository nodes for security posture...');
+  try {
+    const res = await jpost('/api/scan/nodes', {});
+    const data = await res.json();
+    SHIELD_AUDIT.clear();
+    (data.scanned_nodes || []).forEach(item => SHIELD_AUDIT.set(item.id, item));
+    refresh();
+    showToast(`ðŸ›¡ Shield Active: ${data.high_count} High, ${data.med_count} Med risk issues found.`);
+  } catch (err) {
+    showToast('Shield scan failed: ' + err.message);
+  }
+};
+
+/* Swarm Pulse SSE Stream */
+function initSseEvents() {
+  try {
+    const es = new EventSource('/api/events');
+    es.onmessage = (e) => {
+      try {
+        const ev = JSON.parse(e.data);
+        if (ev.type === 'agent_handoff' || ev.type === 'swarm_pulse') {
+          pulseAround('swarm', 14);
+          pulseAround('core', 10);
+        }
+        if (ev.type === 'tool_call') {
+          pulseAround('tools', 14);
+        }
+        renderAutolog([ev]);
+      } catch (_) {}
+    };
+  } catch (err) {
+    console.warn('SSE not supported or failed to connect', err);
+  }
+}
+initSseEvents();
+
+function renderAutolog(events) {
+  const box = $('alog-rows');
+  for (const ev of events.slice(0, 6)) {
+    const row = document.createElement('div'); row.className = 'alog';
+    row.innerHTML = `<span class="ago">now</span><b>${ev.node || 'pulse'}</b> ${ev.summary || JSON.stringify(ev).slice(0, 70)}`;
+    box.insertBefore(row, box.firstChild);
+  }
+  while (box.children.length > 7) box.lastChild.remove();
+}
+
+/* Chat & Command Dock */
+function setDockStatus(s) {
+  STATE = s;
+  $('dock-status').textContent = s;
+  const gem = $('dock-gem');
+  gem.className = 'status-gem ' + s.toLowerCase();
+}
+
+function updateLlmBadge(llm) {
+  if (!llm) return;
+  /* The dock model picker below is the source of truth; this legacy hook is kept
+     for the /api/llm/status caller. */
+}
+
+async function loadDockModels() {
+  const sel = $('dock-model');
+  if (!sel || sel.tagName !== 'SELECT') return;
+  try {
+    const d = await jget('/api/llm/models');
+    const locals = (d.local && d.local.models) || [];
+    const nim = (d.nim && d.nim.models) || [];
+    let html = locals.length
+      ? '<optgroup label="LOCAL">' + locals.map(m => '<option value="local|' + m + '">' + m + '</option>').join('') + '</optgroup>'
+      : '<optgroup label="LOCAL"><option value="local|">local offline</option></optgroup>';
+    html += '<optgroup label="NVIDIA NIM">' +
+      nim.map(m => '<option value="nim|' + m.id + '">' + String(m.name || m.id).slice(0, 28) + '</option>').join('') +
+      '</optgroup>';
+    sel.innerHTML = html;
+    const active = d.active || {};
+    sel.value = (active.provider || 'local') + '|' + (active.model || '');
+    if (sel.selectedIndex < 0) sel.selectedIndex = 0;
+    sel.dataset.prev = sel.value;
+    sel.title = 'Active model - local or NVIDIA NIM';
+  } catch (e) { /* backend offline */ }
+}
+
+$('dock-model').addEventListener('change', async () => {
+  const sel = $('dock-model');
+  const prev = sel.dataset.prev || sel.value;
+  const parts = sel.value.split('|');
+  try {
+    const d = await jpost('/api/llm/model', { provider: parts[0], model: parts[1] || '' });
+    if (d && d.needs_key) {
+      const key = prompt('NVIDIA NIM API key (nvapi-...):');
+      if (!key) { sel.value = prev; return; }
+      const d2 = await jpost('/api/llm/model', { provider: 'nim', model: parts[1] || '', api_key: key });
+      if (!d2 || !d2.ok) { alert((d2 && d2.error) || 'NIM key rejected'); sel.value = prev; return; }
+    } else if (!d || !d.ok) {
+      alert((d && d.error) || 'Switch failed');
+      sel.value = prev;
+      return;
+    }
+    sel.dataset.prev = sel.value;
+    if (typeof setDockStatus === 'function') setDockStatus('idle');
+  } catch (e) {
+    alert('Switch failed: ' + e);
+    sel.value = prev;
+  }
+});
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', loadDockModels);
+} else {
+  loadDockModels();
+}
+
+
+
+async function sendChat(raw) {
+  const text = (raw || $('msg').value || '').trim();
+  if (!text) return;
+  $('msg').value = '';
+
+  // Intercept instant interrupts
+  if (/^(stop|wait|pause|hold|quiet)$/i.test(text)) {
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    setDockStatus('IDLE');
+    showToast('Speech halted.');
+    return;
+  }
+
+  // Voice Routes
+  if (checkVoiceRoutes(text)) return;
+
+  appendChatBubble('user', text.replace(/</g, '&lt;'));
+  setDockStatus('THINKING');
+  pulseAround('N.E.X.U.S', 12);
+
+  try {
+    const res = await jpost('/chat', { message: text, question: text, session_id: API.session });
+    const j = await res.json();
+    const answer = j.answer || j.response || 'No synthesis returned.';
+    const reasoning = (j.reasoning || '').trim();
+    const returnedNodes = j.nodes || [];
+
+    appendChatBubble('nexus', answer, returnedNodes, text, reasoning);
+    speak(answer);
+    animateThoughtTrail(returnedNodes);
+  } catch (err) {
+    appendChatBubble('nexus', 'Communication link disrupted: ' + err.message);
+  }
+  setDockStatus('IDLE');
+}
+
+function appendChatBubble(role, text, nodes = [], originalPrompt = '', reasoning = '') {
+  const d = document.createElement('div');
+  d.className = 'bubble ' + role;
+
+  if (role === 'user') {
+    d.textContent = text;
+  } else {
+    // opencode-style faint reasoning: dimmed, capped, never spoken.
+    if (reasoning) {
+      const think = document.createElement('div');
+      think.className = 'thinking-block';
+      const lbl = document.createElement('div');
+      lbl.className = 'thinking-label';
+      lbl.textContent = 'reasoning';
+      const body = document.createElement('div');
+      body.className = 'thinking-body';
+      body.textContent = reasoning;
+      think.appendChild(lbl);
+      think.appendChild(body);
+      d.appendChild(think);
+    }
+
+    d.innerHTML = `<div>${text.replace(/\n/g, '<br>')}</div>`;
+
+    const footer = document.createElement('div');
+    footer.className = 'bubble-footer';
+
+    // Citation chips
+    const citeWrap = document.createElement('div');
+    citeWrap.className = 'bubble-citations';
+    nodes.forEach(nId => {
+      const n = nodeBy(nId);
+      if (n) {
+        const chip = document.createElement('span');
+        chip.className = 'cite-chip';
+        chip.textContent = `[${n.__label || n.label || n.id}]`;
+        chip.onclick = () => { selectNode(n.id); focusNode(n.id); };
+        citeWrap.appendChild(chip);
+      }
+    });
+    footer.appendChild(citeWrap);
+
+    // Save as Note button
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'save-note-btn';
+    saveBtn.textContent = '+ Save as Note';
+    saveBtn.onclick = async () => {
+      saveBtn.textContent = 'Saving...';
+      const title = originalPrompt ? `Synthesis: ${originalPrompt.slice(0, 32)}` : 'Chat Synthesis';
+      const content = `## Query\n${originalPrompt}\n\n## Synthesis\n${text}\n`;
+      try {
+        const r = await jpost('/api/notes/save', { title, content });
+        const resp = await r.json();
+        if (resp.ok) {
+          showToast('âœ“ Note saved to docs/notes/ & indexed into graph!');
+          saveBtn.textContent = 'âœ“ Saved';
+          loadAll();
+        }
+      } catch (e) { alert('Save failed: ' + e.message); }
+    };
+    footer.appendChild(saveBtn);
+
+    d.appendChild(footer);
+  }
+
+  const drawer = $('chat-drawer');
+  drawer.appendChild(d);
+  while (drawer.children.length > 8) drawer.firstChild.remove();
+  drawer.scrollTop = drawer.scrollHeight;
+}
+
+/* Voice Routes: Extensible voice dispatch */
+const VOICE_ROUTES = [
+  { pattern: /dream( mode)?/i, handler: () => { $('btn-dream').click(); speak('Engaging dream discovery mode, sir.'); return true; } },
+  { pattern: /(security|shield)( scan)?/i, handler: () => { $('btn-shield').click(); speak('Security radar engaged, sir.'); return true; } },
+  { pattern: /trace( path)? from (.+) to (.+)/i, handler: (m) => {
+      const n1 = FULL.nodes.find(n => (n.__label||n.label||'').toLowerCase().includes(m[2].trim().toLowerCase()));
+      const n2 = FULL.nodes.find(n => (n.__label||n.label||'').toLowerCase().includes(m[3].trim().toLowerCase()));
+      if (n1 && n2) {
+        pathPendingStart = n1.id;
+        handlePathTracing(n2);
+        speak(`Path traced from ${n1.__label} to ${n2.__label}.`);
+      } else { speak('Could not identify both path targets in the cosmos.'); }
+      return true;
+    }
+  },
+  { pattern: /(focus|zoom|inspect) (on )?(.+)/i, handler: (m) => {
+      const target = m[3].trim().toLowerCase();
+      const hit = FULL.nodes.find(n => (n.__label||n.label||'').toLowerCase().includes(target));
+      if (hit) { selectNode(hit.id); focusNode(hit.id); speak(`Focusing on ${hit.__label || hit.id}.`); }
+      else { speak(`No cosmic joint found matching ${target}.`); }
+      return true;
+    }
+  }
+];
+
+function checkVoiceRoutes(transcript) {
+  for (const r of VOICE_ROUTES) {
+    const match = transcript.match(r.pattern);
+    if (match) return r.handler(match);
+  }
+  return false;
+}
+
+/* Audio-Reactive Voice & SpeechSynthesis */
+const isMuted = new URLSearchParams(window.location.search).get('mute') === '1';
+
+function caption(text, holdMs) {
+  const c = $('caption'); c.textContent = text; c.classList.add('show');
+  clearTimeout(caption._tm);
+  caption._tm = setTimeout(() => c.classList.remove('show'), holdMs || 3000);
+}
+
+/* Voice helpers moved to /shared/voice.js (single source of truth). */
+const pickVoice = () => NEXUS_VOICE.pickVoice();
+const speakable = t => NEXUS_VOICE.speakable(t);
+
+
+/* Two-Way Buffered Voice Recognition */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SR) {
+  micRec = new SR();
+  micRec.lang = 'en-US';
+  micRec.interimResults = true;
+  micRec.maxAlternatives = 1;
+
+  micRec.onresult = (e) => {
+    clearTimeout(silenceTimer);
+    let interim = '', final = '';
+    for (const res of e.results) {
+      if (res.isFinal) final += res[0].transcript;
+      else interim += res[0].transcript;
+    }
+    const current = (final || interim);
+    $('msg').value = current;
+    caption('ðŸŽ™ ' + current, 1800);
+
+    // Buffer pause for 900ms before auto-dispatch
+    silenceTimer = setTimeout(() => {
+      if (listening && $('msg').value.trim()) {
+        micRec.stop();
+      }
+    }, FINISH_MS);
+  };
+
+  micRec.onend = () => {
+    listening = false;
+    $('mic').classList.remove('live');
+    setDockStatus('IDLE');
+    const said = $('msg').value.trim();
+    if (said) {
+      setTimeout(() => sendChat(said), 200);
+    }
+  };
+  micRec.onerror = () => {
+    listening = false;
+    $('mic').classList.remove('live');
+    setDockStatus('IDLE');
+  };
+}
+
+function toggleMic() {
+  if (!micRec) { showToast('Speech recognition unavailable in this browser.'); return; }
+  if (listening) {
+    micRec.stop();
+    return;
+  }
+  try {
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    micRec.start();
+    listening = true;
+    $('mic').classList.add('live');
+    setDockStatus('LISTENING');
+    caption('Listening... speak now.');
+  } catch (_) {}
+}
+$('mic').onclick = toggleMic;
+$('send').onclick = () => sendChat();
+$('msg').onkeydown = e => { if (e.key === 'Enter') sendChat(); };
+
+/* Keyboard Shortcuts */
+addEventListener('keydown', e => {
+  if (['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)) {
+    if (e.key === 'Escape') document.activeElement.blur();
+    return;
+  }
+  if (e.key === '/' || e.key === '?') {
+    e.preventDefault();
+    $('search').focus();
+  } else if (e.key === 'f' || e.key === 'F') {
+    $('btn-fit').click();
+  } else if (e.key === '3') {
+    $('btn-view-mode').click();
+  } else if (e.key === 'Escape') {
+    $('btn-reset').click();
+  } else if (e.key === 'm' || e.key === 'M') {
+    toggleMic();
+  }
+});
+
+/* Search Filter */
+$('search').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const q = $('search').value.trim().toLowerCase();
+  if (!q) return;
+  const hit = FULL.nodes.find(n => (n.__label || n.label || String(n.id)).toLowerCase().includes(q));
+  if (hit) {
+    selectNode(hit.id);
+    focusNode(hit.id);
+    pulseAround(hit.id, 14);
+  } else {
+    showToast(`No match found for "${q}"`);
+  }
+});
+
+/* Hologram Modes: Ring / Cube / Face / Eyes */
+function applyHoloMode(mode) {
+  document.querySelectorAll('.mode-pill button').forEach(b => b.classList.toggle('on', b.dataset.m === mode));
+  if (!GRAPH) return;
+  GRAPH.d3Force('cube', null);
+  GRAPH.d3Force('face', null);
+
+  if (mode === 'eyes') {
+    toggleEyes();
+    return;
+  }
+
+  if (mode === 'cube') {
+    const G = 60;
+    const f = alpha => {
+      for (const n of FULL.nodes) {
+        n.vx += (Math.round(n.x / G) * G - n.x) * alpha * 0.12;
+        n.vy += (Math.round(n.y / G) * G - n.y) * alpha * 0.12;
+        n.vz += (Math.round(n.z / G) * G - n.z) * alpha * 0.12;
+      }
+    };
+    f.initialize = () => {};
+    GRAPH.d3Force('cube', f);
+  } else if (mode === 'face') {
+    const f = alpha => {
+      for (const n of FULL.nodes) n.vz += (0 - n.z) * alpha * 0.22;
+    };
+    f.initialize = () => {};
+    GRAPH.d3Force('face', f);
+  }
+  applyForces();
+}
+document.querySelectorAll('.mode-pill button').forEach(b => b.onclick = () => applyHoloMode(b.dataset.m));
+
+async function toggleEyes() {
+  if (eyesStream) {
+    eyesStream.getTracks().forEach(t => t.stop()); eyesStream = null;
+    $('eyes').style.display = 'none';
+    return;
+  }
+  try {
+    eyesStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    $('eyesvid').srcObject = eyesStream;
+    $('eyes').style.display = 'block';
+  } catch (err) {
+    showToast('Camera access blocked.');
+  }
+}
+
+/* Compact HUD Toggles: Watch, Hold, Focus */
+$('tog-watch').onclick = () => {
+  const on = $('tog-watch').classList.toggle('on');
+  showToast(on ? 'Watch Mode engaged: pulses on live swarm events' : 'Watch Mode paused');
+};
+$('tog-hold').onclick = () => {
+  HOLD_SIM = !HOLD_SIM;
+  $('tog-hold').classList.toggle('on', HOLD_SIM);
+  if (HOLD_SIM) {
+    GRAPH && GRAPH.pauseAnimation();
+    showToast('Simulation held in position.');
+  } else {
+    GRAPH && GRAPH.resumeAnimation();
+    applyForces();
+    showToast('Simulation running.');
+  }
+};
+$('tog-focus').onclick = () => {
+  FOCUS_MODE = !FOCUS_MODE;
+  $('tog-focus').classList.toggle('on', FOCUS_MODE);
+  refresh();
+  showToast(FOCUS_MODE ? '1-Hop Focus Mode isolated direct neighbors' : 'Full galaxy visible');
+};
+
+/* Button Fit */
+$('btn-fit').onclick = () => GRAPH && GRAPH.zoomToFit(800, 60);
+
+/* Boot Routine */
+initGraph();
+loadAll();
+setInterval(loadAll, MESH_POLL);
+setInterval(async () => {
+  try {
+    const s = await jget('/api/llm/status');
+    updateLlmBadge(s);
+  } catch (_) {}
+}, LLM_POLL);
+
+</script>
+</body>
 </html>

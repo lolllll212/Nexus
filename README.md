@@ -35,6 +35,40 @@ The system features four dedicated spatial operating modes and interconnected fr
 
 ---
 
+## NEXUS OS — Premium Workspace & Multi-Modal Cockpit
+
+A light-mode product front door for the operating system, served buildless at
+**`/workspace`** by the FastAPI backend: an off-white canvas dashboard (hero greeting,
+3D robot companion, Fast Start / Collaborate with Team / Planning feature matrix,
+today's runway, recent threads) with a floating **graphite console** pinned to the
+bottom of the viewport.
+
+The console is a real control surface, not a mockup — four chips map to four backend
+routes and stream over SSE:
+
+| Chip | Route | What the backend actually does |
+|---|---|---|
+| **Deep Research** | `/api/workspace/runs` → `deep_research` | Retrieves repository passages, grounds the briefing in citations, or streams from a live model when one is reachable |
+| **Make an Image** | …`image` | Renders a deterministic 1200×860 vector poster server-side and returns a downloadable SVG |
+| **Search** | …`search` | BM25-lite ranking across `docs/`, `README.md` and the sample notes, with per-passage match scores |
+| **Create music** | …`music` | Maps the prompt to key/tempo/mood, then synthesizes a real 8-second WAV stem |
+
+The `THINKING → STREAMING` state is driven by SSE frames landing on a single
+`data-state` attribute, which lights the console's **dual-layer cyan + violet aura**,
+ticks the execution steps, types the answer out and streams artifact cards. Works
+fully offline (grounding engine + procedural renderer/synth) with every answer
+labelled by provenance — `llm`, `local-grounding`, or `local-primer` — so nothing is
+passed off as model output when no model ran.
+
+```bash
+python backend/main.py                 # → http://127.0.0.1:8099/workspace
+pytest tests/unit/test_workspace_cockpit.py -q     # 33 cockpit API tests
+```
+
+Details: [`docs/workspace-cockpit.md`](docs/workspace-cockpit.md).
+
+---
+
 ## Design Philosophy: Four Visual Pillars & Three UI Varieties
 
 NEXUS OS is engineered around four core visual pillars ensuring visual hierarchy, ergonomic scanning, and cognitive clarity across diverse computing environments:
@@ -371,7 +405,11 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ### Workspace OS (`/api/workspace/*`)
 
-Powers the light-mode Primary Workspace Dashboard and its floating Query Cockpit.
+Powers the light-mode Primary Workspace Dashboard and its floating Query Cockpit in the
+AI Workshop OS API (`src/nexus`, port 8000). The root knowledge-galaxy backend
+(`backend/main.py`, port 8099) serves a sibling cockpit surface at `/workspace` with its
+own `/api/workspace/*` router — see
+[docs/workspace-cockpit.md](docs/workspace-cockpit.md).
 
 | Endpoint | Method | Description |
 |---|---|---|
