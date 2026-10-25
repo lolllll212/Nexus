@@ -355,12 +355,32 @@ const GRAPH = {
       "target": 34
     },
     {
+      "source": 0,
+      "target": 35
+    },
+    {
       "source": 1,
       "target": 2
     },
     {
       "source": 1,
+      "target": 3
+    },
+    {
+      "source": 1,
       "target": 23
+    },
+    {
+      "source": 1,
+      "target": 5
+    },
+    {
+      "source": 1,
+      "target": 6
+    },
+    {
+      "source": 1,
+      "target": 8
     },
     {
       "source": 1,
