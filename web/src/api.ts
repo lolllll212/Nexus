@@ -13,7 +13,10 @@ export function setApiKey(value: string): void {
 export async function nexusFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set('Authorization', `Bearer ${getApiKey()}`);
-  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  // FormData bodies set their own multipart boundary — never force JSON on them.
+  if (init.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
 
   const response = await fetch(input, { ...init, headers });
   if (response.status === 401) {

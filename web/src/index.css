@@ -466,3 +466,8 @@ input[type="range"].cyan-slider::-moz-range-track {
   transform-origin: center;
   transform-box: fill-box;
 }
+
+@keyframes nxs-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

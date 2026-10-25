@@ -15,7 +15,44 @@ import {
   Layers,
   Clock,
   Sparkles,
+  ScanSearch,
+  Film,
+  AudioLines,
+  FileText,
+  Type,
+  Fingerprint,
+  Palette,
 } from 'lucide-react';
+
+/** One analyzed attachment from a multimodal perception run. */
+export interface MediaResultEntry {
+  id: string;
+  type: 'image' | 'video' | 'audio' | 'doc';
+  filename: string;
+  sizeKb: number;
+  previewUrl: string | null;
+  error?: string;
+  /* /api/multimodal/process payload (image / video / doc) */
+  answer?: string;
+  dimensions?: string;
+  format?: string;
+  aspectRatio?: string;
+  luminance?: number;
+  contrast?: number;
+  sha256?: string;
+  palette?: Array<{ hex: string; name?: string; percentage?: number }>;
+  ocrText?: string[];
+  sceneSummary?: string;
+  entities?: Array<{ name: string; category?: string; coordinates?: string }>;
+  keyframes?: Array<{ timestamp: string; scene_name: string; visual_description: string }>;
+  videoDuration?: number;
+  fps?: number;
+  resolution?: string;
+  /* /api/audio/stt payload */
+  transcript?: string;
+  confidence?: number;
+  engine?: string;
+}
 
 export type WorkspaceResult =
   | {
@@ -67,6 +104,12 @@ export type WorkspaceResult =
       scannedSources: number;
       durationMs: number;
     }
+  | {
+      kind: 'media';
+      id: string;
+      query: string;
+      entries: MediaResultEntry[];
+    }
   | { kind: 'error'; id: string; query: string; message: string };
 
 interface WorkspaceResultsProps {
@@ -87,6 +130,7 @@ const KIND_ICON: Record<WorkspaceResult['kind'], React.ComponentType<{ className
   image: ImagePlus,
   search: Search,
   music: Music,
+  media: ScanSearch,
   error: AlertTriangle,
 };
 
@@ -96,7 +140,15 @@ const KIND_TITLE: Record<WorkspaceResult['kind'], string> = {
   image: 'Generated Image',
   search: 'Search Results',
   music: 'Generated Track',
+  media: 'Multimodal Perception',
   error: 'Execution Error',
+};
+
+const ENTRY_ICON: Record<MediaResultEntry['type'], React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
+  image: ImagePlus,
+  video: Film,
+  audio: AudioLines,
+  doc: FileText,
 };
 
 function Meta({ icon: Icon, children }: { icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
@@ -373,6 +425,200 @@ export const WorkspaceResults: React.FC<WorkspaceResultsProps> = ({ result, onCl
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* ── Multimodal perception dossiers ─────────────────────────────── */}
+        {result.kind === 'media' && (
+          <div className="flex flex-col gap-4">
+            {result.entries.map((entry) => {
+              const EntryIcon = ENTRY_ICON[entry.type];
+              return (
+                <div
+                  key={entry.id}
+                  className="rounded-2xl border border-slate-200 bg-slate-50/60 overflow-hidden animate-[nxs-fade-in_0.35s_ease-out]"
+                >
+                  {/* Entry header */}
+                  <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200/80 bg-white">
+                    <span
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                        entry.error
+                          ? 'bg-rose-50 text-rose-600'
+                          : 'bg-gradient-to-br from-cyan-500 to-violet-500 text-white'
+                      }`}
+                    >
+                      <EntryIcon className="w-4 h-4" strokeWidth={2} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-semibold text-slate-800 truncate">{entry.filename}</p>
+                      <p className="text-[10.5px] nxs-mono uppercase tracking-wider text-slate-400">
+                        {entry.type} · {entry.sizeKb >= 1024 ? `${(entry.sizeKb / 1024).toFixed(1)} MB` : `${entry.sizeKb.toFixed(1)} KB`}
+                        {entry.sha256 ? ` · sha ${entry.sha256.slice(0, 8)}` : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 flex flex-col gap-3.5">
+                    {entry.error ? (
+                      <p className="text-[12.5px] text-rose-600 leading-relaxed">{entry.error}</p>
+                    ) : (
+                      <>
+                        {/* Audio: transcript from the speech-to-text route */}
+                        {entry.type === 'audio' && (
+                          <>
+                            <blockquote className="border-l-[3px] border-cyan-400 pl-3.5 text-[14px] text-slate-700 leading-relaxed italic">
+                              “{entry.transcript}”
+                            </blockquote>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {typeof entry.confidence === 'number' && (
+                                <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-medium text-slate-600">
+                                  <span className="w-16 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                                    <span
+                                      className="block h-full rounded-full bg-gradient-to-r from-cyan-400 to-violet-500"
+                                      style={{ width: `${Math.round(entry.confidence * 100)}%` }}
+                                    />
+                                  </span>
+                                  {Math.round(entry.confidence * 100)}% confidence
+                                </span>
+                              )}
+                              {entry.engine && <Meta icon={AudioLines}>{entry.engine}</Meta>}
+                            </div>
+                            {entry.previewUrl && (
+                              <audio controls src={entry.previewUrl} className="w-full h-9" preload="metadata" />
+                            )}
+                          </>
+                        )}
+
+                        {/* Image / doc: preview + real pixel stats */}
+                        {(entry.type === 'image' || entry.type === 'doc') && (
+                          <>
+                            {entry.type === 'image' && entry.previewUrl && (
+                              <img
+                                src={entry.previewUrl}
+                                alt={entry.filename}
+                                className="max-h-56 rounded-xl border border-slate-200 object-contain bg-[repeating-conic-gradient(#f1f5f9_0%_25%,#ffffff_0%_50%)] bg-[length:16px_16px]"
+                              />
+                            )}
+                            <div className="flex flex-wrap gap-2">
+                              {entry.dimensions && <Meta icon={ImagePlus}>{entry.dimensions}</Meta>}
+                              {entry.format && <Meta icon={Layers}>{entry.format}</Meta>}
+                              {entry.aspectRatio && <Meta icon={Layers}>{entry.aspectRatio}</Meta>}
+                              {typeof entry.luminance === 'number' && <Meta icon={Lightbulb}>luma {entry.luminance}</Meta>}
+                              {typeof entry.contrast === 'number' && <Meta icon={Layers}>contrast {(entry.contrast * 100).toFixed(0)}%</Meta>}
+                            </div>
+                          </>
+                        )}
+
+                        {/* Video: keyframe timeline from the temporal decomposition */}
+                        {entry.type === 'video' && (
+                          <>
+                            {entry.previewUrl && (
+                              <video controls src={entry.previewUrl} className="w-full max-h-64 rounded-xl border border-slate-200 bg-black" preload="metadata" />
+                            )}
+                            <div className="flex flex-wrap gap-2">
+                              {entry.resolution && <Meta icon={Film}>{entry.resolution}</Meta>}
+                              {entry.fps && <Meta icon={Film}>{entry.fps} fps</Meta>}
+                              {entry.videoDuration && <Meta icon={Clock}>{entry.videoDuration}s</Meta>}
+                            </div>
+                            {entry.keyframes && entry.keyframes.length > 0 && (
+                              <div>
+                                <h4 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-2">
+                                  <Film className="w-3.5 h-3.5 text-violet-500" /> Keyframe Timeline
+                                </h4>
+                                <div className="flex flex-col gap-2">
+                                  {entry.keyframes.map((kf, i) => (
+                                    <div key={i} className="flex gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                                      <span className="shrink-0 text-[11px] nxs-mono text-violet-600 font-semibold pt-0.5">{kf.timestamp}</span>
+                                      <div className="min-w-0">
+                                        <p className="text-[12.5px] font-semibold text-slate-800">{kf.scene_name}</p>
+                                        <p className="text-[12px] text-slate-500 leading-relaxed line-clamp-2">{kf.visual_description}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* Palette — real quantized colors from the perception bridge */}
+                        {entry.palette && entry.palette.length > 0 && (
+                          <div>
+                            <h4 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-2">
+                              <Palette className="w-3.5 h-3.5 text-amber-500" /> Dominant Palette
+                            </h4>
+                            <div className="flex flex-wrap gap-2">
+                              {entry.palette.map((c, i) => (
+                                <span
+                                  key={i}
+                                  title={`${c.name ?? c.hex}${c.percentage != null ? ` · ${c.percentage}%` : ''}`}
+                                  className="inline-flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full bg-white border border-slate-200 text-[11px] font-medium text-slate-600"
+                                >
+                                  <span className="w-4 h-4 rounded-full border border-black/10" style={{ backgroundColor: c.hex }} />
+                                  {c.name ?? c.hex}
+                                  {c.percentage != null && <span className="text-slate-400 nxs-mono">{c.percentage}%</span>}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* OCR / extracted text */}
+                        {entry.ocrText && entry.ocrText.length > 0 && (
+                          <div>
+                            <h4 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-2">
+                              <Type className="w-3.5 h-3.5 text-cyan-600" /> Extracted Text
+                            </h4>
+                            <div className="flex flex-wrap gap-2">
+                              {entry.ocrText.slice(0, 10).map((t, i) => (
+                                <span key={i} className="px-2.5 py-1 rounded-full bg-cyan-50 border border-cyan-200 text-[12px] font-medium text-cyan-800">
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Entities (image scene graph) */}
+                        {entry.entities && entry.entities.length > 0 && (
+                          <div>
+                            <h4 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-2">
+                              <Brain className="w-3.5 h-3.5 text-violet-500" /> Scene Entities
+                            </h4>
+                            <div className="grid sm:grid-cols-2 gap-2">
+                              {entry.entities.map((e, i) => (
+                                <div key={i} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                                  <p className="text-[12.5px] font-semibold text-slate-800">{e.name}</p>
+                                  <p className="text-[11px] text-slate-400 nxs-mono">
+                                    {e.category} {e.coordinates ? `· ${e.coordinates}` : ''}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Scene summary */}
+                        {entry.sceneSummary && (
+                          <div className="flex gap-2.5 rounded-xl bg-white border border-slate-200 px-3.5 py-3">
+                            <Sparkles className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" strokeWidth={2} />
+                            <p className="text-[12.5px] text-slate-600 leading-relaxed">{entry.sceneSummary}</p>
+                          </div>
+                        )}
+
+                        {/* The bridge answer */}
+                        {entry.answer && (
+                          <div className="flex gap-2.5 rounded-xl bg-gradient-to-br from-slate-900 to-slate-700 text-white px-3.5 py-3">
+                            <Fingerprint className="w-4 h-4 text-cyan-300 shrink-0 mt-0.5" strokeWidth={2} />
+                            <p className="text-[12.5px] leading-relaxed text-slate-100 whitespace-pre-line">{entry.answer}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 

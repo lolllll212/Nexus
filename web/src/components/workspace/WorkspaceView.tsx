@@ -9,8 +9,8 @@ import { WorkflowLight } from './WorkflowLight';
 import { ArchitectureLight } from './ArchitectureLight';
 import { AnalyticsLight } from './AnalyticsLight';
 import { AgentsLight } from './AgentsLight';
-import { QueryConsole, ConsoleMode, ConsoleStatus } from './QueryConsole';
-import { WorkspaceResults, WorkspaceResult } from './WorkspaceResults';
+import { QueryConsole, ConsoleMode, ConsoleStatus, MediaAttachment } from './QueryConsole';
+import { WorkspaceResults, WorkspaceResult, MediaResultEntry } from './WorkspaceResults';
 
 /* ────────────────────────────────────────────────────────────────────────────
  * NEXUS OS — the light-mode workspace shell.
@@ -91,6 +91,44 @@ const RESEARCH_STAGES = [
 ];
 const IMAGE_STAGES = ['Seeding palette', 'Composing geometry', 'Rendering vectors'];
 const MUSIC_STAGES = ['Choosing key & scale', 'Arranging progression', 'Rendering waveform'];
+const MEDIA_STAGES = [
+  'Uploading stream',
+  'Decoding bytes',
+  'Spatial decomposition',
+  'Querying cortex',
+];
+
+const DEFAULT_MEDIA_QUESTION = 'Describe this visual scene and identify key elements';
+
+/* Payload shapes of the multimodal perception routes (verified live). */
+interface ProcessDecomposition {
+  dimensions?: string;
+  format?: string;
+  aspect_ratio?: string;
+  average_luminance?: number;
+  contrast_score?: number;
+  sha256?: string;
+  color_palette?: Array<{ hex: string; name?: string; percentage?: number }>;
+  ocr_extracted_text?: string[];
+  scene_summary?: string;
+  entities?: Array<{ name?: string; category?: string; coordinates?: string }>;
+  keyframes?: Array<{ timestamp?: string; scene_name?: string; visual_description?: string }>;
+  duration_seconds?: number;
+  fps?: number;
+  resolution?: string;
+}
+interface ProcessPayload {
+  status?: string;
+  media_type?: string;
+  filename?: string;
+  decomposition?: ProcessDecomposition;
+  answer?: string;
+}
+interface SttPayload {
+  text?: string;
+  confidence?: number;
+  engine?: string;
+}
 
 interface WorkspaceViewProps {
   onOpenIntegrations: () => void;
@@ -297,9 +335,102 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
     [consoleStatus, startStages, stopStages]
   );
 
+  /* ── The multimodal executor — attachments → perception routes ──────────
+   * Every attachment is really uploaded: images / video / docs go to the
+   * perception bridge (POST /api/multimodal/process, multipart), audio goes
+   * to the transcriber (POST /api/audio/stt). Failures are per-attachment. */
+  const runMedia = useCallback(
+    async (attachments: MediaAttachment[], question: string) => {
+      if (consoleStatus !== 'idle' || attachments.length === 0) return;
+
+      setConsoleValue('');
+      setConsoleStatus('thinking');
+      setStatusDetail('Uploading stream');
+      startStages(MEDIA_STAGES);
+
+      const id = `res-${Date.now()}`;
+      const entries: MediaResultEntry[] = [];
+
+      for (const att of attachments) {
+        const sizeKb = Math.round(att.file.size / 102.4) / 10;
+        try {
+          if (att.kind === 'audio') {
+            const fd = new FormData();
+            fd.append('audio_file', att.file, att.file.name);
+            const stt = await nexusJson<SttPayload>('/api/audio/stt', { method: 'POST', body: fd });
+            entries.push({
+              id: `${att.id}-stt`,
+              type: 'audio',
+              filename: att.file.name,
+              sizeKb,
+              previewUrl: att.previewUrl,
+              transcript: stt.text ?? '',
+              confidence: stt.confidence,
+              engine: stt.engine,
+            });
+          } else {
+            const fd = new FormData();
+            fd.append('file', att.file, att.file.name);
+            fd.append('question', question || DEFAULT_MEDIA_QUESTION);
+            fd.append('media_type', att.kind === 'video' ? 'video' : 'auto');
+            const data = await nexusJson<ProcessPayload>('/api/multimodal/process', {
+              method: 'POST',
+              body: fd,
+            });
+            const dec = data.decomposition ?? {};
+            entries.push({
+              id: `${att.id}-proc`,
+              type: att.kind === 'video' ? 'video' : att.kind === 'image' ? 'image' : 'doc',
+              filename: att.file.name,
+              sizeKb,
+              previewUrl: att.previewUrl,
+              answer: data.answer,
+              dimensions: dec.dimensions,
+              format: dec.format,
+              aspectRatio: dec.aspect_ratio,
+              luminance: dec.average_luminance,
+              contrast: dec.contrast_score,
+              sha256: dec.sha256,
+              palette: dec.color_palette ?? [],
+              ocrText: dec.ocr_extracted_text ?? [],
+              sceneSummary: dec.scene_summary,
+              entities: (dec.entities ?? []).map((e) => ({
+                name: e.name ?? 'entity',
+                category: e.category,
+                coordinates: e.coordinates,
+              })),
+              keyframes: (dec.keyframes ?? []).map((k) => ({
+                timestamp: k.timestamp ?? '',
+                scene_name: k.scene_name ?? '',
+                visual_description: k.visual_description ?? '',
+              })),
+              videoDuration: dec.duration_seconds,
+              fps: dec.fps,
+              resolution: dec.resolution,
+            });
+          }
+        } catch (err: any) {
+          entries.push({
+            id: `${att.id}-err`,
+            type: att.kind,
+            filename: att.file.name,
+            sizeKb,
+            previewUrl: att.previewUrl,
+            error: err?.message ?? 'The perception route failed to respond.',
+          });
+        }
+      }
+
+      stopStages();
+      setConsoleStatus('idle');
+      setStatusDetail('');
+      setResult({ kind: 'media', id, query: question, entries });
+    },
+    [consoleStatus, startStages, stopStages]
+  );
+
   /* ── Handoffs from the suite views into the cockpit ───────────────────── */
-  const handleResearchTopic = useCallback((topic: string) => {
-    setConsoleMode('research');
+  const handleResearchTopic = useCallback((topic: string) => {    setConsoleMode('research');
     setConsoleValue(topic);
     textareaRef.current?.focus();
   }, []);
@@ -360,6 +491,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
             value={consoleValue}
             onChange={setConsoleValue}
             onSubmit={runQuery}
+            onSubmitMedia={runMedia}
             status={consoleStatus}
             statusDetail={statusDetail}
             activeMode={consoleMode}

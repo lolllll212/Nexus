@@ -22,7 +22,7 @@
 **NEXUS** is an enterprise-grade autonomous AI cognitive operating system built on strict hexagonal architecture (ports & adapters). It merges high-velocity interactive reasoning (**The Cortex**) with continuous background memory consolidation and synthesis (**The Subcortex**).
 
 The system features four dedicated spatial operating modes and interconnected frontend experiences:
-0. **PRIMARY WORKSPACE DASHBOARD (Light-Canvas Interface)**: The app's front door — a premium off-white (`#F9FAFB`) light-mode workspace with a fixed thin line-art navigation rail, the "Hi Nixtio, Ready to Achieve Great Things?" header, an animated onboarding hero (a friendly 3D robot companion, NIX-7, inside a floating translucent chat bubble), and a three-card feature matrix (Fast Start · orange geometric icon, Collaborate with Team · multi-colored collaborative grid, Planning · blue application calendar). The **Advanced System Cockpit** floats at the bottom: a dark graphite (`#0B0F19`) pill console with a textarea and four integrated action chips — **Deep Research** (`POST /api/research/execute`, dark-cyan border + background execution stream), **Make an Image** (`POST /api/workspace/image`, procedural art engine), **Search** (`POST /api/workspace/search`, unified multi-modal retrieval), and **Create music** (`POST /api/workspace/music`, generative WAV synthesis). While the server works, the console renders an active dual-layer cyan + violet pulse aura visualising the live `THINKING` / `STREAMING` states.
+0. **PRIMARY WORKSPACE DASHBOARD (Light-Canvas Interface)**: The app's front door — a premium off-white (`#F9FAFB`) light-mode workspace with a fixed thin line-art navigation rail, the "Hi Nixtio, Ready to Achieve Great Things?" header, an animated onboarding hero (a friendly 3D robot companion, NIX-7, inside a floating translucent chat bubble), and a three-card feature matrix (Fast Start · orange geometric icon, Collaborate with Team · multi-colored collaborative grid, Planning · blue application calendar). The **Advanced System Cockpit** floats at the bottom: a dark graphite (`#0B0F19`) pill console with a textarea and four integrated action chips — **Deep Research** (`POST /api/research/execute`, dark-cyan border + background execution stream), **Make an Image** (`POST /api/workspace/image`, procedural art engine), **Search** (`POST /api/workspace/search`, unified multi-modal retrieval), and **Create music** (`POST /api/workspace/music`, generative WAV synthesis). While the server works, the console renders an active dual-layer cyan + violet pulse aura visualising the live `THINKING` / `STREAMING` states. The console also takes **whisper-flow voice input** (mic button; live Web Speech transcription with an amplitude-reactive flowing-ribbon canvas that breathes with your voice, and a real MediaRecorder → `POST /api/audio/stt` fallback) and **multimodal attachments** — images, video, audio and documents staged via picker, drag-and-drop or paste, then really uploaded (images/video/docs → `POST /api/multimodal/process`, audio → `POST /api/audio/stt`) with a rich perception dossier in the result sheet.
 1. **LIVING KNOWLEDGE GRAPH (Tactical OS)**: A full-screen graphite/near-black operating canvas featuring a real-time D3 force-directed knowledge graph, 18 node categories, 5 major enterprise clusters, 3D isometric perspective projection, animated edge data streams, holographic tooltips, and an 11-action tactical context menu.
 2. **WEB-BASED ANALYTICS DASHBOARD**: High-density widescreen command center with KPI telemetry matrix, synchronized compute/memory histograms, and autonomous agent swarm monitoring.
 3. **MOBILE COMPACT COCKPIT UI**: High-velocity thumb-accessible mobile interface with 48px touch targets, quick-switch mode dock, and ambient readability.
@@ -436,6 +436,19 @@ live :8000 API, never navigating away to the legacy dark pages:
 
 Every view degrades honestly: when an endpoint is unreachable the surface shows
 an offline chip plus fallback data instead of dead widgets.
+
+The cockpit itself is multi-modal on the input side too:
+
+| Input | Route | What actually happens |
+|---|---|---|
+| **Voice (whisper flow)** | `POST /api/audio/stt` | Mic button opens a Web Audio analyser that drives an amplitude-reactive flowing-ribbon canvas while Web Speech Recognition streams live interim text into the console; where recognition is unavailable, a MediaRecorder captures a real audio blob and uploads it to the server-side transcriber |
+| **Image / video attachments** | `POST /api/multimodal/process` | Real multipart upload to the perception bridge — Pillow-derived dimensions, quantized palette, luminance/contrast, extracted text and scene entities (images) or a keyframe timeline (video), answered by the LLM with an offline fallback |
+| **Audio attachments** | `POST /api/audio/stt` | Uploaded to the Whisper-1 transcriber; the transcript, confidence and engine land in the result sheet |
+| **Documents (.txt/.md/.csv/.json/.pdf)** | `POST /api/multimodal/process` | Uploaded and run through the bridge's byte-level text extraction heuristic — real file content surfaces in the extracted-text chips |
+
+Attachments stage as preview chips (thumbnails for images/video, icons for the
+rest), arrive via the picker, drag-and-drop or clipboard paste, and the typed
+question is forwarded to the bridge as the analysis question.
 
 ### Coding & Research Studio (`/api/coding/*`)
 
