@@ -22,6 +22,7 @@
 **NEXUS** is an enterprise-grade autonomous AI cognitive operating system built on strict hexagonal architecture (ports & adapters). It merges high-velocity interactive reasoning (**The Cortex**) with continuous background memory consolidation and synthesis (**The Subcortex**).
 
 The system features four dedicated spatial operating modes and interconnected frontend experiences:
+0. **PRIMARY WORKSPACE DASHBOARD (Light-Canvas Interface)**: The app's front door — a premium off-white (`#F9FAFB`) light-mode workspace with a fixed thin line-art navigation rail, the "Hi Nixtio, Ready to Achieve Great Things?" header, an animated onboarding hero (a friendly 3D robot companion, NIX-7, inside a floating translucent chat bubble), and a three-card feature matrix (Fast Start · orange geometric icon, Collaborate with Team · multi-colored collaborative grid, Planning · blue application calendar). The **Advanced System Cockpit** floats at the bottom: a dark graphite (`#0B0F19`) pill console with a textarea and four integrated action chips — **Deep Research** (`POST /api/research/execute`, dark-cyan border + background execution stream), **Make an Image** (`POST /api/workspace/image`, procedural art engine), **Search** (`POST /api/workspace/search`, unified multi-modal retrieval), and **Create music** (`POST /api/workspace/music`, generative WAV synthesis). While the server works, the console renders an active dual-layer cyan + violet pulse aura visualising the live `THINKING` / `STREAMING` states.
 1. **LIVING KNOWLEDGE GRAPH (Tactical OS)**: A full-screen graphite/near-black operating canvas featuring a real-time D3 force-directed knowledge graph, 18 node categories, 5 major enterprise clusters, 3D isometric perspective projection, animated edge data streams, holographic tooltips, and an 11-action tactical context menu.
 2. **WEB-BASED ANALYTICS DASHBOARD**: High-density widescreen command center with KPI telemetry matrix, synchronized compute/memory histograms, and autonomous agent swarm monitoring.
 3. **MOBILE COMPACT COCKPIT UI**: High-velocity thumb-accessible mobile interface with 48px touch targets, quick-switch mode dock, and ambient readability.
@@ -367,6 +368,17 @@ docker compose -f docker-compose.prod.yml up -d --build
 ---
 
 ## API Reference
+
+### Workspace OS (`/api/workspace/*`)
+
+Powers the light-mode Primary Workspace Dashboard and its floating Query Cockpit.
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/workspace/bootstrap` | GET | Live workspace state: personalised greeting, onboarding hero, feature-matrix cards, and system telemetry (uptime, agent roster, recent memories, NIM status) |
+| `/api/workspace/search` | POST | Unified multi-modal search across episodic memory, knowledge-graph concepts, research history, and the multimodal corpus — merged and relevance-ranked |
+| `/api/workspace/image` | POST | Deterministic procedural art synthesis (aurora / blueprint / horizon styles) seeded by the prompt hash; returns an SVG data URI + palette |
+| `/api/workspace/music` | POST | Generative audio synthesis: key/scale selection by prompt mood, chord progression, arpeggios, bass, and percussion rendered to a 16-bit WAV data URI |
 
 ### Coding & Research Studio (`/api/coding/*`)
 
