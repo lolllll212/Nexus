@@ -1,3 +1,14 @@
+# C learning project (c/) — commit sources, not build artifacts
+c/**/*.o
+c/**/*.so
+c/**/*.dylib
+c/textstats/textstats
+c/textstats/test_textstats
+c/textstats/test_textstats_asan
+plugins/c_text_tools/*.so
+plugins/c_text_tools/*.dylib
+plugins/c_text_tools/*.dll
+
 # Python
 __pycache__/
 *.py[cod]

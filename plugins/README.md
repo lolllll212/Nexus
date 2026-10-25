@@ -60,3 +60,6 @@ async def handler(params: dict[str, Any]) -> dict[str, Any]:
 - **`math_tools`**:
   - `math_statistics`: Calculates count, mean, median, min, max, and variance for a list of numbers.
   - `prime_factors`: Computes the prime factorization of an integer >= 2.
+- **`c_text_tools`**: (C learning project — see `c/README.md`)
+  - `c_text_stats`: Native-C (ctypes `libtextstats`) count of chars/words/lines/longest word, with an identical pure-Python fallback when the shared library is not built (`"backend"` reports which ran).
+  - `c_title_case`: Native-C Title Case conversion, same fallback behaviour. Build with `cd c/textstats && make`.
