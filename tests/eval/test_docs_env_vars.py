@@ -50,10 +50,10 @@ ENV_MENTION = re.compile(r"\bNEXUS_[A-Z0-9_]*[A-Z0-9]\b")
 
 
 def _src_files() -> list[Path]:
-    """src/ plus the ops scripts - the daemon's knobs live in scripts/, and an
-    env var read by an ops script is exactly as undocumented as one read by a
-    module."""
+    """src/, the ops scripts, and the cosmos backend - knobs read by any of
+    them are exactly as undocumented as one read by a module."""
     found = sorted(SRC.rglob("*.py")) + sorted(SCRIPTS.glob("*.py"))
+    found += sorted((REPO_ROOT / "backend").rglob("*.py"))
     assert found, f"no python under {SRC} or {SCRIPTS} - the glob is wrong, not the codebase"
     return found
 
