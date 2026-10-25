@@ -60,6 +60,12 @@ nexus train <add|search|...> # coding-training data CLI
   resources for any MCP client
 - [REA (Reverse Engineer Anything)](rea.md) - vendored reverse-engineering MCP
   server under `vendor/rea/`, built and registered alongside `nexus`
+- [RL Training](training.md) - how to train the framework: hard-question
+  corpus, tool-grounded rounds, judge, reward store, and day-by-day stats
+- [Voice Architecture](voice.md) - how NEXUS listens and speaks: Web Speech
+  API input, natural-voice output, and the speakable-text sanitizer
+- [Workspace Cockpit](workspace-cockpit.md) - the light-mode workspace UI:
+  six live views, whisper-flow voice input, and the multi-modal query cockpit
 - [Security & Secrets](security.md) - auth, secret stores, SSRF, sandbox, path
   confinement, and container hardening
 - [Deployment](deploy.md) - Railway (backend) and Vercel (frontend) runbook,
