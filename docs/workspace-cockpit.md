@@ -38,7 +38,7 @@ robot when WebGL is unavailable.
 | Region | Behaviour |
 |---|---|
 | Left rail | 88px glass rail, line-art icons, tooltips, active-state dot |
-| Header | workspace crumb, plan pill, quick-find (`⌘K`), notifications, dark **Upgrade** pill |
+| Header | workspace crumb, plan pill, quick-find (`⌘K`), notifications (the dark **Upgrade** pill was removed per product decision — no upsell surface) |
 | Hero | `Hi Nixtio, Ready to Achieve Great Things?`, live engine label, session meta |
 | Companion | 3D robot in a translucent bubble: “Hey there! Need a boost?” + three prompts |
 | Fast Start | orange geometric tile, velocity ring, sparkline, weekly metric |

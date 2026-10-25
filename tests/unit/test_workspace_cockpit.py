@@ -342,7 +342,6 @@ class TestSupportingSurfaces:
         for landmark in (
             "Hi ",
             "Ready to Achieve Great Things?",
-            "Upgrade",
             "Hey there! Need a boost?",
             "Fast Start",
             "Collaborate with Team",
@@ -353,6 +352,8 @@ class TestSupportingSurfaces:
             "Example: 'Explain quantum computing in simple terms'",
         ):
             assert landmark in html, landmark
+        # The dark Upgrade pill was intentionally removed from the product.
+        assert "Upgrade" not in html, "Upgrade sign must not appear on the workspace page"
 
     def test_static_assets_are_served(self, client):
         for path in (

@@ -476,8 +476,7 @@ async function submit(promptOverride) {
       state.controller = null;
       setState('idle');
       if (response.status === 402) {
-        toast('Credit ceiling reached — upgrade the plan to keep going.', 'error');
-        openUpgrade();
+        toast('Credit ceiling reached — this run was capped by the plan limit.', 'error');
       } else {
         toast(payload?.error || `Could not open a run (${response.status}).`, 'error');
       }
@@ -517,57 +516,6 @@ async function cancelRun() {
 function autosize() {
   promptEl.style.height = 'auto';
   promptEl.style.height = `${Math.min(promptEl.scrollHeight, 132)}px`;
-}
-
-/* ── upgrade dialog ─────────────────────────────────────────────────────── */
-
-async function openUpgrade() {
-  const dialog = $('#upgrade-dialog');
-  const list = $('#plans');
-  if (!list.dataset.ready) {
-    try {
-      const response = await fetch('/api/workspace/plans');
-      const payload = await response.json();
-      renderPlans(payload.plans || [], payload.current);
-      list.dataset.ready = '1';
-    } catch {
-      list.innerHTML = '<p class="nx-dialog__note">Plan catalog unavailable — cockpit API offline.</p>';
-    }
-  }
-  if (typeof dialog.showModal === 'function') dialog.showModal();
-  else dialog.setAttribute('open', '');
-}
-
-function renderPlans(plans, current) {
-  const list = $('#plans');
-  list.innerHTML = plans.map((plan) => `
-    <article class="nx-plan-card ${plan.id === current ? 'is-current' : ''}">
-      <h3>${escapeHtml(plan.name)}</h3>
-      <div class="nx-price">$${plan.price}<small>/${plan.period}</small></div>
-      <p>${escapeHtml(plan.blurb)}</p>
-      <ul>${(plan.perks || []).map((perk) => `<li>${escapeHtml(perk)}</li>`).join('')}</ul>
-      <button type="button" data-plan="${escapeHtml(plan.id)}" ${plan.id === current ? 'disabled' : ''}>
-        ${plan.id === current ? 'Current plan' : `Choose ${escapeHtml(plan.name)}`}
-      </button>
-    </article>`).join('');
-
-  $$('[data-plan]', list).forEach((button) => {
-    button.addEventListener('click', async () => {
-      const plan = button.dataset.plan;
-      try {
-        const response = await fetch('/api/workspace/upgrade', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ plan }),
-        });
-        const payload = await response.json();
-        $('#upgrade-note').textContent = payload.note || 'Checkout is not wired in this build.';
-        toast(`Plan interest recorded: ${plan}. Checkout isn’t configured in this build.`);
-      } catch {
-        toast('Upgrade service unreachable.', 'error');
-      }
-    });
-  });
 }
 
 /* ── bootstrap ──────────────────────────────────────────────────────────── */
@@ -786,9 +734,6 @@ function wireCockpit() {
       promptEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
   });
-
-  $('#upgrade-btn').addEventListener('click', openUpgrade);
-  $$('[data-close-dialog]').forEach((node) => node.addEventListener('click', () => $('#upgrade-dialog').close()));
 
   $('#attach-btn').addEventListener('click', () => {
     toast('File context isn’t wired to the cockpit yet — prompts are text-only in this build.');

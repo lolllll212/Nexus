@@ -109,10 +109,6 @@
           <svg class="nx-icon" aria-hidden="true"><use href="#i-bell"/></svg>
           <i class="nx-iconbtn__dot" aria-hidden="true"></i>
         </button>
-        <button class="nx-upgrade" type="button" id="upgrade-btn">
-          <svg class="nx-icon" aria-hidden="true"><use href="#i-sparkle"/></svg>
-          <span>Upgrade</span>
-        </button>
       </div>
     </header>
 
@@ -506,21 +502,6 @@
 
   <!-- toast -->
   <div class="nx-toast" id="toast" role="status" aria-live="polite"></div>
-
-  <!-- upgrade dialog -->
-  <dialog class="nx-dialog" id="upgrade-dialog" aria-labelledby="upgrade-title">
-    <header class="nx-dialog__head">
-      <div>
-        <p class="nx-eyebrow"><i class="nx-eyebrow__dot"></i><span>Plans</span></p>
-        <h2 id="upgrade-title">Give the cockpit more room.</h2>
-      </div>
-      <button class="nx-iconbtn nx-iconbtn--flat" type="button" data-close-dialog aria-label="Close">
-        <svg class="nx-icon" aria-hidden="true"><use href="#i-close"/></svg>
-      </button>
-    </header>
-    <div class="nx-plans" id="plans"></div>
-    <p class="nx-dialog__note" id="upgrade-note">Checkout isn&rsquo;t wired in this build — the catalog below is served by the cockpit API.</p>
-  </dialog>
 </div>
 
 <script type="module" src="workspace/app.js"></script>

@@ -96,7 +96,7 @@ body.nx-body {
 .nx-icon { width: 20px; height: 20px; display: block; flex: none; }
 /* NB: base resets are written with :where() so they carry zero specificity — a plain
    `.nx-app button { color: … }` would out-rank the single-class component rules
-   (.nx-upgrade, .nx-chip, .nx-send …) and dim their colours. */
+   (.nx-chip, .nx-send …) and dim their colours. */
 :where(.nx-app) a { text-decoration: none; }
 :where(.nx-app) button { font: inherit; cursor: pointer; }
 .nx-app a:not([class]) { color: inherit; }
@@ -255,18 +255,6 @@ body.nx-body {
 }
 .nx-iconbtn--flat { background: transparent; border-color: transparent; width: 34px; height: 34px; border-radius: 10px; }
 .nx-iconbtn--flat:hover { background: #f2f4f8; border-color: transparent; }
-
-.nx-upgrade {
-  display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 22px;
-  border: 1px solid rgba(11, 15, 25, 0.9); border-radius: 999px;
-  background: linear-gradient(170deg, #1a2130, #0b0f19);
-  color: #f8fafc; font-size: 14px; font-weight: 700; letter-spacing: -0.01em;
-  box-shadow: 0 12px 24px -14px rgba(11, 15, 25, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.16);
-  transition: transform 0.25s var(--ease), box-shadow 0.3s;
-}
-.nx-upgrade .nx-icon { width: 16px; height: 16px; color: #ffd7b4; }
-.nx-upgrade:hover { transform: translateY(-2px); box-shadow: 0 18px 30px -14px rgba(11, 15, 25, 0.7), 0 0 0 4px rgba(255, 122, 24, 0.1); }
-.nx-upgrade:active { transform: translateY(0) scale(0.985); }
 
 /* ── hero ────────────────────────────────────────────────────────────── */
 .nx-hero {
@@ -956,39 +944,6 @@ body.nx-body {
 }
 .nx-toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
 
-/* dialog */
-.nx-dialog {
-  border: 0; padding: 26px; width: min(940px, 92vw); border-radius: 28px; background: #fff;
-  color: var(--text); box-shadow: 0 40px 90px -40px rgba(11, 15, 25, 0.6);
-}
-.nx-dialog::backdrop { background: rgba(11, 15, 25, 0.32); backdrop-filter: blur(7px); }
-.nx-dialog__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.nx-dialog__head h2 { margin: 10px 0 0; font-size: 24px; font-weight: 800; letter-spacing: -0.03em; color: var(--ink); }
-.nx-plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 22px; }
-.nx-plan-card {
-  border: 1px solid var(--line); border-radius: 20px; padding: 18px; display: flex; flex-direction: column; gap: 4px;
-  position: relative; background: #fff;
-}
-.nx-plan-card.is-current { border-color: var(--ink); box-shadow: 0 14px 30px -22px rgba(11, 15, 25, 0.6); }
-.nx-plan-card.is-current::after {
-  content: "Current"; position: absolute; top: 14px; right: 14px; font-size: 8.5px; font-weight: 700;
-  letter-spacing: 0.1em; text-transform: uppercase; color: #fff; background: var(--ink);
-  padding: 3px 7px; border-radius: 999px;
-}
-.nx-plan-card h3 { margin: 0; font-size: 15px; font-weight: 700; color: var(--ink); }
-.nx-plan-card .nx-price { font-size: 30px; font-weight: 800; letter-spacing: -0.04em; color: var(--ink); margin-top: 6px; }
-.nx-plan-card .nx-price small { font-size: 11.5px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
-.nx-plan-card p { margin: 2px 0 8px; font-size: 11.5px; color: var(--muted); }
-.nx-plan-card ul { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 5px; }
-.nx-plan-card li { font-size: 11.5px; color: #576073; display: flex; gap: 6px; align-items: center; }
-.nx-plan-card li::before { content: ""; width: 4px; height: 4px; border-radius: 50%; background: var(--orange); }
-.nx-plan-card button {
-  margin-top: auto; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 8px 14px;
-  font-size: 12px; font-weight: 600; color: var(--ink); transition: all 0.2s;
-}
-.nx-plan-card button:hover { background: var(--ink); color: #fff; border-color: var(--ink); }
-.nx-plan-card.is-current button { background: #f2f4f8; color: #8d95a5; cursor: default; }
-.nx-dialog__note { margin: 16px 0 0; font-family: var(--mono); font-size: 9.5px; color: #a3aab8; letter-spacing: 0.03em; }
 
 /* reveal */
 .nx-reveal { animation: nxRise 0.85s var(--ease) both; animation-delay: var(--d, 0ms); }
@@ -1095,8 +1050,6 @@ body.nx-body {
 }
 @media (max-width: 860px) {
   .nx-features { grid-template-columns: 1fr; }
-  .nx-plan-card, .nx-plans { grid-template-columns: 1fr; }
-  .nx-plans { max-height: 60vh; overflow-y: auto; }
   .nx-bubble__stage { height: 216px; }
   .nx-dock { padding-bottom: 14px; }
   .nx-run__scroll { max-height: 34vh; }
@@ -1119,8 +1072,6 @@ body.nx-body {
   #hero-engine, .nx-eyebrow__sep { display: none; }
   .nx-eyebrow { font-size: 10px; }
   .nx-quickfind kbd { display: none; }
-  .nx-upgrade { height: 42px; padding: 0 16px; font-size: 13px; }
-  .nx-upgrade .nx-icon { width: 14px; height: 14px; }
   .nx-hero__title { font-size: clamp(30px, 8.4vw, 40px); letter-spacing: -0.03em; }
   .nx-hero__sub { font-size: 14px; margin-top: 14px; }
   .nx-hero__stats { gap: 14px; margin-top: 22px; }
@@ -1158,7 +1109,6 @@ body.nx-body {
   .nx-steps li { font-size: 9.5px; }
   .nx-run__scroll { padding: 2px 14px 2px; }
   .nx-run__foot { padding: 9px 14px 10px; }
-  .nx-dialog { padding: 18px; border-radius: 22px; }
   .nx-footnote { display: none; }
   .nx-toast { bottom: 180px; }
 }
