@@ -8,6 +8,8 @@ dark floating console that is the control surface for four backend routes.
 - **API:** `/api/workspace/*` — `backend/routers/workspace.py`
 - **Tests:** `tests/unit/test_workspace_cockpit.py` (33 cases, no LLM required)
 
+![NEXUS OS workspace dashboard](assets/workspace-dashboard.png)
+
 ```
 Screen 1  dashboard   hero + companion bubble, Fast Start / Collaborate / Planning,
                       today's runway, recent threads
@@ -58,6 +60,8 @@ Four chips map to backend routes (the chip is the route selector; `↵` sends):
 | **Make an Image** | `image` | deterministic 1200×860 SVG poster + art direction |
 | **Search** | `search` | BM25-lite ranking over `docs/`, `README.md`, sample notes |
 | **Create music** | `music` | mood → key/BPM blueprint + synthesized 8s WAV |
+
+![The cockpit mid-stream: dual-layer aura, step chips, typed answer](assets/workspace-streaming.png)
 
 ### Streaming contract (SSE)
 
