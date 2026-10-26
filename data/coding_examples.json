@@ -369,5 +369,10 @@
     "fail_count": 0,
     "avg_rating": 0.0,
     "source": "manual"
+  },
+  {
+    "instruction": "Create 'parse_csv.py' with parse_csv(text) that parses simple comma-separated text (first line is the header) into a list of dicts keyed by the header names, with string values stripped.",
+    "input": "Create 'parse_csv.py' with parse_csv(text) that parses simple comma-separated text (first line is the header) into a list of dicts keyed by the header names, with string values stripped.",
+    "output": "def parse_csv(text):\n    lines = text.strip().splitlines()\n    if not lines:\n        return []\n    headers = [h.strip() for h in lines[0].split(',')]\n    result = []\n    for line in lines[1:]:\n        if not line.strip():\n            continue\n        values = [v.strip() for v in line.split(',')]\n        row = dict(zip(headers, values))\n        result.append(row)\n    return result"
   }
 ]

@@ -6,9 +6,10 @@ import json
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from backend.schemas import ExtractExamplesRequest, TrainingJudgeRequest
+from backend.schemas import ExtractExamplesRequest, RunTasksRequest, TrainingJudgeRequest
 from backend.services import llm as llm_service
 from backend.services import tools as tools_service
+from backend.services import task_training as task_training_service
 from backend.services import training as training_service
 
 router = APIRouter()
@@ -139,6 +140,14 @@ async def api_training_extract_examples(req: ExtractExamplesRequest):
     (newest when no path given) into data/coding_examples.json - the
     self-training dataset."""
     result = await training_service.extract_examples(req.note_path)
+    return JSONResponse(result)
+
+
+@router.post("/api/training/run-tasks")
+async def api_training_run_tasks(req: RunTasksRequest):
+    """Run real coding/debugging tasks: code -> verify -> repair ->
+    objective reward (does the generated code actually pass)."""
+    result = await task_training_service.run_task_round(req.n, req.repair)
     return JSONResponse(result)
 
 

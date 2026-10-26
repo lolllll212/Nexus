@@ -48,3 +48,8 @@ class WorkspaceRunRequest(BaseModel):
 
 class WorkspaceUpgradeRequest(BaseModel):
     plan: str = ""
+
+
+class RunTasksRequest(BaseModel):
+    n: int = 2
+    repair: bool = True
