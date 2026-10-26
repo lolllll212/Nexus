@@ -323,6 +323,31 @@ class ProcessMessageUseCase:
 
         return merged[: self.MEMORY_RECALL_LIMIT]
 
+    @staticmethod
+    def _is_casual_message(text: str) -> bool:
+        """True for greetings and short pleasantries that need no tools."""
+        t = (text or "").strip().lower().rstrip("!?., ")
+        if len(t.split()) > 4:
+            return False
+        greetings = (
+            "hi",
+            "hello",
+            "hey",
+            "yo",
+            "greetings",
+            "good morning",
+            "good afternoon",
+            "good evening",
+            "how are you",
+            "sup",
+            "what's up",
+            "whats up",
+            "test",
+            "ping",
+            "you there",
+        )
+        return t in greetings
+
     async def _react_loop(
         self,
         conversation: Conversation,
@@ -340,6 +365,37 @@ class ProcessMessageUseCase:
         iteration = 0
         seen_calls: list[tuple[str, str]] = []
         total_tokens = self._estimate_tokens(context)
+
+        # Greeting / casual-chat gate: a hello needs conversation, not 37 tool
+        # calls. Short pleasantries with no question and no tool verbs skip the
+        # loop entirely and get one direct LLM reply.
+        last_user = next((m["content"] for m in reversed(context) if m.get("role") == "user"), "")
+        if self._is_casual_message(str(last_user)):
+            context = [m for m in context if "[OBSERVATION" not in str(m.get("content", ""))]
+            context.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "The operator is greeting you or making casual conversation. "
+                        "Reply warmly and briefly (1-3 sentences). Do NOT use tools. "
+                        "Do not mention tools, loops, or subsystems."
+                    ),
+                }
+            )
+            try:
+                reasoning = await self._llm.complete(context)
+            except LLMUnavailableError:
+                # Same contract as the loop: surface the outage through the
+                # graceful fallback instead of a 500.
+                return await self._build_unavailable_fallback(context, active_tools)
+            # Same answer contract as the loop: a model that prefixes its reply
+            # with the final-answer marker gets it stripped here too.
+            if "FINAL ANSWER:" in reasoning:
+                reasoning = reasoning.split("FINAL ANSWER:", 1)[-1].strip()
+            thoughts.append(Thought(content=reasoning, thought_type=ThoughtType.REASONING))
+            if on_event is not None:
+                await on_event({"type": "thought", "content": reasoning})
+            return reasoning
 
         tool_catalog = []
         for t in await active_tools.list_all():
@@ -463,10 +519,29 @@ class ProcessMessageUseCase:
             if on_event is not None:
                 await on_event({"type": "observation", "content": observation})
 
-        # Final fallback — synthesize what we have
-        return "I've reached my reasoning limit. Here's my best synthesis: " + self._extract_last_content(
-            context
-        )
+        # Final fallback — one LLM synthesis over the gathered observations.
+        # Never dump raw observations: strip the OBSERVATION wrappers and let
+        # the model compose a concise answer; if synthesis fails, say so
+        # without leaking tool internals.
+        try:
+            context.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "You have reached your reasoning-step limit. Synthesize a "
+                        "concise final answer (max 5 sentences) from the "
+                        "observations above. Do not repeat raw tool output or "
+                        "observation markers; speak plainly to the operator."
+                    ),
+                }
+            )
+            return await self._llm.complete(context)
+        except Exception:
+            return (
+                "I explored the available tools but hit my reasoning limit before "
+                "completing the synthesis, sir. Please rephrase or narrow the "
+                "question and I'll try again."
+            )
 
     async def _encode_episodic(self, conversation: Conversation, response: str) -> None:
         """Persist the raw exchange as episodic memory for tonight's dreaming."""

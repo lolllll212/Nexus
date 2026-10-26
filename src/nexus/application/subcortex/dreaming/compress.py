@@ -78,8 +78,13 @@ class CompressionUseCase:
                 continue
 
             for fact in structured.get("facts", []):
+                # Model output is untrusted: a fact that is not a dict with a
+                # content field (e.g. a bare string from a reasoning model) is
+                # skipped rather than crashing the whole dream cycle.
+                if not isinstance(fact, dict) or not fact.get("content"):
+                    continue
                 semantic = Memory(
-                    content=fact["content"],
+                    content=str(fact["content"]),
                     memory_type=MemoryType.SEMANTIC,
                     concepts=[],
                     metadata={"importance": fact.get("importance", 0.5), "origin": "dream_compression"},
