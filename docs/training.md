@@ -45,6 +45,33 @@ just prose. Add a new tool-grounded question by appending to
  "q": "…", "rubric": ["answer uses live tool output", …]}
 ```
 
+## 2b. Real-task rounds (objective verification)
+
+Real-task rounds are different from the question corpus: instead of asking a
+question and judging the answer with an LLM rubric, the brain is given real
+engineering work (write a module, fix a bug) inside a fresh throwaway
+workspace, and the reward is OBJECTIVE - the task ships its own verification
+script, and the score is whether the generated code actually passes it.
+
+| Outcome | Score |
+| --- | --- |
+| Passes verification first try | 10.0 |
+| Passes after one repair round (with the traceback fed back) | 7.5 |
+| Never passes | 3.0 |
+
+Passing transcripts are stored as coding exemplars in
+`data/coding_examples.json`, so the brain trains on its own successful work.
+
+```powershell
+Invoke-RestMethod -Uri http://127.0.0.1:8001/api/training/run-tasks `
+  -Method Post -ContentType application/json -Body '{"n": 2, "repair": true}'
+```
+
+The request body: `n` = how many not-yet-attempted tasks to run (tasks already
+in the reward store are skipped), `repair` = give the model one repair round
+with its own traceback when verification fails. Each response item carries the
+task id, score, pass flag, attempt count and the tail of the verifier output.
+
 ## 3. Add hard questions
 
 Append to `TRAINING_CORPUS` in `backend/services/training.py`:

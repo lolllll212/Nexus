@@ -8,8 +8,8 @@ from fastapi.responses import JSONResponse
 
 from backend.schemas import ExtractExamplesRequest, RunTasksRequest, TrainingJudgeRequest
 from backend.services import llm as llm_service
-from backend.services import tools as tools_service
 from backend.services import task_training as task_training_service
+from backend.services import tools as tools_service
 from backend.services import training as training_service
 
 router = APIRouter()

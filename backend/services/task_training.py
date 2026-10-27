@@ -18,8 +18,8 @@ import tempfile
 from pathlib import Path
 
 from backend.services import llm as llm_service
-from backend.services import training as training_service
 from backend.services import tools as tools_service
+from backend.services import training as training_service
 
 _CODE_BLOCK = re.compile(r"```(?:python)?\s*\n(.*?)```", re.S)
 
@@ -278,9 +278,7 @@ async def _run_single(task: dict, workspace: Path, repair: bool) -> dict:
                 + (final_code or "(none)")[:1500]
                 + "\n\nReturn the FIXED complete file as one Python code block."
             )
-        content, _r = await llm_service._call_llm(
-            _TASK_SYSTEM, [{"role": "user", "content": user}]
-        )
+        content, _r = await llm_service._call_llm(_TASK_SYSTEM, [{"role": "user", "content": user}])
         code = _extract_code(content)
         if not code:
             attempts.append({"attempt": attempt, "passed": False, "output": "no code block in reply"})

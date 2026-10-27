@@ -17,9 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture(scope="module")
 def be():
-    spec = importlib.util.spec_from_file_location(
-        "nexus_cosmos_backend", REPO_ROOT / "backend" / "main.py"
-    )
+    spec = importlib.util.spec_from_file_location("nexus_cosmos_backend", REPO_ROOT / "backend" / "main.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules["nexus_cosmos_backend"] = mod
     spec.loader.exec_module(mod)
@@ -85,9 +83,7 @@ class TestObjectiveVerification:
         assert "VERIFY PASS" in output
 
     def test_broken_code_fails(self, tt, tmp_path):
-        (tmp_path / "dedupe.py").write_text(
-            "def dedupe(items):\n    return items\n", encoding="utf-8"
-        )
+        (tmp_path / "dedupe.py").write_text("def dedupe(items):\n    return items\n", encoding="utf-8")
         passed, output = tt._run_verify(
             tmp_path,
             next(t["verify"] for t in tt.TASK_CORPUS if t["id"] == "code-dedupe"),
