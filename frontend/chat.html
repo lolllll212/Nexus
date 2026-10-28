@@ -84,7 +84,7 @@
   #key-row button.ghost { background: transparent; border-color: rgba(125,255,217,.25); color: #7a95a1; }
 
   /* ── Stream ─────────────────────────────────────────────── */
-  #stream { flex: 1; overflow-y: auto; padding: 34px 24px 12px; scroll-behavior: smooth; }
+  #stream { flex: 1; overflow-y: auto; padding: 34px 24px 12px; scroll-behavior: smooth; overscroll-behavior: contain; scrollbar-gutter: stable; }
   #stream::-webkit-scrollbar { width: 8px; }
   #stream::-webkit-scrollbar-thumb { background: rgba(0,240,255,.14); border-radius: 8px; }
 
@@ -198,6 +198,19 @@
   .shimmer { background: linear-gradient(90deg, #5a6b62 25%, #9fd8cc 50%, #5a6b62 75%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmerMove 1.8s linear infinite; }
   @keyframes shimmerMove { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
+  #stop { color: #ff9a9a; border-color: rgba(255,107,107,.45); font-size: 11px; }
+  #stop:hover { color: #ffd1d1; border-color: rgba(255,107,107,.75); }
+  #stop[hidden], #jump-latest[hidden] { display: none; }
+  #jump-latest {
+    position: absolute; right: 24px; bottom: 154px; z-index: 6; cursor: pointer;
+    padding: 8px 12px; border-radius: 999px; border: 1px solid rgba(0,240,255,.45);
+    background: rgba(4,18,24,.92); color: #d9fbff; font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px; letter-spacing: .14em; box-shadow: 0 10px 28px rgba(0,0,0,.45);
+  }
+  button:focus-visible, a:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible {
+    outline: 2px solid var(--cyan); outline-offset: 2px;
+  }
+
   @media (max-width: 640px) {
     header { padding: 14px 16px; } #stream { padding: 20px 14px 8px; }
     .bubble { max-width: 92%; } #composer { padding: 10px 14px 16px; }
@@ -216,6 +229,9 @@
         <span class="status-dot" id="status-dot"></span>
         <select id="model-pick"></select>
       </label>
+      <a class="hud-link" href="/workspace">WORKSPACE</a>
+      <a class="hud-link" href="/workspace#spaces">SPACES</a>
+      <a class="hud-link" href="/">GRAPH</a>
       <a class="hud-link" href="/holo.html">GALAXY</a>
     </div>
   </header>
@@ -234,8 +250,9 @@
       <p>A ReAct reasoning cortex with live tools — it reads the knowledge graph, checks the
          swarm, runs diagnostics, and answers with evidence. Ask anything, or start with a prompt below.</p>
     </div>
-    <div class="wrap" id="messages"></div>
+    <div class="wrap" id="messages" aria-live="polite"></div>
   </div>
+  <button id="jump-latest" type="button" hidden>Jump to latest ↓</button>
 
   <div id="quick">
     <button class="qp"><span class="no">01</span>Map the knowledge graph</button>
@@ -246,12 +263,13 @@
 
   <div id="composer">
     <div class="bar">
-      <button class="icon-btn" id="mic" title="Voice input">&#127908;</button>
-      <textarea id="input" rows="1" placeholder="Ask the brain anything..."></textarea>
-      <button class="icon-btn" id="voice-out" title="Spoken replies">&#128266;</button>
-      <button id="send">SEND</button>
+      <button class="icon-btn" id="mic" type="button" title="Voice input (Indian English)" aria-label="Voice input in Indian English">&#127908;</button>
+      <textarea id="input" rows="1" placeholder="Ask the brain anything..." aria-label="Ask the brain anything"></textarea>
+      <button class="icon-btn" id="voice-out" type="button" title="Spoken replies (Indian English)" aria-label="Toggle spoken replies" aria-pressed="false">&#128266;</button>
+      <button class="icon-btn" id="stop" type="button" title="Stop generation" aria-label="Stop generation" hidden>■</button>
+      <button id="send" type="button">SEND</button>
     </div>
-    <div class="hint">ENTER to send &nbsp;·&nbsp; SHIFT+ENTER newline &nbsp;·&nbsp; <b id="latency">cortex ready</b></div>
+    <div class="hint">ENTER to send &nbsp;·&nbsp; SHIFT+ENTER newline &nbsp;·&nbsp; STOP halts the browser request &nbsp;·&nbsp; <b id="latency">cortex ready</b></div>
   </div>
 </div>
 
@@ -297,6 +315,11 @@ const dot = document.getElementById('status-dot'),
       keyRow = document.getElementById('key-row'),
       nimKey = document.getElementById('nim-key');
 let activeModel = { provider: 'local', model: '' };
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
 
 function setActiveLabel(reachable) {
   dot.classList.toggle('on', !!reachable);
@@ -311,10 +334,10 @@ async function loadModels() {
     const locals = (d.local && d.local.models) || [];
     const nim = (d.nim && d.nim.models) || [];
     let html = locals.length
-      ? '<optgroup label="LOCAL">' + locals.map(m => '<option value="local|' + m + '">' + m + '</option>').join('') + '</optgroup>'
+      ? '<optgroup label="LOCAL">' + locals.map(m => '<option value="local|' + escapeHtml(m) + '">' + escapeHtml(m) + '</option>').join('') + '</optgroup>'
       : '<optgroup label="LOCAL"><option value="local|">local server offline</option></optgroup>';
     html += '<optgroup label="NVIDIA NIM">' +
-      nim.map(m => '<option value="nim|' + m.id + '">' + (m.name || m.id) + '</option>').join('') +
+      nim.map(m => '<option value="nim|' + escapeHtml(m.id) + '">' + escapeHtml(m.name || m.id) + '</option>').join('') +
       '</optgroup>';
     pick.innerHTML = html;
     pick.value = activeModel.provider + '|' + activeModel.model;
@@ -381,12 +404,37 @@ loadModels();
 /* ── Chat ──────────────────────────────────────────────────────────── */
 const stream = document.getElementById('stream'), box = document.getElementById('messages'),
       input = document.getElementById('input'), sendBtn = document.getElementById('send'),
+      stopBtn = document.getElementById('stop'), jumpLatest = document.getElementById('jump-latest'),
       intro = document.getElementById('intro'), lat = document.getElementById('latency'),
       voiceOut = { on: false, el: document.getElementById('voice-out') };
+const CHAT_DRAFT_KEY = 'nexus-legacy-chat-draft';
 let busy = false;
+let activeController = null;
+let stickToBottom = true;
 
-function scrollDown() { stream.scrollTop = stream.scrollHeight; }
-function now() { return new Date().toLocaleTimeString([], { hour12: false }); }
+function isNearBottom() {
+  return stream.scrollHeight - stream.scrollTop - stream.clientHeight < 120;
+}
+function scrollDown(force = false) {
+  if (force || stickToBottom) {
+    stream.scrollTop = stream.scrollHeight;
+    stickToBottom = true;
+    jumpLatest.hidden = true;
+  } else {
+    jumpLatest.hidden = false;
+  }
+}
+stream.addEventListener('scroll', () => {
+  stickToBottom = isNearBottom();
+  jumpLatest.hidden = stickToBottom;
+}, { passive: true });
+jumpLatest.addEventListener('click', () => scrollDown(true));
+function now() {
+  return new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false });
+}
+function saveDraft() {
+  try { sessionStorage.setItem(CHAT_DRAFT_KEY, input.value); } catch (_) {}
+}
 
 function addMsg(role, text, extras) {
   const row = document.createElement('div');
@@ -395,14 +443,14 @@ function addMsg(role, text, extras) {
   let chips = '';
   if (extras) {
     const bits = [];
-    (extras.tools_used || []).forEach(t => bits.push('<span class="chip tool">' + t + '</span>'));
+    (extras.tools_used || []).forEach(t => bits.push('<span class="chip tool">' + escapeHtml(t) + '</span>'));
     if (extras.memories_recalled) bits.push('<span class="chip">' + extras.memories_recalled + ' memories</span>');
     if (extras.nodes && extras.nodes.length) bits.push('<span class="chip">' + extras.nodes.length + ' nodes</span>');
     if (bits.length) chips = '<div class="chips">' + bits.join('') + '</div>';
   }
   let think = '';
   if (extras && extras.reasoning) {
-    const dur = extras.reasoningMs ? '<span class="dur">' + extras.reasoningMs + '</span>' : '';
+    const dur = extras.reasoningMs ? '<span class="dur">' + escapeHtml(extras.reasoningMs) + '</span>' : '';
     think =
       '<div class="thinking-block"><div class="thinking-head"><span class="dot"></span>' +
       '<span>Thinking process</span>' + dur + '<span class="chev">&#9654;</span></div>' +
@@ -431,7 +479,7 @@ function addMsg(role, text, extras) {
   }
   row.querySelector('.txt').textContent = text;
   box.appendChild(row);
-  scrollDown();
+  scrollDown(role === 'user');
   return row;
 }
 
@@ -455,19 +503,26 @@ function speak(text) {
   const u = new SpeechSynthesisUtterance(NEXUS_VOICE.speakable(text));
   const v = NEXUS_VOICE.pickVoice();
   if (v) { u.voice = v; u.lang = v.lang; }
+  else u.lang = NEXUS_VOICE.LANGUAGE || 'en-IN';
   u.rate = 0.98; u.pitch = 1.0;
   speechSynthesis.speak(u);
 }
 
 
+function stopAsk() {
+  activeController?.abort();
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+}
+
 async function ask(text) {
   text = (text || '').trim();
   if (!text || busy) return;
-  busy = true; sendBtn.disabled = true;
+  busy = true; sendBtn.disabled = true; stopBtn.hidden = false;
+  activeController = new AbortController();
   intro.classList.add('gone');
   document.querySelectorAll('.qp').forEach(q => q.style.display = 'none');
   addMsg('user', text);
-  input.value = ''; input.style.height = 'auto';
+  input.value = ''; input.style.height = 'auto'; saveDraft();
   finalBase = '';
   lat.textContent = 'cortex thinking...';
   const t0 = performance.now();
@@ -476,7 +531,8 @@ async function ask(text) {
   try {
     const r = await fetch('/chat', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text })
+      body: JSON.stringify({ message: text }),
+      signal: activeController.signal
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
@@ -488,21 +544,31 @@ async function ask(text) {
     lat.textContent = 'answered in ' + ((performance.now() - t0) / 1000).toFixed(1) + 's';
   } catch (err) {
     trow.remove();
-    addMsg('bot', 'Link to the cortex failed (' + err.message + '). Is the backend running? Try: python backend/main.py');
-    lat.textContent = 'link error';
+    if (err.name === 'AbortError') {
+      addMsg('bot', 'Generation stopped. The browser request was cancelled; a non-streaming backend task may still finish server-side.');
+      lat.textContent = 'generation stopped';
+    } else {
+      addMsg('bot', 'Link to the cortex failed (' + err.message + '). Is the backend running? Try: python backend/main.py');
+      lat.textContent = 'link error';
+    }
   } finally {
-    busy = false; sendBtn.disabled = false; input.focus();
+    busy = false; activeController = null;
+    sendBtn.disabled = false; stopBtn.hidden = true; input.focus();
     document.querySelector('.bar').classList.remove('processing');
   }
 }
 
 sendBtn.addEventListener('click', () => ask(input.value));
+stopBtn.addEventListener('click', stopAsk);
 input.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(input.value); }
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+    e.preventDefault(); ask(input.value);
+  }
 });
 input.addEventListener('input', () => {
   input.style.height = 'auto';
   input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+  saveDraft();
 });
 document.querySelectorAll('.qp').forEach(q =>
   q.addEventListener('click', () => ask(q.textContent.replace(/^\s*\d+\s*/, '')))
@@ -510,6 +576,7 @@ document.querySelectorAll('.qp').forEach(q =>
 voiceOut.el.addEventListener('click', () => {
   voiceOut.on = !voiceOut.on;
   voiceOut.el.classList.toggle('on', voiceOut.on);
+  voiceOut.el.setAttribute('aria-pressed', String(voiceOut.on));
   if (!voiceOut.on && 'speechSynthesis' in window) speechSynthesis.cancel();
 });
 
@@ -523,7 +590,7 @@ function getRec() {
   rec = new Ctor();
   rec.continuous = true;          // stay hot through short pauses
   rec.interimResults = true;
-  rec.lang = 'en-US';
+  rec.lang = (window.NEXUS_VOICE && NEXUS_VOICE.recognitionLanguage()) || 'en-IN';
   rec.maxAlternatives = 1;
   rec.onresult = e => {
     let interim = '';
@@ -534,6 +601,9 @@ function getRec() {
       else interim += t;
     }
     input.value = (finalBase + interim).replace(/\s+/g, ' ').trimStart();
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+    saveDraft();
   };
   rec.onend = () => {
     // Engines end the session on silence or periodically - if the mic is
@@ -574,12 +644,20 @@ micBtn.addEventListener('click', () => {
   }
   finalBase = input.value ? input.value.replace(/\s+$/, ' ') : '';
   try {
+    r.lang = (window.NEXUS_VOICE && NEXUS_VOICE.recognitionLanguage()) || 'en-IN';
     r.start(); listening = true; micBtn.classList.add('rec');
     document.querySelector('.bar').classList.add('listening');
     lat.textContent = 'listening... click mic when done';
   } catch (e) { /* already running */ }
 });
 
+try {
+  const draft = sessionStorage.getItem(CHAT_DRAFT_KEY);
+  if (draft) {
+    input.value = draft;
+    input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+  }
+} catch (_) {}
 input.focus();
 </script>
 </body>

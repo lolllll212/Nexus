@@ -10,6 +10,8 @@ import {
   Users,
   CalendarRange,
   Bot,
+  Layers3,
+  Search,
 } from 'lucide-react';
 import { WorkspaceRoute } from './shared';
 import { RobotCompanion } from './RobotCompanion';
@@ -50,6 +52,7 @@ interface WorkspaceHomeProps {
   heroDismissed: boolean;
   onDismissHero: () => void;
   onRouteChange: (route: WorkspaceRoute) => void;
+  onOpenSpaces?: () => void;
   onFastStart: (query: string) => void;
   onSuggestion: (s: string) => void;
   onBoost: () => void;
@@ -62,6 +65,7 @@ export const WorkspaceHome: React.FC<WorkspaceHomeProps> = ({
   heroDismissed,
   onDismissHero,
   onRouteChange,
+  onOpenSpaces,
   onFastStart,
   onSuggestion,
   onBoost,
@@ -226,6 +230,40 @@ export const WorkspaceHome: React.FC<WorkspaceHomeProps> = ({
           </div>
         </button>
       </section>
+
+      {/* ── Upgrade Spaces — searchable platform capability catalog ─────── */}
+      {onOpenSpaces && (
+        <section className="relative mt-6 overflow-hidden rounded-[2rem] bg-slate-950 px-6 py-6 text-white shadow-[0_28px_60px_-30px_rgba(15,23,42,0.7)] sm:px-8">
+          <div aria-hidden className="pointer-events-none absolute -right-24 -top-28 h-64 w-64 rounded-full bg-cyan-400/20 blur-3xl" />
+          <div aria-hidden className="pointer-events-none absolute -bottom-32 left-1/3 h-64 w-64 rounded-full bg-violet-500/20 blur-3xl" />
+          <div className="relative flex flex-wrap items-center gap-5">
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-3xl border border-white/15 bg-white/10">
+              <Layers3 className="h-7 w-7 text-cyan-300" strokeWidth={1.7} />
+            </span>
+            <div className="min-w-[240px] flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-xl font-extrabold tracking-tight">Upgrade Spaces</h2>
+                <span className="rounded-full border border-emerald-300/30 bg-emerald-400/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-200">
+                  10 landed
+                </span>
+              </div>
+              <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-300">
+                Search semantic memory, swarm state, routing, consensus, bridge security, telemetry and more — with
+                evidence paths and honest runtime activation notes.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onOpenSpaces}
+              className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-bold text-slate-950 shadow-lg transition-all hover:-translate-y-0.5 hover:bg-cyan-100"
+            >
+              <Search className="h-4 w-4" />
+              Explore spaces
+              <ArrowUpRight className="h-4 w-4" />
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* ── Onboarding Hero (center-right) + System Pulse ──────────────── */}
       <section className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { nexusJson, nexusChatStream } from '../../api';
-import { WorkspaceRoute } from './shared';
-import { WorkspaceNavRail } from './WorkspaceNavRail';
+import { WorkspaceNavRail, type WorkspaceNavRoute } from './WorkspaceNavRail';
+import { UpgradeSpacesPanel } from '../UpgradeSpacesPanel';
 import { WorkspaceHome, BootstrapData } from './WorkspaceHome';
 import { LightKnowledgeGraph } from './LightKnowledgeGraph';
 import { DeepResearchLight } from './DeepResearchLight';
@@ -28,6 +28,16 @@ import { WorkspaceResults, WorkspaceResult, MediaResultEntry } from './Workspace
  * The floating graphite cockpit stays docked across every route, and its
  * results surface as a bottom sheet above it — no legacy dark pages open.
  * ──────────────────────────────────────────────────────────────────────────── */
+
+const CONSOLE_DRAFT_KEY = 'nexus-workspace-console-draft';
+
+function loadConsoleDraft(): string {
+  try {
+    return window.sessionStorage.getItem(CONSOLE_DRAFT_KEY) || '';
+  } catch {
+    return '';
+  }
+}
 
 const FALLBACK_BOOTSTRAP: BootstrapData = {
   greeting: {
@@ -135,11 +145,11 @@ interface WorkspaceViewProps {
 }
 
 export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations }) => {
-  const [route, setRoute] = useState<WorkspaceRoute>('HOME');
+  const [route, setRoute] = useState<WorkspaceNavRoute>('HOME');
   const [bootstrap, setBootstrap] = useState<BootstrapData>(FALLBACK_BOOTSTRAP);
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
 
-  const [consoleValue, setConsoleValue] = useState('');
+  const [consoleValue, setConsoleValue] = useState(() => loadConsoleDraft());
   const [consoleMode, setConsoleMode] = useState<ConsoleMode>('chat');
   const [consoleStatus, setConsoleStatus] = useState<ConsoleStatus>('idle');
   const [statusDetail, setStatusDetail] = useState('');
@@ -149,27 +159,37 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const stageTimerRef = useRef<number | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
+  const activeRunControllerRef = useRef<AbortController | null>(null);
 
   const isBusy = consoleStatus !== 'idle';
 
   /* ── Live bootstrap pull ──────────────────────────────────────────────── */
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
     (async () => {
       try {
-        const data = await nexusJson<BootstrapData>('/api/workspace/bootstrap');
-        if (!cancelled) {
+        const data = await nexusJson<BootstrapData>('/api/workspace/bootstrap', {
+          signal: controller.signal,
+        });
+        if (!controller.signal.aborted) {
           setBootstrap(data);
           setBackendOnline(true);
         }
       } catch {
-        if (!cancelled) setBackendOnline(false);
+        if (!controller.signal.aborted) setBackendOnline(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    try {
+      if (consoleValue) window.sessionStorage.setItem(CONSOLE_DRAFT_KEY, consoleValue);
+      else window.sessionStorage.removeItem(CONSOLE_DRAFT_KEY);
+    } catch {
+      // Draft persistence is best-effort in restricted browser contexts.
+    }
+  }, [consoleValue]);
 
   /* ── Stage ticker: visualises the background execution stream ─────────── */
   const startStages = useCallback((stages: string[]) => {
@@ -189,7 +209,19 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
     }
   }, []);
 
-  useEffect(() => () => stopStages(), [stopStages]);
+  useEffect(
+    () => () => {
+      activeRunControllerRef.current?.abort();
+      stopStages();
+    },
+    [stopStages],
+  );
+
+  const cancelActiveRun = useCallback(() => {
+    activeRunControllerRef.current?.abort();
+    stopStages();
+    setStatusDetail('Stopping…');
+  }, [stopStages]);
 
   /* Bring the result sheet into view when a fresh result lands */
   useEffect(() => {
@@ -202,6 +234,8 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
       const query = rawQuery.trim();
       if (!query || consoleStatus !== 'idle') return;
 
+      const controller = new AbortController();
+      activeRunControllerRef.current = controller;
       setConsoleValue('');
       setResult(null);
       setConsoleStatus('thinking');
@@ -234,7 +268,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
               answer += ev.content;
               setResult({ kind: 'chat', id, query, answer, steps, streaming: true });
             }
-          });
+          }, { signal: controller.signal });
 
           setResult((prev) =>
             prev && prev.kind === 'chat' && prev.id === id
@@ -256,6 +290,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
           const data = await nexusJson<any>('/api/research/execute', {
             method: 'POST',
             body: JSON.stringify({ query, max_sources: 3 }),
+            signal: controller.signal,
           });
           setResult({
             kind: 'research',
@@ -274,11 +309,12 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
           const data = await nexusJson<any>('/api/workspace/image', {
             method: 'POST',
             body: JSON.stringify({ prompt: query }),
+            signal: controller.signal,
           });
           setResult({
             kind: 'image',
             id,
-            query,
+            prompt: query,
             svgDataUri: data.svg_data_uri,
             palette: data.palette ?? [],
             seed: data.seed,
@@ -286,10 +322,12 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
             renderMs: data.render_ms ?? 0,
           });
         } else if (mode === 'search') {
+          stagesStarted = true;
           startStages(['Scanning memory', 'Walking graph', 'Merging corpora']);
           const data = await nexusJson<any>('/api/workspace/search', {
             method: 'POST',
             body: JSON.stringify({ query, limit: 8 }),
+            signal: controller.signal,
           });
           setResult({
             kind: 'search',
@@ -305,11 +343,12 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
           const data = await nexusJson<any>('/api/workspace/music', {
             method: 'POST',
             body: JSON.stringify({ prompt: query }),
+            signal: controller.signal,
           });
           setResult({
             kind: 'music',
             id,
-            query,
+            prompt: query,
             audioDataUri: data.audio_data_uri,
             keyName: data.key,
             scale: data.scale,
@@ -320,13 +359,34 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
           });
         }
       } catch (err: any) {
-        setResult({
-          kind: 'error',
-          id,
-          query,
-          message: err?.message ?? 'The backend route failed to respond.',
-        });
+        const stopped = controller.signal.aborted || err?.name === 'AbortError';
+        if (stopped) {
+          setResult((prev) =>
+            prev && prev.kind === 'chat' && prev.id === id
+              ? {
+                  ...prev,
+                  streaming: false,
+                  answer: prev.answer
+                    ? `${prev.answer.trim()}\n\n_Generation stopped._`
+                    : 'Generation stopped before an answer arrived.',
+                }
+              : {
+                  kind: 'error',
+                  id,
+                  query,
+                  message: 'Run stopped. A server-side task may still finish in the background; check its result surface before retrying.',
+                },
+          );
+        } else {
+          setResult({
+            kind: 'error',
+            id,
+            query,
+            message: err?.message ?? 'The backend route failed to respond.',
+          });
+        }
       } finally {
+        if (activeRunControllerRef.current === controller) activeRunControllerRef.current = null;
         if (stagesStarted) stopStages();
         setConsoleStatus('idle');
         setStatusDetail('');
@@ -343,6 +403,8 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
     async (attachments: MediaAttachment[], question: string) => {
       if (consoleStatus !== 'idle' || attachments.length === 0) return;
 
+      const controller = new AbortController();
+      activeRunControllerRef.current = controller;
       setConsoleValue('');
       setConsoleStatus('thinking');
       setStatusDetail('Uploading stream');
@@ -350,14 +412,23 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
 
       const id = `res-${Date.now()}`;
       const entries: MediaResultEntry[] = [];
+      let stopped = false;
 
       for (const att of attachments) {
+        if (controller.signal.aborted) {
+          stopped = true;
+          break;
+        }
         const sizeKb = Math.round(att.file.size / 102.4) / 10;
         try {
           if (att.kind === 'audio') {
             const fd = new FormData();
             fd.append('audio_file', att.file, att.file.name);
-            const stt = await nexusJson<SttPayload>('/api/audio/stt', { method: 'POST', body: fd });
+            const stt = await nexusJson<SttPayload>('/api/audio/stt', {
+              method: 'POST',
+              body: fd,
+              signal: controller.signal,
+            });
             entries.push({
               id: `${att.id}-stt`,
               type: 'audio',
@@ -376,6 +447,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
             const data = await nexusJson<ProcessPayload>('/api/multimodal/process', {
               method: 'POST',
               body: fd,
+              signal: controller.signal,
             });
             const dec = data.decomposition ?? {};
             entries.push({
@@ -410,6 +482,10 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
             });
           }
         } catch (err: any) {
+          if (controller.signal.aborted || err?.name === 'AbortError') {
+            stopped = true;
+            break;
+          }
           entries.push({
             id: `${att.id}-err`,
             type: att.kind,
@@ -421,10 +497,30 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
         }
       }
 
+      if (activeRunControllerRef.current === controller) activeRunControllerRef.current = null;
       stopStages();
       setConsoleStatus('idle');
       setStatusDetail('');
-      setResult({ kind: 'media', id, query: question, entries });
+      if (stopped && entries.length === 0) {
+        setResult({
+          kind: 'error',
+          id,
+          query: question,
+          message: 'Media run stopped before any attachment completed. A server-side upload may still finish in the background.',
+        });
+      } else {
+        if (stopped) {
+          entries.push({
+            id: `${id}-stopped`,
+            type: 'doc',
+            filename: 'Run stopped',
+            sizeKb: 0,
+            previewUrl: null,
+            error: 'Stopped before all attachments were processed.',
+          });
+        }
+        setResult({ kind: 'media', id, query: question, entries });
+      }
     },
     [consoleStatus, startStages, stopStages]
   );
@@ -460,6 +556,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
             heroDismissed={heroDismissed}
             onDismissHero={() => setHeroDismissed((d) => !d)}
             onRouteChange={setRoute}
+            onOpenSpaces={() => setRoute('SPACES')}
             onFastStart={handleSuggestion}
             onSuggestion={handleSuggestion}
             onBoost={handleBoost}
@@ -471,6 +568,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
         {route === 'ARCHITECTURE' && <ArchitectureLight />}
         {route === 'ANALYTICS' && <AnalyticsLight />}
         {route === 'AGENTS' && <AgentsLight />}
+        {route === 'SPACES' && <UpgradeSpacesPanel />}
       </div>
 
       {/* ── Result sheet — floats above the cockpit on every route ───────── */}
@@ -492,6 +590,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ onOpenIntegrations
             onChange={setConsoleValue}
             onSubmit={runQuery}
             onSubmitMedia={runMedia}
+            onCancel={cancelActiveRun}
             status={consoleStatus}
             statusDetail={statusDetail}
             activeMode={consoleMode}

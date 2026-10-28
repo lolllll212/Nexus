@@ -93,7 +93,7 @@ protects the tenant's tool budget over a full day.
 ## Evaluating the Evolution Loop
 
 The golden set in `src/nexus/eval/harness.py` has a `self_evolution` category
-(2 of 16 cases). Those cases check the *shape* of the behaviour - the agent
+(2 of 21 cases). Those cases check the *shape* of the behaviour - the agent
 inspects existing tools, then produces a named, working new one - rather than
 pinning specific tool names, so a model that evolves along a different path is
 not punished for it.

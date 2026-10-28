@@ -80,34 +80,50 @@ export interface HealIteration {
   created_at?: string;
 }
 
+function defaultBridgeUrl(): string {
+  const configured = (import.meta as any).env?.VITE_BRIDGE_WS_URL;
+  if (typeof configured === 'string' && configured.trim()) return configured.trim();
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/bridge`;
+}
+
+const WAITING_AGENTS: Record<string, SwarmAgent> = {
+  ceo: { status: 'offline', current_task: 'Waiting for a live bridge snapshot', last_heartbeat: null },
+  astra: { status: 'offline', current_task: 'Waiting for a live bridge snapshot', last_heartbeat: null },
+  tron: { status: 'offline', current_task: 'Waiting for a live bridge snapshot', last_heartbeat: null },
+  xenom: { status: 'offline', current_task: 'Waiting for a live bridge snapshot', last_heartbeat: null },
+};
+
+const EMPTY_BUDGETS: Record<string, AgentBudget> = {
+  ceo: { limit: 0, used: 0, pct: 0, tier: 'primary' },
+  astra: { limit: 0, used: 0, pct: 0, tier: 'primary' },
+  tron: { limit: 0, used: 0, pct: 0, tier: 'local' },
+  xenom: { limit: 0, used: 0, pct: 0, tier: 'local' },
+};
+
 export const SwarmDashboardView: React.FC<SwarmDashboardViewProps> = ({
   onOpenClaudeStudio,
   onOpenMultimodalBridge,
   onToggleAnalyticsMode,
 }) => {
-  // WebSocket State (NO POLLING - updates strictly pushed via WebSocket events)
+  // WebSocket state. Entity panels stay explicitly in "waiting" mode until
+  // the bridge sends a snapshot or delta; no seeded activity is shown as live.
   const [wsConnected, setWsConnected] = useState<boolean>(false);
+  const [bridgeUrl] = useState<string>(() => defaultBridgeUrl());
+  const [bridgeNotice, setBridgeNotice] = useState<string>('Connecting to the same-origin bridge…');
+  const [dataSource, setDataSource] = useState<'waiting' | 'live'>('waiting');
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [reconnectNonce, setReconnectNonce] = useState(0);
   const [latencyMs, setLatencyMs] = useState<number>(0);
-  const [clientCount, setClientCount] = useState<number>(1);
+  const [clientCount, setClientCount] = useState<number>(0);
   const [messagesReceived, setMessagesReceived] = useState<number>(0);
-  const [lastEventTime, setLastEventTime] = useState<string>('just now');
+  const [lastEventTime, setLastEventTime] = useState<string>('—');
 
   // Swarm Entities
-  const [agents, setAgents] = useState<Record<string, SwarmAgent>>({
-    ceo: { status: 'done', current_task: 'Adjudicating upgrade spaces & monitoring consensus', last_heartbeat: new Date().toISOString() },
-    astra: { status: 'working', current_task: 'task-033-plan-001 (LoRA pipeline & eval)', last_heartbeat: new Date().toISOString() },
-    tron: { status: 'working', current_task: 'Upgrade Space 6 - Real-time swarm dashboard in web/', last_heartbeat: new Date().toISOString() },
-    xenom: { status: 'idle', current_task: 'Standby for infrastructure & bridge telemetry', last_heartbeat: new Date().toISOString() },
-  });
-
+  const [agents, setAgents] = useState<Record<string, SwarmAgent>>(WAITING_AGENTS);
   const [taskQueue, setTaskQueue] = useState<SwarmTask[]>([]);
   const [consensusList, setConsensusList] = useState<ConsensusProposal[]>([]);
-  const [budgets, setBudgets] = useState<Record<string, AgentBudget>>({
-    ceo: { limit: 500000, used: 42100, pct: 8.4, tier: 'primary' },
-    astra: { limit: 500000, used: 184500, pct: 36.9, tier: 'primary' },
-    tron: { limit: 500000, used: 215300, pct: 43.1, tier: 'local' },
-    xenom: { limit: 500000, used: 96400, pct: 19.3, tier: 'local' },
-  });
+  const [budgets, setBudgets] = useState<Record<string, AgentBudget>>(EMPTY_BUDGETS);
   const [heals, setHeals] = useState<HealIteration[]>([]);
 
   // UI Filters
@@ -118,19 +134,29 @@ export const SwarmDashboardView: React.FC<SwarmDashboardViewProps> = ({
   const wsRef = useRef<WebSocket | null>(null);
   const pingStartRef = useRef<number>(0);
 
-  // Initialize and maintain WebSocket connection to headless bridge
+  // Initialize and maintain the same-origin WebSocket bridge connection.
+  // The token is sent as the first message, never in the URL where it could
+  // leak through browser history, proxies, or server access logs.
   useEffect(() => {
-    let reconnectTimeout: any = null;
+    let reconnectTimeout: number | null = null;
     let isCancelled = false;
+    let attempt = 0;
+
+    const scheduleReconnect = () => {
+      if (isCancelled) return;
+      attempt += 1;
+      setReconnectAttempt(attempt);
+      const baseDelay = Math.min(15000, 1000 * (2 ** Math.min(attempt - 1, 4)));
+      const jitter = Math.round(Math.random() * 350);
+      reconnectTimeout = window.setTimeout(connect, baseDelay + jitter);
+    };
 
     const connect = () => {
       if (isCancelled) return;
-      const wsUrl = (import.meta as any).env?.VITE_BRIDGE_WS_URL || 'ws://127.0.0.1:8765';
       const token = (import.meta as any).env?.VITE_BRIDGE_TOKEN || '';
-      const fullUrl = token ? `${wsUrl}?token=${encodeURIComponent(token)}` : wsUrl;
 
       try {
-        const ws = new WebSocket(fullUrl);
+        const ws = new WebSocket(bridgeUrl);
         wsRef.current = ws;
 
         ws.onopen = () => {
@@ -138,15 +164,17 @@ export const SwarmDashboardView: React.FC<SwarmDashboardViewProps> = ({
             ws.close();
             return;
           }
-          setWsConnected(true);
-          // Authenticate if token provided
+          attempt = 0;
+          setReconnectAttempt(0);
           if (token) {
+            setWsConnected(false);
+            setBridgeNotice('Socket open — authenticating with the bridge…');
             ws.send(JSON.stringify({ type: 'auth', token }));
+            return;
           }
-          // Request instant initial state sync
+          setWsConnected(true);
+          setBridgeNotice('Connected — waiting for a live swarm snapshot.');
           ws.send(JSON.stringify({ type: 'get_state' }));
-
-          // Measure ping latency
           pingStartRef.current = performance.now();
           ws.send(JSON.stringify({ type: 'ping' }));
         };
@@ -158,6 +186,31 @@ export const SwarmDashboardView: React.FC<SwarmDashboardViewProps> = ({
 
           try {
             const msg = JSON.parse(event.data);
+
+            if (msg.type === 'auth') {
+              if (msg.ok) {
+                setWsConnected(true);
+                setBridgeNotice('Authenticated — waiting for a live swarm snapshot.');
+                ws.send(JSON.stringify({ type: 'get_state' }));
+                pingStartRef.current = performance.now();
+                ws.send(JSON.stringify({ type: 'ping' }));
+              } else {
+                setWsConnected(false);
+                setBridgeNotice('Bridge authentication failed. Check VITE_BRIDGE_TOKEN.');
+              }
+              return;
+            }
+
+            if (msg.type === 'error') {
+              const message = String(msg.error || 'Bridge error');
+              setBridgeNotice(
+                message.toLowerCase().includes('auth')
+                  ? 'Bridge authentication required. Set VITE_BRIDGE_TOKEN to match NEXUS_BRIDGE_TOKEN; the token is sent as a message, not in the URL.'
+                  : `Bridge error: ${message}`,
+              );
+              if (message.toLowerCase().includes('auth')) setWsConnected(false);
+              return;
+            }
 
             if (msg.type === 'pong') {
               const diff = Math.round(performance.now() - pingStartRef.current);
@@ -178,15 +231,26 @@ export const SwarmDashboardView: React.FC<SwarmDashboardViewProps> = ({
                 payload.snapshot
               ) {
                 const snap = payload.snapshot || payload;
-                if (snap.agents) setAgents(snap.agents);
-                if (Array.isArray(snap.task_queue)) setTaskQueue(snap.task_queue);
-                if (Array.isArray(snap.consensus)) setConsensusList(snap.consensus);
-                if (snap.budgets) setBudgets(snap.budgets);
-                if (Array.isArray(snap.heals)) setHeals(snap.heals);
+                let receivedEntityData = false;
+                if (snap.agents) { setAgents(snap.agents); receivedEntityData = true; }
+                if (Array.isArray(snap.task_queue)) { setTaskQueue(snap.task_queue); receivedEntityData = true; }
+                if (Array.isArray(snap.consensus)) { setConsensusList(snap.consensus); receivedEntityData = true; }
+                if (snap.budgets) { setBudgets(snap.budgets); receivedEntityData = true; }
+                if (Array.isArray(snap.heals)) { setHeals(snap.heals); receivedEntityData = true; }
+                if (receivedEntityData) {
+                  setWsConnected(true);
+                  setDataSource('live');
+                  setBridgeNotice('Live bridge data received.');
+                }
                 return;
               }
 
               // Handle individual delta events
+              if (typeof payload.nexus_event === 'string') {
+                setWsConnected(true);
+                setDataSource('live');
+                setBridgeNotice('Live bridge data received.');
+              }
               if (payload.nexus_event === 'task_created') {
                 setTaskQueue((prev) => {
                   if (prev.some((t) => t.id === payload.task_id)) return prev;
@@ -224,15 +288,19 @@ export const SwarmDashboardView: React.FC<SwarmDashboardViewProps> = ({
         ws.onclose = () => {
           if (isCancelled) return;
           setWsConnected(false);
-          reconnectTimeout = setTimeout(connect, 2500);
+          setBridgeNotice('Bridge disconnected — reconnecting with backoff. The last live snapshot, if any, remains visible.');
+          scheduleReconnect();
         };
 
         ws.onerror = () => {
           setWsConnected(false);
+          setBridgeNotice('Bridge socket error — check that scripts/ide_bridge.py is running and the /bridge proxy can reach it.');
+          try { ws.close(); } catch { /* close is best-effort */ }
         };
       } catch {
         setWsConnected(false);
-        reconnectTimeout = setTimeout(connect, 3000);
+        setBridgeNotice('Could not create the bridge socket — reconnecting with backoff.');
+        scheduleReconnect();
       }
     };
 
@@ -249,17 +317,21 @@ export const SwarmDashboardView: React.FC<SwarmDashboardViewProps> = ({
     return () => {
       isCancelled = true;
       clearInterval(pingInterval);
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (reconnectTimeout !== null) window.clearTimeout(reconnectTimeout);
       if (wsRef.current) wsRef.current.close();
+      wsRef.current = null;
     };
-  }, []);
+  }, [bridgeUrl, reconnectNonce]);
 
   const handleManualSync = () => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && wsConnected) {
       wsRef.current.send(JSON.stringify({ type: 'get_state' }));
       pingStartRef.current = performance.now();
       wsRef.current.send(JSON.stringify({ type: 'ping' }));
+      return;
     }
+    setBridgeNotice('Reconnecting to the bridge now…');
+    setReconnectNonce((current) => current + 1);
   };
 
   const filteredTasks = taskQueue.filter((t) => {
@@ -322,19 +394,34 @@ export const SwarmDashboardView: React.FC<SwarmDashboardViewProps> = ({
               }`}
             >
               {wsConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-              <span>{wsConnected ? `WS CONNECTED (${latencyMs}ms)` : 'RECONNECTING TO BRIDGE...'}</span>
+              <span>{wsConnected ? `WS CONNECTED (${latencyMs}ms)` : `CONNECTING TO BRIDGE${reconnectAttempt ? ` · TRY ${reconnectAttempt}` : ''}`}</span>
+            </span>
+            <span
+              className={`text-[10px] px-2.5 py-0.5 rounded-full border font-bold uppercase flex items-center gap-1.5 ${
+                dataSource === 'live'
+                  ? 'bg-cyan-950/90 border-cyan-400/50 text-cyan-200'
+                  : 'bg-amber-950/90 border-amber-400/50 text-amber-200'
+              }`}
+            >
+              {dataSource === 'live' ? 'Live bridge data' : 'Waiting — no live data yet'}
             </span>
           </div>
 
           <h1 className="text-xl font-black text-white tracking-widest uppercase flex items-center gap-2">
             <span>NEXUS MULTI-AGENT SWARM COCKPIT</span>
           </h1>
-          <p className="text-xs text-slate-400 tracking-wide mt-0.5 flex items-center gap-3">
-            <span>WebSocket bus: <code className="text-cyan-300">ws://127.0.0.1:8765</code></span>
+          <p className="text-xs text-slate-400 tracking-wide mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>WebSocket bus: <code className="break-all text-cyan-300">{bridgeUrl}</code></span>
+            <span>•</span>
+            <span>Clients: <strong className="text-white">{clientCount || '—'}</strong></span>
             <span>•</span>
             <span>Events: <strong className="text-white">{messagesReceived}</strong></span>
             <span>•</span>
-            <span>Last sync: <span className="text-slate-300">{lastEventTime}</span></span>
+            <span>Last event: <span className="text-slate-300">{lastEventTime}</span></span>
+          </p>
+          <p aria-live="polite" className="mt-2 max-w-3xl text-[11px] leading-relaxed text-slate-400">
+            {bridgeNotice}
+            {dataSource !== 'live' && ' Agent cards below are placeholders, not live telemetry.'}
           </p>
         </div>
 
@@ -342,11 +429,11 @@ export const SwarmDashboardView: React.FC<SwarmDashboardViewProps> = ({
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
             onClick={handleManualSync}
-            title="Send sync request over WebSocket"
+            title={wsConnected ? 'Send sync request over WebSocket' : 'Reconnect to the bridge now'}
             className="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 hover:border-cyan-400 text-xs text-slate-300 hover:text-white flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
           >
             <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
-            <span>SYNC BRIDGE</span>
+            <span>{wsConnected ? 'SYNC BRIDGE' : 'RECONNECT'}</span>
           </button>
 
           {onToggleAnalyticsMode && (
@@ -380,7 +467,9 @@ export const SwarmDashboardView: React.FC<SwarmDashboardViewProps> = ({
               ACTIVE SWARM AGENTS (PORT CONFLICT RESOLUTION & CRDTs)
             </span>
           </div>
-          <span className="text-[10px] text-cyan-400/80">4 OF 4 AGENTS TRACKED VIA HEARTBEAT</span>
+          <span className="text-[10px] text-cyan-400/80">
+            {dataSource === 'live' ? `${Object.keys(agents).length} AGENTS IN LIVE SNAPSHOT` : 'WAITING FOR LIVE HEARTBEATS'}
+          </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

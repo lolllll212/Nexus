@@ -76,6 +76,9 @@
       <button class="nx-rail__item" type="button" data-tip="Agents" data-scroll="agents">
         <svg class="nx-icon" aria-hidden="true"><use href="#i-agents"/></svg><span class="nx-rail__label">Agents</span>
       </button>
+      <button class="nx-rail__item" type="button" data-tip="Platform Spaces" data-scroll="spaces">
+        <svg class="nx-icon" aria-hidden="true"><use href="#i-layers"/></svg><span class="nx-rail__label">Spaces</span>
+      </button>
     </nav>
 
     <div class="nx-rail__foot">
@@ -382,10 +385,44 @@
         </div>
       </section>
 
+      <!-- Platform Spaces: the same ten-space catalog served to the React app. -->
+      <section class="nx-panel nx-spaces nx-reveal" id="spaces" style="--d:440ms" aria-labelledby="spaces-title">
+        <header class="nx-panel__head">
+          <div>
+            <h3 id="spaces-title">Platform Spaces</h3>
+            <p>Search the ten Nexus capability spaces, their evidence, and what still needs runtime activation.</p>
+          </div>
+          <span class="nx-pill nx-pill--ghost" id="spaces-count">Loading…</span>
+        </header>
+
+        <div class="nx-spaces__toolbar">
+          <label class="nx-sr" for="spaces-search">Search platform spaces</label>
+          <input class="nx-spaces__search" id="spaces-search" type="search" autocomplete="off"
+                 placeholder="Search memory, telemetry, sandbox, evidence paths…">
+          <label class="nx-sr" for="spaces-priority">Filter platform spaces by priority</label>
+          <select class="nx-spaces__priority" id="spaces-priority">
+            <option value="">All priorities</option>
+          </select>
+          <button class="nx-ghostbtn nx-spaces__refresh" type="button" id="spaces-refresh">Refresh</button>
+        </div>
+
+        <div class="nx-spaces__summary" id="spaces-summary" aria-live="polite">
+          <span>Catalog loading</span>
+        </div>
+        <div class="nx-spaces__state" id="spaces-state" role="status">Loading the shared platform catalog…</div>
+        <div class="nx-spaces__grid" id="spaces-grid" hidden></div>
+      </section>
+
       <footer class="nx-footnote">
         <span>NEXUS OS · build 2.4.0</span>
         <span class="nx-footnote__dot" aria-hidden="true">•</span>
         <span id="footnote-engine">Grounding engine · local</span>
+        <span class="nx-footnote__dot" aria-hidden="true">•</span>
+        <a href="/chat.html">Brain chat</a>
+        <span class="nx-footnote__dot" aria-hidden="true">•</span>
+        <a href="/">Knowledge graph</a>
+        <span class="nx-footnote__dot" aria-hidden="true">•</span>
+        <a href="/holo.html">Holo workbench</a>
         <span class="nx-footnote__dot" aria-hidden="true">•</span>
         <span>Multi-modal cockpit online</span>
       </footer>
@@ -427,6 +464,7 @@
         <footer class="nx-run__foot">
           <span class="nx-run__meta" id="run-meta">streaming…</span>
           <div class="nx-run__footactions">
+            <button class="nx-ghostbtn" type="button" id="run-latest" hidden>Jump to latest</button>
             <button class="nx-ghostbtn" type="button" id="run-copy">Copy</button>
             <button class="nx-ghostbtn" type="button" id="run-rerun">Rerun</button>
           </div>

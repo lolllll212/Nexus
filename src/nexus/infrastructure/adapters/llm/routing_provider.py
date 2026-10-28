@@ -159,13 +159,13 @@ def build_local_tier(
         # Local inference on a consumer GPU needs far more than a socket
         # check; 120s covers quantized-model generation without hanging.
         timeout = float(os.environ.get("NEXUS_LOCAL_TIMEOUT", "120"))
-        high = OpenAIProvider(
+        high: LLMProvider = OpenAIProvider(
             api_key="local-no-key",
             model=os.environ.get("NEXUS_LMSTUDIO_MODEL_HIGH", DEFAULT_LMSTUDIO_HIGH),
             base_url=base_url,
             timeout=timeout,
         )
-        low = OpenAIProvider(
+        low: LLMProvider = OpenAIProvider(
             api_key="local-no-key",
             model=os.environ.get("NEXUS_LMSTUDIO_MODEL_LOW", DEFAULT_LMSTUDIO_LOW),
             base_url=base_url,
@@ -415,6 +415,7 @@ class RoutingProvider(LLMProvider):
         weights_path: Path | str | None = None,
         cost_aware: bool = False,
         speculative: bool = False,
+        telemetry: Any | None = None,
     ) -> None:
         self.primary = primary
         self.local = local
@@ -429,7 +430,46 @@ class RoutingProvider(LLMProvider):
             if (self.weights_path or cost_aware or speculative)
             else None
         )
+        self.telemetry = telemetry
         self.route_log: list[dict[str, Any]] = []
+        self.supports_native_tool_calls = any(
+            provider is not None and bool(getattr(provider, "supports_native_tool_calls", False))
+            for provider in [self.primary, self.local, self.local_high, self.local_low]
+        )
+
+    def _log_route(
+        self,
+        route: str,
+        complexity: Complexity,
+        prompt: str,
+        *,
+        speculative: bool = False,
+    ) -> None:
+        entry: dict[str, Any] = {
+            "route": route,
+            "complexity": complexity.value,
+            "prompt": prompt,
+        }
+        if speculative:
+            entry["speculative"] = True
+        self.route_log.append(entry)
+
+        # Space 9: the route log is useful for learning, but operators also
+        # need the same outcome in Prometheus. Telemetry must never break a
+        # model call, so every failure here is intentionally swallowed.
+        try:
+            telemetry = self.telemetry
+            if telemetry is None:
+                from nexus.infrastructure.adapters.observability.agent_telemetry import (
+                    get_global_agent_telemetry,
+                )
+
+                telemetry = get_global_agent_telemetry()
+            record_route = getattr(telemetry, "record_route", None)
+            if callable(record_route):
+                record_route(route)
+        except Exception:
+            pass
 
     def _pick_local(self, complexity: Complexity) -> LLMProvider | None:
         if complexity is Complexity.HIGH and self.local_high is not None:
@@ -516,14 +556,7 @@ class RoutingProvider(LLMProvider):
                 spec_reply = await _try(local_spec)
                 if spec_reply and len(spec_reply.strip()) > 2 and not spec_reply.strip().startswith("Error"):
                     self.learned_router.stats["speculative_hits"] += 1
-                    self.route_log.append(
-                        {
-                            "route": "local-speculative",
-                            "complexity": complexity.value,
-                            "prompt": full_text,
-                            "speculative": True,
-                        }
-                    )
+                    self._log_route("local-speculative", complexity, full_text, speculative=True)
                     return spec_reply
 
         reply = ""
@@ -532,45 +565,76 @@ class RoutingProvider(LLMProvider):
             if local is not None:
                 reply = await _try(local)
                 if reply:
-                    self.route_log.append(
-                        {
-                            "route": "local",
-                            "complexity": complexity.value,
-                            "prompt": full_text,
-                        }
-                    )
+                    self._log_route("local", complexity, full_text)
                     return reply
                 route = "primary-fallback"
         reply = await _try(self.primary)
         if reply:
-            self.route_log.append(
-                {
-                    "route": "primary",
-                    "complexity": complexity.value,
-                    "prompt": full_text,
-                }
-            )
+            self._log_route("primary", complexity, full_text)
             return reply
         local = self._pick_local(complexity)
         if local is not None:
             reply = await _try(local)
             if reply:
-                self.route_log.append(
-                    {
-                        "route": "local-fallback",
-                        "complexity": complexity.value,
-                        "prompt": full_text,
-                    }
-                )
+                self._log_route("local-fallback", complexity, full_text)
                 return reply
-        self.route_log.append(
-            {
-                "route": "none",
-                "complexity": complexity.value,
-                "prompt": full_text,
-            }
-        )
+        self._log_route("none", complexity, full_text)
         return ""
+
+    async def complete_with_tools(
+        self,
+        messages: list[dict[str, str]],
+        tools: list[dict],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> dict:
+        """Route a native tool turn without speculative wrong-tier execution."""
+
+        full_text = "\n".join(str(m.get("content", "")) for m in messages)
+        if self.force_route:
+            complexity = self.force_route
+        elif self.learned_router:
+            complexity, _ = self.learned_router.route_decision(full_text)
+        else:
+            complexity = classify_complexity(full_text)
+
+        local = self._pick_local(complexity)
+        primary_supports_native = bool(getattr(self.primary, "supports_native_tool_calls", False))
+        local_supports_native = bool(
+            local is not None and getattr(local, "supports_native_tool_calls", False)
+        )
+
+        if complexity is Complexity.LOW and local_supports_native:
+            ordered = [("local", local), ("primary", self.primary)]
+        elif complexity is Complexity.LOW and primary_supports_native:
+            # A text-only local tier should not receive structured actions it
+            # cannot represent reliably when the primary can call tools.
+            ordered = [("primary", self.primary), ("local-fallback", local)]
+        else:
+            ordered = [("primary", self.primary), ("local-fallback", local)]
+
+        seen: set[int] = set()
+        for route, provider in ordered:
+            if provider is None or id(provider) in seen:
+                continue
+            seen.add(id(provider))
+            try:
+                result = await provider.complete_with_tools(
+                    messages,
+                    tools,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            except Exception:
+                continue
+            if not isinstance(result, dict):
+                continue
+            if result.get("type") == "tool_call" or str(result.get("content", "")).strip():
+                self._log_route(route, complexity, full_text)
+                return result
+
+        self._log_route("none", complexity, full_text)
+        return {"type": "text", "content": ""}
 
     async def extract_structured(
         self,
@@ -615,6 +679,12 @@ class TokenBudgetMiddleware(LLMProvider):
         self.daily_budget = daily_budget
         self.agent = agent
         self.spend: int = 0
+        self.supports_native_tool_calls = bool(
+            getattr(self.inner, "supports_native_tool_calls", False)
+        ) or bool(
+            self.fallback is not None
+            and getattr(self.fallback, "supports_native_tool_calls", False)
+        )
 
     def _load(self) -> dict[str, Any]:
         try:
@@ -671,6 +741,47 @@ class TokenBudgetMiddleware(LLMProvider):
             if reply:
                 self._record(estimate_tokens(reply))
         return reply
+
+    async def complete_with_tools(
+        self,
+        messages: list[dict[str, str]],
+        tools: list[dict],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> dict:
+        incoming = sum(estimate_tokens(str(m.get("content", ""))) for m in messages)
+        incoming += estimate_tokens(json.dumps(tools, default=str))
+        provider = self.inner
+        routed = "primary"
+        if self.over_budget(incoming):
+            if self.fallback is None:
+                return {"type": "text", "content": ""}
+            provider = self.fallback
+            routed = "local-budget"
+
+        result = await provider.complete_with_tools(
+            messages,
+            tools,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        self._record(incoming + estimate_tokens(json.dumps(result, default=str)))
+
+        empty_text = (
+            isinstance(result, dict)
+            and result.get("type") == "text"
+            and not str(result.get("content", "")).strip()
+        )
+        if empty_text and routed == "primary" and self.fallback is not None:
+            fallback_result = await self.fallback.complete_with_tools(
+                messages,
+                tools,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            self._record(estimate_tokens(json.dumps(fallback_result, default=str)))
+            return fallback_result
+        return result if isinstance(result, dict) else {"type": "text", "content": ""}
 
     async def extract_structured(
         self,

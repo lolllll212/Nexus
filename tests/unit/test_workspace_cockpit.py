@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import struct
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -23,6 +24,8 @@ os.environ["NEXUS_WORKSPACE_ENGINE"] = "local"
 
 from backend.main import app  # noqa: E402
 from backend.routers import workspace as cockpit  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture()
@@ -67,6 +70,12 @@ class TestBootstrap:
         assert payload["greeting"]["bubble"] == "Hey there! Need a boost?"
         assert payload["greeting"]["title"].startswith("Hi ")
         assert len(payload["greeting"]["suggestions"]) >= 3
+        assert payload["spaces"] == {
+            "total": 10,
+            "landed": 10,
+            "pending": 0,
+            "endpoint": "/api/workspace/spaces",
+        }
 
     def test_feature_matrix_matches_the_three_cards(self, client):
         features = client.get("/api/workspace/bootstrap").json()["features"]
@@ -100,6 +109,41 @@ class TestBootstrap:
         assert usage["credits_left"] == 1200
         assert usage["plan"] == "studio"
         assert usage["window"]
+
+
+class TestPlatformSpaces:
+    def test_shared_catalog_is_served(self, client):
+        payload = client.get("/api/workspace/spaces").json()
+        assert payload["ok"] is True
+        assert payload["summary"] == {"total": 10, "landed": 10, "pending": 0}
+        assert payload["filtered_count"] == 10
+        assert [space["id"] for space in payload["spaces"]] == list(range(1, 11))
+        assert payload["source"] == "nexus.domain.value_objects.upgrade_spaces"
+        for space in payload["spaces"]:
+            assert space["status"] == "landed"
+            assert space["summary"] and space["runtime_note"]
+            assert space["evidence"]
+
+    def test_search_matches_name_summary_and_evidence(self, client):
+        by_name = client.get("/api/workspace/spaces", params={"q": "telemetry"}).json()
+        assert by_name["filtered_count"] >= 1
+        assert any("telemetry" in space["name"].lower() for space in by_name["spaces"])
+
+        by_evidence = client.get("/api/workspace/spaces", params={"q": "agent_telemetry.py"}).json()
+        assert by_evidence["filtered_count"] >= 1
+        assert all(
+            "agent_telemetry.py" in " ".join(space["evidence"]) for space in by_evidence["spaces"]
+        )
+
+    def test_priority_filter_and_validation(self, client):
+        payload = client.get("/api/workspace/spaces", params={"priority": "p0"}).json()
+        assert payload["priority"] == "P0"
+        assert payload["spaces"]
+        assert all(space["priority"] == "P0" for space in payload["spaces"])
+
+        response = client.get("/api/workspace/spaces", params={"priority": "P9"})
+        assert response.status_code == 400
+        assert response.json()["priorities"]
 
 
 # ── run validation ──────────────────────────────────────────────────────────
@@ -349,6 +393,11 @@ class TestSupportingSurfaces:
             "Deep Research",
             "Make an Image",
             "Create music",
+            "Platform Spaces",
+            "Search the ten Nexus capability spaces",
+            'id="spaces-search"',
+            'id="spaces-priority"',
+            "Jump to latest",
             "Example: 'Explain quantum computing in simple terms'",
         ):
             assert landmark in html, landmark
@@ -373,3 +422,38 @@ class TestSupportingSurfaces:
         runs = client.get("/api/workspace/runs").json()["runs"]
         assert runs[0]["id"] == second
         assert runs[1]["id"] == first
+
+
+class TestLegacySurfaceContracts:
+    def test_workspace_controller_uses_abortable_runs_and_shared_spaces(self):
+        script = (ROOT / "frontend/workspace/app.js").read_text(encoding="utf-8")
+        assert "/api/workspace/spaces" in script
+        assert "signal: state.controller.signal" in script
+        assert "event.keyCode !== 229" in script
+        assert "safeArtifactUrl" in script
+        assert "Intl.NumberFormat('en-IN')" in script
+        assert "nexus-legacy-workspace-draft" in script
+
+    def test_shared_voice_defaults_to_indian_english(self):
+        voice = (ROOT / "frontend/shared/voice.js").read_text(encoding="utf-8")
+        assert 'var LANGUAGE = "en-IN"' in voice
+        assert "recognitionLanguage" in voice
+        assert 'lang === "en-in"' in voice
+
+    @pytest.mark.parametrize("page", ["frontend/chat.html", "frontend/index.html", "frontend/holo.html"])
+    def test_legacy_chat_surfaces_are_cancellable_ime_safe_and_en_in(self, page):
+        html = (ROOT / page).read_text(encoding="utf-8")
+        assert "AbortController" in html
+        assert "keyCode !== 229" in html
+        assert "en-IN" in html
+        assert "lang = 'en-US'" not in html
+        assert "â" not in html
+        assert "/workspace#spaces" in html
+
+    def test_static_dashboard_keeps_key_session_only_and_renders_spaces(self):
+        html = (ROOT / "src/nexus/infrastructure/api/static/dashboard.html").read_text(encoding="utf-8")
+        assert "sessionStorage.getItem('nexus_api_key')" in html
+        assert "localStorage.setItem('nexus_api_key'" not in html
+        assert "/api/system/upgrade-spaces" in html
+        assert "renderList" in html
+        assert "list.innerHTML = tools.map" not in html

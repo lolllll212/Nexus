@@ -103,6 +103,10 @@ Thumbs.db
 _test_*.py
 *.tmp
 data/coding_examples_*.json
+
+# Local chat history contains private conversation transcripts.
+data/chat_history.json
+data/chat_history.json.tmp
 py_deps/
 web_vendor/
 

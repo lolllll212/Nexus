@@ -239,6 +239,13 @@ A cybernetic telemetry ticker monitoring conscious ReAct thoughts alongside unco
 * **`[SUBCORTEX]` Basal Ganglia & Amygdala**: Habit policy enforcement, emotional valence scoring, and safety validation.
 * **`[SUBCORTEX]` Dreaming & Fourier Grid Cells**: Nightly memory consolidation, stale synapse pruning, and 6-fold spatial lattice routing.
 
+### 8. Modern AI Platform Layer
+* **Runtime Guardrails**: Deterministic input/output checks redact high-confidence secrets and PII, block direct secret-exfiltration and tool-bypass requests before the model runs, and flag prompt-override attempts without exposing matched values.
+* **Hybrid Cited Context**: Semantic and graph memory candidates are fused with weighted reciprocal-rank fusion, deduplicated, diversified with MMR, and packed into a 1,200-token evidence budget with `[M1]`-style citations and source/rank provenance.
+* **Elite Execution Engine**: Auto/Fast/Balanced/Deep/Max profiles adapt sampling, token budget, evidence requirements, and—on NVIDIA NIM Auto—fast/flagship/vision model routing. Provider-native tool calls are canonicalized through the same approval/audit path with textual ReAct fallback, then a deterministic quality gate checks evidence, calculations, constraints, formats, tool outcomes, and verification before a bounded repair pass. Chat responses expose `execution` and `quality` metadata; the goal is stronger grounded work than a raw single-pass prompt, not an unsupported claim of universal superiority over a frontier base model.
+* **Closed-Loop Quality Feedback**: Every chat answer receives a `response_id`; users can submit thumbs/star/category feedback, while personal and admin-tenant summaries expose quality trends by category and model.
+* **AI Observability**: Guardrail decision/finding counters and feedback counters flow through the existing metrics port. See [`docs/ai-platform.md`](docs/ai-platform.md).
+
 ---
 
 ## Registered Tool Matrix (20 Built-In Tools)
@@ -299,12 +306,19 @@ NEXUS divides cognitive workload between two distinct engines:
 # Clone and enter directory
 cd Nexus
 
-# Install Python requirements
-pip install -r requirements.txt
+# Create the Python development environment
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -e . --no-deps
 
-# Install Frontend dependencies and build assets
-cd web && npm install && npm run build && cd ..
+# Install frontend dependencies for BOTH web surfaces
+# (Workplace OS at / and standalone Chat UI at /chat.html)
+cd web && npm ci && cd ..
 ```
+
+For the full local-development workflow, see
+[`docs/development.md`](docs/development.md).
 
 ### 2. Configuration
 
@@ -332,6 +346,15 @@ NEXUS_NIM_BASE_URL=https://integrate.api.nvidia.com/v1
 # Security & CORS
 NEXUS_CORS_ORIGINS=*
 NEXUS_JSON_LOGS=true
+
+# Modern AI guardrails + response feedback
+NEXUS_AI_GUARDRAILS_ENABLED=true
+NEXUS_AI_GUARDRAIL_REDACT_PII=true
+NEXUS_AI_FEEDBACK_PATH=data/ai_feedback.json
+NEXUS_AI_QUALITY_GATE_ENABLED=true
+NEXUS_AI_NATIVE_TOOL_CALLING_ENABLED=true
+NEXUS_AI_QUALITY_MAX_REPAIRS=3
+NEXUS_AI_DEFAULT_EFFORT=auto
 ```
 
 ### 3. Preflight Check
@@ -347,16 +370,31 @@ python scripts/preflight.py --strict  # treat warnings as failures
 
 ### 4. Launch Services
 
-Start the conscious API engine (FastAPI / Cortex & Second Brain fallback):
+Recommended one-command development stack (API + IDE bridge + Vite):
 
 ```bash
-uvicorn nexus.infrastructure.api.main:app --host 0.0.0.0 --port 8000
+bash scripts/dev.sh --setup   # first run only: creates .venv and web deps
+bash scripts/dev.sh           # later runs
 ```
 
-Start the Vite development frontend (Tactical HUD, Analytics Dashboard & Mobile Cockpit):
+Or start services manually. Start the conscious API engine (FastAPI / Cortex
+& Second Brain fallback):
 
 ```bash
-npm run dev --prefix web -- --host 0.0.0.0 --port 3000
+PYTHONPATH=src .venv/bin/python -m uvicorn nexus.infrastructure.api.main:app --host 0.0.0.0 --port 8000
+```
+
+Start the IDE bridge used by live workspace/swarm views:
+
+```bash
+NEXUS_BRIDGE_TOKEN=bridge-test-token .venv/bin/python scripts/ide_bridge.py --port 8765 --poll 5
+```
+
+Start the Vite development frontend. The same dev server serves two separate
+entries: Workplace OS at `/` and the standalone Chat UI at `/chat.html`:
+
+```bash
+VITE_BRIDGE_TOKEN=bridge-test-token npm run dev --prefix web -- --host 0.0.0.0 --port 3000
 ```
 
 Start the HOLO Deck gesture control server:
@@ -367,11 +405,15 @@ python3 frontend/server.py
 
 ### 5. Access Interfaces & Ports
 
-* **NEXUS OS Frontend (`Port 3000`)**: `http://localhost:3000`
+* **Workplace OS Frontend (`Port 3000`)**: `http://localhost:3000/`
   * **Tactical HUD (FUI)**: Arc Reactor orb, telemetry flanks, and voice cortex
-  * **Analytics Dashboard**: `http://localhost:3000` (select `ANALYTICS` in top bar)
-  * **Claude Coding & Research Studio**: `http://localhost:3000/?view=claude` (or press <kbd>C</kbd>)
+  * **Analytics Dashboard**: `http://localhost:3000/` (select `ANALYTICS` in top bar)
+  * **Claude Coding & Research Studio**: press <kbd>C</kbd> inside Workplace OS
   * **Mobile Cockpit**: Automatically active on mobile viewports (< 768px) with 48px touch targets
+* **Standalone Nexus Chat UI (`Port 3000`)**: `http://localhost:3000/chat.html`
+  * Separate Vite entry/controller from Workplace OS; use this for the
+    Claude-style chat, model changer, tools/files, repositories, voice, and
+    backend history.
 * **Cortex REST API & Documentation (`Port 8000`)**: `http://localhost:8000/docs`
   * **Built-in Static Second Brain OS**: `http://localhost:8000/`
   * **Prometheus Metrics**: `http://localhost:8000/metrics`
@@ -477,6 +519,23 @@ question is forwarded to the bridge as the analysis question.
 | `/api/nim/chat/stream` | POST | Server-Sent Events (SSE) token-by-token streaming |
 | `/api/nim/configure` | POST | Dynamically update NIM API key or active model |
 
+### Modern AI Platform (`/api/ai/*`)
+
+`POST /v1/chat` accepts an `effort` selection and returns `response_id`, safe
+`guardrail` metadata, `context_sources`, `execution`, and `quality`; SSE
+clients receive the resolved effort up front, optional `quality_repair`
+progress, and the same settled metadata in a `metadata` frame before `done`.
+`GET /api/models` also publishes execution discovery metadata for the model
+and effort controls.
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/ai/capabilities` | GET | Enabled guardrail, hybrid-context, execution-quality, feedback, and metric features |
+| `/api/ai/feedback` | POST | Create or update the caller's thumbs/star/category feedback for one `response_id` |
+| `/api/ai/feedback` | GET | List only the caller's feedback records |
+| `/api/ai/feedback/summary` | GET | Caller's quality totals, category mix, and per-model positive rates |
+| `/api/ai/quality` | GET | Admin-only aggregate tenant quality summary (no comments or user IDs) |
+
 ### Telemetry & Observability
 
 | Endpoint | Method | Description |
@@ -505,6 +564,12 @@ pytest tests/unit/test_security_audit_hardening.py -v
 
 # Run role-based route authentication and admin authorization tests
 pytest tests/unit/test_route_authentication.py -v
+
+# Run modern AI guardrail, context-packing, feedback, and API tests
+pytest tests/unit/test_modern_ai_platform.py -v
+
+# Run adaptive effort, native-tool fallback, answer-quality, and eval-gate tests
+pytest tests/unit/test_execution_quality.py tests/eval/test_eval_gate.py -v
 
 # Run real-world coding assistant and sandbox tests
 pytest tests/unit/test_coding_assistant_real_world.py -v

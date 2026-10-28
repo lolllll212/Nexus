@@ -3,10 +3,12 @@
 import asyncio
 import os
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
+from nexus.domain.value_objects.upgrade_spaces import upgrade_spaces_catalog
 from nexus.infrastructure.api.dependencies import get_container, require_identity
 from nexus.infrastructure.api.routes.graph import get_default_second_brain_graph
 from nexus.infrastructure.di.container import Container
@@ -28,6 +30,48 @@ def increment_metric(metric_name: str, count: int = 1) -> None:
         REQUEST_COUNTERS[metric_name] += count
     else:
         REQUEST_COUNTERS[metric_name] = count
+
+
+def _agent_telemetry_candidates(container: Container | None) -> list[Any]:
+    """Return distinct telemetry stores without rendering one twice."""
+
+    candidates: list[Any] = []
+    seen_objects: set[int] = set()
+    seen_metrics: set[int] = set()
+
+    possible: list[Any] = [getattr(container, "agent_telemetry", None) if container else None]
+    try:
+        from nexus.infrastructure.adapters.observability.agent_telemetry import (
+            get_global_agent_telemetry,
+        )
+
+        possible.append(get_global_agent_telemetry())
+    except Exception:
+        pass
+
+    for candidate in possible:
+        if candidate is None or id(candidate) in seen_objects:
+            continue
+        metrics_id = id(getattr(candidate, "metrics", candidate))
+        if metrics_id in seen_metrics:
+            continue
+        seen_objects.add(id(candidate))
+        seen_metrics.add(metrics_id)
+        candidates.append(candidate)
+    return candidates
+
+
+def _agent_telemetry_snapshot(container: Container | None) -> dict[str, Any]:
+    candidates = _agent_telemetry_candidates(container)
+    if not candidates:
+        return {"enabled": False, "counters": {}}
+    snapshot = getattr(candidates[0], "snapshot", None)
+    if callable(snapshot):
+        try:
+            return snapshot()
+        except Exception:
+            pass
+    return {"enabled": bool(getattr(candidates[0], "enabled", False)), "counters": {}}
 
 
 async def generate_prometheus_metrics(container: Container) -> str:
@@ -68,17 +112,17 @@ async def generate_prometheus_metrics(container: Container) -> str:
     for key, val in REQUEST_COUNTERS.items():
         lines.append(f'nexus_requests_total{{module="{key}"}} {val}')
 
-    # Space 9: Agent-layer observability (routes, heal, consensus, token spend)
-    try:
-        from nexus.infrastructure.adapters.observability.agent_telemetry import get_global_agent_telemetry
-
-        telemetry = get_global_agent_telemetry()
-        agent_rendered = telemetry.render_prometheus()
+    # Space 9: Agent-layer observability (routes, heal, consensus, token spend).
+    # Production binds the container and global instances together; candidates
+    # are de-duplicated by metrics store so that binding never double-renders.
+    for telemetry in _agent_telemetry_candidates(container):
+        try:
+            agent_rendered = telemetry.render_prometheus()
+        except Exception:
+            continue
         if agent_rendered:
             lines.append("")
             lines.append(agent_rendered.strip())
-    except Exception:
-        pass
 
     lines.append("")
     lines.append(f"# Nexus backend mode: {backend}")
@@ -108,6 +152,21 @@ async def system_telemetry(container: Container = Depends(get_container)) -> dic
         "graph_nodes_count": len(graph_data.get("nodes", [])),
         "graph_links_count": len(graph_data.get("links", [])),
         "counters": REQUEST_COUNTERS,
+        "agent_telemetry": _agent_telemetry_snapshot(container),
+    }
+
+
+@router.get("/api/system/upgrade-spaces")
+async def upgrade_spaces(container: Container = Depends(get_container)) -> dict[str, Any]:
+    """Shared catalog for the ten Upgrade Spaces shown across Nexus websites."""
+
+    catalog = upgrade_spaces_catalog()
+    tools = await container.tool_registry.list_all()
+    return {
+        **catalog,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "tools_count": len(tools),
+        "telemetry": _agent_telemetry_snapshot(container),
     }
 
 
@@ -119,7 +178,7 @@ async def websocket_telemetry(websocket: WebSocket) -> None:
     try:
         while True:
             uptime = time.time() - START_TIME
-            tools_count = 20
+            tools_count = 0
             if container and hasattr(container, "tool_registry"):
                 try:
                     tools = await container.tool_registry.list_all()
@@ -137,6 +196,7 @@ async def websocket_telemetry(websocket: WebSocket) -> None:
                 "graph_nodes_count": len(graph_data.get("nodes", [])),
                 "graph_links_count": len(graph_data.get("links", [])),
                 "nim_active": getattr(nim_provider, "has_api_key", False) if nim_provider else False,
+                "agent_telemetry": _agent_telemetry_snapshot(container),
                 "timestamp": time.time(),
             }
             await websocket.send_json(payload)

@@ -23,6 +23,12 @@ class LLMProvider(ABC):
     and invokes `complete` without mutating the caller's message list.
     """
 
+    # Concrete adapters that truly send provider-native function/tool schemas
+    # set this to True.  Wrappers may expose it as a property based on their
+    # inner providers.  The cortex uses the flag only as a capability hint and
+    # always retains the textual ReAct protocol as a compatibility fallback.
+    supports_native_tool_calls: bool = False
+
     @abstractmethod
     async def complete(
         self,

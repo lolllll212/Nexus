@@ -37,6 +37,12 @@ PLAN_EDITABLE_ROOTS = (
     "docs",
     "plugins",
     "config",
+    # Existing first-class website surfaces. These trees predate the current
+    # src-first layout, but the React app, buildless pages, and their sibling
+    # web backend still need the same explicit plan coverage as core code.
+    "web",
+    "frontend",
+    "backend",
     "Dockerfile",
     "docker-compose.yml",
     "docker-compose.prod.yml",

@@ -6,13 +6,13 @@ dark floating console that is the control surface for four backend routes.
 
 - **Page:** `/workspace` (alias `/workspace.html`)
 - **API:** `/api/workspace/*` — `backend/routers/workspace.py`
-- **Tests:** `tests/unit/test_workspace_cockpit.py` (33 cases, no LLM required)
+- **Tests:** `tests/unit/test_workspace_cockpit.py` (42 cases, no LLM required)
 
 ![NEXUS OS workspace dashboard](assets/workspace-dashboard.png)
 
 ```
 Screen 1  dashboard   hero + companion bubble, Fast Start / Collaborate / Planning,
-                      today's runway, recent threads
+                      today's runway, recent threads, searchable Platform Spaces
 Screen 2  cockpit     graphite pill: textarea + Deep Research · Make an Image ·
                       Search · Create music, dual-layer cyan/violet aura,
                       streaming result surface
@@ -45,10 +45,15 @@ robot when WebGL is unavailable.
 | Collaborate with Team | multi-colour grid tile, agent faces, animated mesh bus |
 | Planning | blue calendar tile, live week strip (real dates), agenda |
 | Lower row | Today's runway (resume a thread) + recent threads |
+| Platform Spaces | searchable ten-space catalog with priority filter, evidence paths, runtime notes, and refresh |
 
 Everything numeric comes from `GET /api/workspace/bootstrap`: identity, engine state,
-usage meters, knowledge-index size, feature cards, route catalog, activity and
-history. The week strip is computed client-side from the real date.
+usage meters, knowledge-index size, feature cards, route catalog, Spaces summary,
+activity and history. The week strip is computed client-side from the real date.
+`GET /api/workspace/spaces?q=&priority=` returns the **same**
+`nexus.domain.value_objects.upgrade_spaces` catalog used by the React app, core API,
+and static dashboard; the legacy controller renders it with text nodes rather than
+interpolating API fields into HTML.
 
 ## Screen 2 — the cockpit
 
@@ -81,8 +86,12 @@ done  {run}                                     → READY
 ```
 
 Cancelling (`Esc` or the stop button) POSTs `/cancel`; the stream ends with
-`state: cancelled` then `done`. Re-opening a finished run's stream **replays** the
-recorded frames, so a reconnect never loses the answer.
+`state: cancelled` then `done`. The initial run-creation request and SSE reader use
+the same browser `AbortController`, the prompt draft is restored from session storage,
+Enter is ignored during IME composition, and streamed output only sticks to the bottom
+while the reader is already there — otherwise **Jump to latest** appears. Re-opening a
+finished run's stream **replays** the recorded frames, so a reconnect never loses the
+answer.
 
 ### Honesty rules for offline operation
 
@@ -102,11 +111,28 @@ the answer states plainly that the corpus does not cover the question.
 Set `NEXUS_WORKSPACE_ENGINE=llm` with a reachable model (see `config/nexus.yaml`,
 `.env`) to have Deep Research stream from it; `=local` skips the probe entirely.
 
+## Cross-surface legacy contract
+
+The buildless pages share the same safety and interaction rules:
+
+- `frontend/shared/voice.js` is the single voice source: recognition and speech prefer
+  **Indian English (`en-IN`)**, with other English voices only as fallbacks.
+- Brain Chat and both galaxy docks expose Stop through `AbortController`, preserve a
+  session draft, ignore Enter during IME composition, respect manual scroll-up, and link
+  back to Workspace/Spaces.
+- Dynamic graph, model, dream, event, tool, and swarm labels are escaped or rendered as
+  text nodes. Chat answers are never inserted as raw HTML.
+- The core static dashboard keeps its API key in session storage only and includes a
+  searchable Upgrade Spaces card backed by `/api/system/upgrade-spaces`.
+- Stopping a non-streaming legacy chat request cancels the browser wait; it does not
+  claim that a backend task already accepted by the server was rolled back.
+
 ## API reference
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/workspace/bootstrap` | Screen 1 payload (identity, usage, features, routes, history) |
+| GET | `/api/workspace/bootstrap` | Screen 1 payload (identity, usage, features, routes, Spaces summary, history) |
+| GET | `/api/workspace/spaces?q=&priority=` | shared ten-space catalog with server-side search/filter |
 | POST | `/api/workspace/runs` | open a run → `{run, stream, plan}` (201) |
 | GET | `/api/workspace/runs` | recent runs, newest first |
 | GET | `/api/workspace/runs/{id}` | run snapshot (poll fallback) |
@@ -118,8 +144,8 @@ Set `NEXUS_WORKSPACE_ENGINE=llm` with a reachable model (see `config/nexus.yaml`
 | POST | `/api/workspace/upgrade` | records intent; `checkout: not_configured` |
 | GET | `/api/workspace/preview-state?state=` | aura descriptor for design hand-off |
 
-Errors: `400` empty/oversized prompt or unknown route, `402` credit ceiling,
-`404` unknown run. State is per-process and bounded (`MAX_RUNS = 40`) — this is a
+Errors: `400` empty/oversized prompt, unknown route, or unknown Spaces priority,
+`402` credit ceiling, `404` unknown run. State is per-process and bounded (`MAX_RUNS = 40`) — this is a
 cockpit surface, not a durable job queue.
 
 ## Design tokens

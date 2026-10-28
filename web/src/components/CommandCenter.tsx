@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Terminal, 
   Send, 
@@ -12,12 +12,25 @@ import {
   CheckCircle2,
   Cpu,
   Loader2,
+  Square,
   Volume2
 } from 'lucide-react';
 import { AgentStatus } from '../types';
 
+const COMMAND_DRAFT_KEY = 'nexus-command-draft';
+
+function loadCommandDraft(): string {
+  try {
+    return window.sessionStorage.getItem(COMMAND_DRAFT_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
 interface CommandCenterProps {
   onExecuteCommand: (query: string, actionType: 'RESEARCH' | 'WORKFLOW' | 'CODE' | 'MEMORY' | 'GRAPH') => void;
+  onStopGeneration?: () => void;
+  queuedCount?: number;
   onOpenClaudeStudio: () => void;
   onOpenResearchMode: (topic?: string) => void;
   onOpenVoiceCortex: () => void;
@@ -26,16 +39,30 @@ interface CommandCenterProps {
 
 export const CommandCenter: React.FC<CommandCenterProps> = ({
   onExecuteCommand,
+  onStopGeneration,
+  queuedCount = 0,
   onOpenClaudeStudio,
   onOpenResearchMode,
   onOpenVoiceCortex,
   agentStatus = 'idle',
 }) => {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(() => loadCommandDraft());
   const [isInjecting, setIsInjecting] = useState(false);
 
-  // FIX 3: Prevent state race conditions - lock input & triggers while agent is resolving
-  const isBusy = agentStatus === 'thinking' || agentStatus === 'speaking' || isInjecting;
+  const isGenerating = agentStatus === 'thinking';
+  // Text entry stays available: App owns a real FIFO queue, so sending during
+  // generation or speech queues safely instead of racing the active stream.
+  const isBusy = isInjecting;
+  const isAuxLocked = agentStatus !== 'idle' || isInjecting;
+
+  useEffect(() => {
+    try {
+      if (query) window.sessionStorage.setItem(COMMAND_DRAFT_KEY, query);
+      else window.sessionStorage.removeItem(COMMAND_DRAFT_KEY);
+    } catch {
+      // Draft persistence is best-effort in restricted browser contexts.
+    }
+  }, [query]);
 
   const promptChips = [
     { label: '✦ Transcode Image/Video for Non-Vision LLM', type: 'CODE' as const },
@@ -48,33 +75,33 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!query.trim() || isBusy) return;
+    const submittedQuery = query.trim();
+    if (!submittedQuery || isInjecting) return;
 
     setIsInjecting(true);
     let actionType: 'RESEARCH' | 'WORKFLOW' | 'CODE' | 'MEMORY' | 'GRAPH' = 'GRAPH';
-    const lower = query.toLowerCase();
+    const lower = submittedQuery.toLowerCase();
     if (lower.includes('research')) actionType = 'RESEARCH';
     else if (lower.includes('workflow') || lower.includes('pipeline')) actionType = 'WORKFLOW';
     else if (lower.includes('code') || lower.includes('analyze') || lower.includes('git')) actionType = 'CODE';
     else if (lower.includes('remember') || lower.includes('memory')) actionType = 'MEMORY';
 
-    onExecuteCommand(query, actionType);
-
-    setTimeout(() => {
-      setQuery('');
-      setIsInjecting(false);
-    }, 600);
+    onExecuteCommand(submittedQuery, actionType);
+    setQuery('');
+    window.setTimeout(() => setIsInjecting(false), 350);
   };
 
   const getPlaceholderText = () => {
     if (agentStatus === 'thinking') {
-      return '⚡ NEXUS is resolving task... Input locked to prevent race collision';
+      return queuedCount > 0
+        ? `NEXUS is working — ${queuedCount} queued. Type to add another…`
+        : 'NEXUS is working — type to queue the next command…';
     }
     if (agentStatus === 'speaking') {
-      return '🔊 NEXUS vocal speech active... Microphone & input locked';
+      return 'NEXUS is speaking — type to queue the next command…';
     }
     if (agentStatus === 'listening') {
-      return '🎙️ Voice Cortex listening... Speak your command or hotkey M to stop';
+      return 'Voice Cortex listening… Speak, or type a command';
     }
     return 'Message NEXUS...';
   };
@@ -89,7 +116,6 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
             disabled={isBusy}
             onClick={() => {
               if (isBusy) return;
-              setQuery(chip.label);
               onExecuteCommand(chip.label, chip.type);
             }}
             className={`px-2.5 py-1 rounded-full text-[10px] border transition-all backdrop-blur-md shrink-0 ${
@@ -102,6 +128,29 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
           </button>
         ))}
       </div>
+
+      {(isGenerating || queuedCount > 0) && (
+        <div
+          aria-live="polite"
+          className="flex max-w-full items-center gap-2 rounded-full border border-amber-400/40 bg-slate-950/85 px-3 py-1.5 text-[10px] text-amber-100 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md"
+        >
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
+          <span>
+            {isGenerating ? 'Nexus is working' : 'Nexus will continue shortly'}
+            {queuedCount > 0 ? ` · ${queuedCount} queued` : ''}
+          </span>
+          {isGenerating && onStopGeneration && (
+            <button
+              type="button"
+              onClick={onStopGeneration}
+              className="ml-1 flex items-center gap-1 rounded-full border border-red-300/50 bg-red-500/15 px-2 py-0.5 font-bold text-red-100 transition-colors hover:bg-red-500/25 cursor-pointer"
+            >
+              <Square className="h-3 w-3" />
+              Stop
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── Main AI Command Terminal Bar ────────────────────────────────────── */}
       <form
@@ -142,42 +191,51 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
           >
             {agentStatus}
           </span>
+          {queuedCount > 0 && (
+            <span className="rounded border border-amber-400/50 bg-amber-950 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-200">
+              {queuedCount} queued
+            </span>
+          )}
         </div>
 
-        {/* Input Field - Disabled while agent is thinking or speaking */}
+        {/* Input stays enabled: commands sent while Nexus is busy enter the FIFO queue. */}
         <input
           type="text"
           value={query}
-          disabled={isBusy}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(event) => {
+            const nativeEvent = event.nativeEvent as KeyboardEvent;
+            if (event.key === 'Enter' && (nativeEvent.isComposing || nativeEvent.keyCode === 229)) {
+              event.preventDefault();
+            }
+          }}
           placeholder={getPlaceholderText()}
-          className={`flex-1 bg-transparent text-xs font-mono text-white placeholder:text-slate-500 focus:outline-none transition-opacity ${
-            isBusy ? 'opacity-60 cursor-not-allowed' : 'opacity-100'
-          }`}
+          aria-label="Message NEXUS"
+          className="min-w-0 flex-1 bg-transparent text-xs font-mono text-white placeholder:text-slate-500 focus:outline-none"
         />
 
         {/* Action Buttons */}
         <div className="flex items-center gap-1">
           <button
             type="button"
-            disabled={isBusy}
+            disabled={isAuxLocked}
             onClick={onOpenVoiceCortex}
             className={`p-2 rounded-xl transition-colors ${
-              isBusy
+              isAuxLocked
                 ? 'text-slate-600 cursor-not-allowed'
                 : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-900 cursor-pointer'
             }`}
-            title={isBusy ? 'Microphone locked while agent is active' : 'Voice Input (Hotkey: M)'}
+            title={isAuxLocked ? 'Microphone locked while agent is active' : 'Voice Input (Hotkey: M)'}
           >
             <Mic className="w-4 h-4" />
           </button>
 
           <button
             type="button"
-            disabled={isBusy}
+            disabled={isAuxLocked}
             onClick={() => onExecuteCommand('Attach Local File to Graph', 'MEMORY')}
             className={`p-2 rounded-xl transition-colors ${
-              isBusy
+              isAuxLocked
                 ? 'text-slate-600 cursor-not-allowed'
                 : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-900 cursor-pointer'
             }`}
@@ -188,10 +246,10 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
 
           <button
             type="button"
-            disabled={isBusy}
+            disabled={isAuxLocked}
             onClick={() => onOpenResearchMode(query || 'Autonomous Web Crawl')}
             className={`p-2 rounded-xl transition-colors ${
-              isBusy
+              isAuxLocked
                 ? 'text-slate-600 cursor-not-allowed'
                 : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-900 cursor-pointer'
             }`}
@@ -209,9 +267,22 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
             <Code className="w-4 h-4" />
           </button>
 
+          {isGenerating && onStopGeneration && (
+            <button
+              type="button"
+              onClick={onStopGeneration}
+              title="Stop generating"
+              className="flex items-center gap-1.5 rounded-xl border border-red-300/50 bg-red-500/15 px-3 py-2 text-xs font-bold text-red-100 transition-colors hover:bg-red-500/25 cursor-pointer"
+            >
+              <Square className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">STOP</span>
+            </button>
+          )}
+
           <button
             type="submit"
             disabled={!query.trim() || isBusy}
+            title={isGenerating || agentStatus === 'speaking' ? 'Queue command' : 'Send command'}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md ${
               isBusy
                 ? 'bg-slate-900 text-slate-500 border border-slate-800 cursor-not-allowed opacity-70'
@@ -220,7 +291,12 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                 : 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed'
             }`}
           >
-            {agentStatus === 'thinking' ? (
+            {query.trim() && (isGenerating || agentStatus === 'speaking') ? (
+              <>
+                <Send className="w-3.5 h-3.5" />
+                <span>QUEUE</span>
+              </>
+            ) : agentStatus === 'thinking' ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 <span>THINKING</span>

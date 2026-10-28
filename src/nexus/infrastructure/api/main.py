@@ -34,6 +34,7 @@ from nexus.domain.exceptions import (
 )
 from nexus.infrastructure.api.dependencies import get_container
 from nexus.infrastructure.api.routes import (
+    ai_feedback,
     analyze,
     audio,
     chat,
@@ -41,9 +42,11 @@ from nexus.infrastructure.api.routes import (
     coding_assistant,
     goals,
     graph,
+    history,
     integrations,
     mcp,
     memory,
+    models,
     multimodal,
     nim,
     research,
@@ -145,6 +148,9 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.add_exception_handler(Exception, _handle_unexpected)
 
     app.include_router(chat.router)
+    app.include_router(ai_feedback.router)
+    app.include_router(history.router)
+    app.include_router(models.router)
     app.include_router(goals.router)
     app.include_router(goals.autonomy_router)
     app.include_router(memory.router)

@@ -18,13 +18,91 @@ export type NodeCategory =
   | 'FILE'
   | 'SOURCE';
 
-export type OperatingMode = 'WORKSPACE' | 'HUD' | 'GRAPH' | 'RESEARCH' | 'WORKFLOW' | 'ARCHITECTURE' | 'VIDEO' | 'DASHBOARD';
+export type OperatingMode = 'WORKSPACE' | 'CLAUDE_CHAT' | 'HUD' | 'GRAPH' | 'RESEARCH' | 'WORKFLOW' | 'ARCHITECTURE' | 'VIDEO' | 'DASHBOARD';
 
 export type UiVariety = 'TACTICAL_HUD' | 'ANALYTICS_DASHBOARD' | 'MOBILE_COMPACT';
 
 export type AgentStatus = 'idle' | 'listening' | 'thinking' | 'speaking';
 
 export type TaskDifficulty = 'low' | 'medium' | 'high' | 'critical';
+
+export type ChatEffort = 'auto' | 'fast' | 'balanced' | 'deep' | 'max';
+
+export type CodingFocus =
+  | 'auto'
+  | 'frontend'
+  | 'c'
+  | 'cpp'
+  | 'rust'
+  | 'python'
+  | 'php'
+  | 'html5'
+  | 'xml'
+  | 'ruby';
+
+export interface ChatCodingMetadata {
+  requested_focus?: CodingFocus | string;
+  focus?: CodingFocus | string;
+  is_coding?: boolean;
+  is_frontend?: boolean;
+  languages?: string[];
+  language_labels?: string[];
+  standards?: string[];
+  frontend_kind?: string | null;
+  design_goals?: string[];
+  expected_tools?: string[];
+  verification_checks?: string[];
+  weak_model_risk?: string;
+  [key: string]: unknown;
+}
+
+export interface CodingCapabilityCatalog {
+  focuses?: string[];
+  languages?: Record<string, { label?: string; standard?: string; [key: string]: unknown }>;
+  frontend?: {
+    kinds?: string[];
+    design_goals?: string[];
+    [key: string]: unknown;
+  };
+  tools?: string[];
+  quality_gates?: string[];
+  project_checks?: string[];
+  repository_templates?: string[];
+  [key: string]: unknown;
+}
+
+export interface ChatExecutionMetadata {
+  requested_effort?: ChatEffort | string;
+  effective_effort?: Exclude<ChatEffort, 'auto'> | string;
+  complexity?: number;
+  mode?: string;
+  intent?: string;
+  operation_level?: string;
+  workstreams?: string[];
+  expected_tools?: string[];
+  coding?: ChatCodingMetadata | null;
+  coding_languages?: string[];
+  frontend_kind?: string | null;
+  [key: string]: unknown;
+}
+
+export interface ChatQualityIssue {
+  code: string;
+  severity: 'critical' | 'major' | 'minor' | string;
+  detail?: string;
+  repair_instruction?: string;
+}
+
+export interface ChatQualityMetadata {
+  score: number;
+  passed: boolean;
+  status: 'verified' | 'degraded' | 'needs_repair' | 'guardrail_blocked' | 'not_run' | string;
+  issues?: ChatQualityIssue[];
+  checks?: string[];
+  word_count?: number;
+  tools_used?: string[];
+  repair_attempts_used?: number;
+}
 
 export interface ConversationalMessage {
   id: string;
@@ -34,6 +112,166 @@ export interface ConversationalMessage {
   toolsUsed?: string[];
   actionTriggers?: Array<{ label: string; action: string; payload?: any }>;
   difficulty?: TaskDifficulty;
+  /** Model that produced this turn (model changer), e.g. a NIM model id. */
+  model?: string;
+  /** Where the model came from: 'nexus-default' | 'nvidia-nim'. */
+  modelSource?: string;
+  /** Sanitized reasoning trace for the Extended Thinking accordion. */
+  thinking?: string;
+  /** Adaptive effort/evidence profile used for this answer. */
+  execution?: ChatExecutionMetadata;
+  /** Deterministic final-answer quality verdict from the cortex. */
+  quality?: ChatQualityMetadata;
+  /** Frontend/polyglot specialist profile used for this answer. */
+  coding?: ChatCodingMetadata;
+  /** Lifecycle marker used to label partial/stopped streamed answers honestly. */
+  status?: 'streaming' | 'complete' | 'stopped' | 'error';
+}
+
+// ── Model changer + Claude-style capabilities ──────────────────────────────
+export type ModelCapabilityKey =
+  | 'reasoning'
+  | 'tool_use'
+  | 'code'
+  | 'vision'
+  | 'long_context'
+  | 'research'
+  | 'streaming';
+
+export interface NexusModel {
+  id: string;
+  name: string;
+  provider: string;
+  description: string;
+  tags: string[];
+  context_window: number | null;
+  speed: string; // 'fastest' | 'balanced' | 'deep'
+  best_for: string;
+  capabilities: string[];
+  is_active?: boolean;
+  source?: string; // 'nexus-default' | 'nvidia-nim'
+}
+
+export interface ModelCatalogExecution {
+  efforts: ChatEffort[];
+  default_effort: ChatEffort;
+  adaptive_model_routing: boolean;
+  quality_gate_enabled: boolean;
+  native_tool_calling_enabled: boolean;
+  quality_max_repairs: number;
+}
+
+export interface ModelCatalog {
+  models: NexusModel[];
+  active_model: string | null;
+  default_model: string;
+  provider_status: string; // 'live' | 'simulation' | 'offline'
+  has_api_key: boolean;
+  capability_labels: Record<string, string>;
+  execution?: ModelCatalogExecution;
+  coding?: CodingCapabilityCatalog;
+}
+
+export interface ChatCapabilities {
+  extendedThinking: boolean;
+  artifacts: boolean;
+  deepResearch: boolean;
+  voiceReplies: boolean;
+  memory: boolean;
+  effort: ChatEffort;
+  codingFocus: CodingFocus;
+}
+
+export type ChatCapabilityToggleKey = Exclude<keyof ChatCapabilities, 'effort' | 'codingFocus'>;
+
+// ── Tool registry (Claude-style chat workspace Tools/Code panel) ───────────
+export interface NexusToolSchema {
+  type?: string;
+  properties?: Record<string, { type?: string; description?: string; [key: string]: any }>;
+  required?: string[];
+  description?: string;
+}
+
+export interface NexusTool {
+  id: string;
+  name: string;
+  description: string;
+  status: string;
+  use_count: number;
+  success_rate: number;
+  is_self_generated: boolean;
+  endpoint: string | null;
+  input_schema: NexusToolSchema;
+  output_schema: NexusToolSchema;
+  requires_approval: boolean;
+  category: string;
+}
+
+export interface NexusToolApproval {
+  tool_id: string;
+  action: string;
+  approved: boolean;
+}
+
+// ── Upgrade Spaces (shared status catalog across Nexus websites) ──────────
+export interface UpgradeSpace {
+  id: number;
+  name: string;
+  priority: string;
+  owner: string;
+  summary: string;
+  status: string;
+  evidence: string[];
+  runtime_note: string;
+}
+
+export interface AgentTelemetrySnapshot {
+  enabled: boolean;
+  metrics_backend?: string;
+  tracer_backend?: string;
+  counters?: Record<string, number>;
+  heal_success_rate?: number | null;
+}
+
+export interface UpgradeSpacesResponse {
+  spaces: UpgradeSpace[];
+  summary: {
+    total: number;
+    landed: number;
+    pending: number;
+  };
+  generated_at: string;
+  tools_count: number;
+  telemetry: AgentTelemetrySnapshot;
+}
+
+// ── Chat history (server-backed sessions) ──────────────────────────────────
+export interface StoredChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: string;
+  model?: string;
+  tools_used?: string[];
+}
+
+export interface ChatSessionSummary {
+  id: string;
+  title: string;
+  model: string | null;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+  preview: string;
+}
+
+export interface ChatSessionRecord {
+  id: string;
+  title: string;
+  model: string | null;
+  created_at: string;
+  updated_at: string;
+  messages: StoredChatMessage[];
 }
 
 export interface McpToolSpec {

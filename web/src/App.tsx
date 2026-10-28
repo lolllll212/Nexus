@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  NexusNode, 
-  NexusLink, 
-  NodeCategory, 
-  OperatingMode, 
+import { Sparkles } from 'lucide-react';
+import {
+  NexusNode,
+  NexusLink,
+  NodeCategory,
+  OperatingMode,
   ResearchClaim,
   AgentStatus,
+  ChatCapabilities,
+  ChatCodingMetadata,
+  ChatExecutionMetadata,
+  ChatQualityMetadata,
+  ChatSessionRecord,
+  ChatSessionSummary,
   ConversationalMessage,
+  ModelCatalog,
   TaskDifficulty
 } from './types';
 import { 
@@ -40,8 +48,83 @@ import { AnalyticsDashboardView } from './components/AnalyticsDashboardView';
 import { SwarmDashboardView } from './components/SwarmDashboardView';
 import { MobileCompactCockpit } from './components/MobileCompactCockpit';
 import { playHudClick, playChime, playSuccessChime } from './utils/soundEffects';
-import { speakWithStatus, stopAnySpeaking } from './utils/voiceManager';
+import {
+  FALLBACK_CATALOG,
+  codingFocusMode,
+  fetchModelCatalog,
+  getStoredCapabilities,
+  getStoredModelId,
+  resolveSelectedModelId,
+  saveCapabilities,
+  saveStoredModelId,
+} from './data/modelCatalog';
+import {
+  appendChatMessages,
+  clearChatSessions,
+  conversationalToStored,
+  deleteChatSession,
+  getChatSession,
+  listChatSessions,
+  newSessionId,
+  renameChatSession,
+  storedToConversational,
+  summaryFromRecord,
+  type HistorySource,
+} from './utils/chatHistory';
+import {
+  getVoicePreferences,
+  saveVoicePreferences,
+  speakWithStatus,
+  stopAnySpeaking,
+  type VoicePreferences,
+} from './utils/voiceManager';
 import { nexusChatStream, nexusJson } from './api';
+
+type CommandActionType = 'RESEARCH' | 'WORKFLOW' | 'CODE' | 'MEMORY' | 'GRAPH';
+
+interface QueuedCommand {
+  id: string;
+  query: string;
+  actionType: CommandActionType;
+  /** The user bubble is added at enqueue time so queued sends are visible. */
+  userMessage: ConversationalMessage;
+  /** Settings are snapshotted at enqueue time so later UI changes don't mutate queued work. */
+  model: string;
+  capabilities: ChatCapabilities;
+  sessionId: string;
+}
+
+function createWelcomeMessage(): ConversationalMessage {
+  return {
+    id: `init-${Date.now()}`,
+    role: 'assistant',
+    content: 'NEXUS Autonomous Cognitive OS v2.4 online. All 3 concentric HUD rings synchronized. Standing by for instructions or vocal input [M].',
+    timestamp: new Date().toLocaleTimeString(),
+    toolsUsed: ['system_boot', 'ast_sandbox_guard'],
+    difficulty: 'low',
+    actionTriggers: [
+      { label: '✦ Transcode Media', action: 'OPEN_MULTIMODAL' },
+      { label: '⚡ Code Sandbox', action: 'OPEN_CODE' },
+      { label: '◈ Canvas Builder', action: 'OPEN_CANVAS' },
+    ],
+  };
+}
+
+function sanitizeThinking(text: string): string {
+  if (!text) return '';
+  let cleaned = text.replace(/\r\n/g, '\n');
+  const finalAnswerMatch = cleaned.match(/final\s+answer\s*:/i);
+  if (finalAnswerMatch?.index !== undefined) {
+    cleaned = cleaned.slice(0, finalAnswerMatch.index);
+  }
+  return cleaned
+    .split('\n')
+    .filter((line) => !/TOOL_CALL\s*:/i.test(line))
+    .join('\n')
+    .replace(/^\s*(thought|thinking|reasoning)\s*:\s*/i, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
 
 export const App: React.FC = () => {
   // Operating Modes: 'WORKSPACE' | 'GRAPH' | 'RESEARCH' | 'WORKFLOW' | 'ARCHITECTURE' | 'VIDEO'
@@ -73,36 +156,70 @@ export const App: React.FC = () => {
   const [taskDifficulty, setTaskDifficulty] = useState<TaskDifficulty>('low');
   const [puffTrigger, setPuffTrigger] = useState<number>(0);
   const [isAccelerated, setIsAccelerated] = useState<boolean>(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isJarvisOpen, setIsJarvisOpen] = useState(false);
   const [jarvisListening, setJarvisListening] = useState(false);
   const [nimStatus, setNimStatus] = useState<any>(null);
 
+  // Model changer, Claude-style capabilities, voice output and chat history.
+  const [modelCatalog, setModelCatalog] = useState<ModelCatalog>(FALLBACK_CATALOG);
+  const [selectedModelId, setSelectedModelId] = useState<string>(() => getStoredModelId());
+  const [capabilities, setCapabilities] = useState<ChatCapabilities>(() => getStoredCapabilities());
+  const [voicePreferences, setVoicePreferences] = useState<VoicePreferences>(() => getVoicePreferences());
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [chatSessions, setChatSessions] = useState<ChatSessionSummary[]>([]);
+  const [historySource, setHistorySource] = useState<HistorySource>('local');
+  const [currentSessionId, setCurrentSessionId] = useState<string>(() => newSessionId());
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const voiceEnabled = capabilities.voiceReplies;
+
   // Module 2: The Conversational Stream framing AI feedback
   const [conversationalMessages, setConversationalMessages] = useState<ConversationalMessage[]>([
-    {
-      id: 'init-1',
-      role: 'assistant',
-      content: 'NEXUS Autonomous Cognitive OS v2.4 online. All 3 concentric HUD rings synchronized. Standing by for instructions or vocal input [M].',
-      timestamp: '00:00:01',
-      toolsUsed: ['system_boot', 'ast_sandbox_guard'],
-      difficulty: 'low',
-      actionTriggers: [
-        { label: '✦ Transcode Media', action: 'OPEN_MULTIMODAL' },
-        { label: '⚡ Code Sandbox', action: 'OPEN_CODE' },
-        { label: '◈ Canvas Builder', action: 'OPEN_CANVAS' },
-      ],
-    },
+    createWelcomeMessage(),
   ]);
 
   // Unified Command Queue to prevent state race conditions
-  const commandQueueRef = useRef<{
-    id: string;
-    query: string;
-    actionType: 'RESEARCH' | 'WORKFLOW' | 'CODE' | 'MEMORY' | 'GRAPH';
-  }[]>([]);
+  const [queuedCommandCount, setQueuedCommandCount] = useState(0);
+  const commandQueueRef = useRef<QueuedCommand[]>([]);
   const isProcessingCommandRef = useRef(false);
+  const activeGenerationControllerRef = useRef<AbortController | null>(null);
+  const selectedModelIdRef = useRef(selectedModelId);
+  const capabilitiesRef = useRef(capabilities);
+  const voicePreferencesRef = useRef(voicePreferences);
+  const currentSessionIdRef = useRef(currentSessionId);
+  const agentStatusRef = useRef(agentStatus);
+  const currentModeRef = useRef(currentMode);
+  const speechGatesQueueRef = useRef(false);
+  const stopSpeakingRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    selectedModelIdRef.current = selectedModelId;
+  }, [selectedModelId]);
+
+  useEffect(() => {
+    capabilitiesRef.current = capabilities;
+  }, [capabilities]);
+
+  useEffect(() => {
+    voicePreferencesRef.current = voicePreferences;
+  }, [voicePreferences]);
+
+  useEffect(() => {
+    currentSessionIdRef.current = currentSessionId;
+  }, [currentSessionId]);
+
+  useEffect(() => {
+    agentStatusRef.current = agentStatus;
+    if (agentStatus !== 'speaking') setSpeakingMessageId(null);
+  }, [agentStatus]);
+
+  useEffect(() => {
+    currentModeRef.current = currentMode;
+  }, [currentMode]);
+
+  useEffect(() => () => {
+    activeGenerationControllerRef.current?.abort();
+  }, []);
 
   // Deep research initial query state
   const [researchTopic, setResearchTopic] = useState('Recursive Self-Evolution & AST Guard Sandboxes in Autonomous LLMs');
@@ -120,12 +237,151 @@ export const App: React.FC = () => {
     refreshNimStatus();
   }, [refreshNimStatus]);
 
+  const handleModelChange = useCallback((modelId: string) => {
+    const saved = saveStoredModelId(modelId);
+    selectedModelIdRef.current = saved;
+    setSelectedModelId(saved);
+  }, []);
+
+  const handleCapabilitiesChange = useCallback((next: ChatCapabilities) => {
+    const saved = saveCapabilities(next);
+    capabilitiesRef.current = saved;
+    setCapabilities(saved);
+    if (!saved.voiceReplies && agentStatusRef.current === 'speaking') {
+      stopSpeakingRef.current();
+    }
+  }, []);
+
+  const handleVoicePreferencesChange = useCallback((preferences: VoicePreferences) => {
+    const saved = saveVoicePreferences(preferences);
+    voicePreferencesRef.current = saved;
+    setVoicePreferences(saved);
+  }, []);
+
+  const refreshChatHistory = useCallback(async (): Promise<void> => {
+    setIsHistoryLoading(true);
+    try {
+      const result = await listChatSessions('', 100);
+      setChatSessions(result.sessions);
+      setHistorySource(result.source);
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  }, []);
+
+  const upsertChatSessionSummary = useCallback((record: ChatSessionRecord) => {
+    const summary = summaryFromRecord(record);
+    setChatSessions((prev) =>
+      [summary, ...prev.filter((session) => session.id !== summary.id)].sort(
+        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+      ),
+    );
+  }, []);
+
+  const startFreshSession = useCallback((): string => {
+    const sessionId = newSessionId();
+    currentSessionIdRef.current = sessionId;
+    setCurrentSessionId(sessionId);
+    setConversationalMessages([createWelcomeMessage()]);
+    setSpeakingMessageId(null);
+    return sessionId;
+  }, []);
+
+  const prepareForSessionSwitch = useCallback((): boolean => {
+    if (commandQueueRef.current.length > 0) return false;
+    if (agentStatusRef.current === 'thinking' || agentStatusRef.current === 'listening') return false;
+    if (isProcessingCommandRef.current && !speechGatesQueueRef.current) return false;
+    if (agentStatusRef.current === 'speaking') stopSpeakingRef.current();
+    return !isProcessingCommandRef.current;
+  }, []);
+
+  const handleNewChat = useCallback(async (): Promise<boolean> => {
+    if (!prepareForSessionSwitch()) return false;
+    startFreshSession();
+    setIsConversationalStreamOpen(true);
+    return true;
+  }, [prepareForSessionSwitch, startFreshSession]);
+
+  const handleOpenSession = useCallback(async (sessionId: string): Promise<boolean> => {
+    if (sessionId === currentSessionIdRef.current && chatSessions.some((s) => s.id === sessionId)) {
+      setIsConversationalStreamOpen(true);
+      return true;
+    }
+    if (!prepareForSessionSwitch()) return false;
+
+    setIsHistoryLoading(true);
+    try {
+      const result = await getChatSession(sessionId);
+      if (!result.session) return false;
+      setHistorySource(result.source);
+      currentSessionIdRef.current = result.session.id;
+      setCurrentSessionId(result.session.id);
+      setConversationalMessages(result.session.messages.map(storedToConversational));
+      setSpeakingMessageId(null);
+      setIsConversationalStreamOpen(true);
+      return true;
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  }, [chatSessions, prepareForSessionSwitch]);
+
+  const handleRenameSession = useCallback(async (sessionId: string, title: string): Promise<boolean> => {
+    const result = await renameChatSession(sessionId, title);
+    if (!result.session) return false;
+    setHistorySource(result.source);
+    upsertChatSessionSummary(result.session);
+    return true;
+  }, [upsertChatSessionSummary]);
+
+  const handleDeleteSession = useCallback(async (sessionId: string): Promise<boolean> => {
+    const deletingCurrent = sessionId === currentSessionIdRef.current;
+    if (deletingCurrent && !prepareForSessionSwitch()) return false;
+
+    const result = await deleteChatSession(sessionId);
+    if (!result.deleted) return false;
+    setHistorySource(result.source);
+    setChatSessions((prev) => prev.filter((session) => session.id !== sessionId));
+    if (deletingCurrent) startFreshSession();
+    return true;
+  }, [prepareForSessionSwitch, startFreshSession]);
+
+  const handleClearHistory = useCallback(async (): Promise<boolean> => {
+    if (!prepareForSessionSwitch()) return false;
+    const result = await clearChatSessions();
+    setHistorySource(result.source);
+    setChatSessions([]);
+    startFreshSession();
+    return true;
+  }, [prepareForSessionSwitch, startFreshSession]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchModelCatalog().then((catalog) => {
+      if (cancelled) return;
+      setModelCatalog(catalog);
+      const resolved = resolveSelectedModelId(catalog, selectedModelIdRef.current);
+      selectedModelIdRef.current = resolved;
+      setSelectedModelId(resolved);
+      saveStoredModelId(resolved);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    void refreshChatHistory();
+  }, [refreshChatHistory]);
+
   // Keyboard Shortcuts (C for Claude Studio, A for Agents, I for Integrations, 1-4 for Modes, Esc to close)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
+      // The Claude-style chat is a focused writing/tool surface; global OS
+      // hotkeys should not fire modal overlays over it.
+      if (currentModeRef.current === 'CLAUDE_CHAT') return;
 
       if (e.key === 'c' || e.key === 'C') {
         setIsClaudeStudioOpen((prev) => !prev);
@@ -303,12 +559,17 @@ export const App: React.FC = () => {
   const processNextCommand = useCallback(() => {
     if (commandQueueRef.current.length === 0) {
       isProcessingCommandRef.current = false;
+      activeGenerationControllerRef.current = null;
+      setQueuedCommandCount(0);
       setAgentStatus('idle');
       setIsAccelerated(false);
       return;
     }
 
     const next = commandQueueRef.current.shift()!;
+    setQueuedCommandCount(commandQueueRef.current.length);
+    const generationController = new AbortController();
+    activeGenerationControllerRef.current = generationController;
     isProcessingCommandRef.current = true;
     setAgentStatus('thinking');
 
@@ -317,7 +578,21 @@ export const App: React.FC = () => {
     let diff: TaskDifficulty = 'low';
     if (lq.includes('security') || lq.includes('threat') || lq.includes('critical') || lq.includes('hardening')) {
       diff = 'critical';
-    } else if (lq.includes('code') || lq.includes('compiler') || lq.includes('sandbox') || lq.includes('ast') || lq.includes('python')) {
+    } else if (
+      next.capabilities.codingFocus !== 'auto' ||
+      lq.includes('code') ||
+      lq.includes('frontend') ||
+      lq.includes('compiler') ||
+      lq.includes('sandbox') ||
+      lq.includes('ast') ||
+      lq.includes('python') ||
+      lq.includes('rust') ||
+      lq.includes('c++') ||
+      lq.includes('html5') ||
+      lq.includes('xml') ||
+      lq.includes('ruby') ||
+      lq.includes('php')
+    ) {
       diff = 'high';
     } else if (lq.includes('multimodal') || lq.includes('image') || lq.includes('video') || lq.includes('transcode')) {
       diff = 'medium';
@@ -325,14 +600,9 @@ export const App: React.FC = () => {
     setTaskDifficulty(diff);
     setIsAccelerated(true);
 
-    // Add user turn to Conversational Stream
-    const userMsg: ConversationalMessage = {
-      id: `usr-${Date.now()}`,
-      role: 'user',
-      content: next.query,
-      timestamp: new Date().toLocaleTimeString(),
-    };
-    setConversationalMessages((prev) => [...prev, userMsg]);
+    // The user turn was appended when the command was queued, so a message
+    // sent during another response is visible immediately.
+    const userMsg = next.userMessage;
 
     executeCommandDirect(next.query, next.actionType, async () => {
       // Module 3: Exact millisecond action ripple "puff" effect
@@ -344,17 +614,17 @@ export const App: React.FC = () => {
 
       if (diff === 'medium' || lq.includes('image') || lq.includes('video') || lq.includes('multimodal')) {
         triggers.push({ label: '✦ Open Multimodal Bridge', action: 'OPEN_MULTIMODAL' });
-        if (lq.includes('open') || lq.includes('transcode') || lq.includes('show')) {
+        if (currentModeRef.current !== 'CLAUDE_CHAT' && (lq.includes('open') || lq.includes('transcode') || lq.includes('show'))) {
           setIsMultimodalBridgeOpen(true);
         }
       } else if (diff === 'high' || lq.includes('code') || lq.includes('python')) {
         triggers.push({ label: '⚡ Open Code Compiler', action: 'OPEN_CODE' });
-        if (lq.includes('open') || lq.includes('run') || lq.includes('code')) {
+        if (currentModeRef.current !== 'CLAUDE_CHAT' && (lq.includes('open') || lq.includes('run') || lq.includes('code'))) {
           setIsCodeCompilerOpen(true);
         }
       } else if (lq.includes('canvas') || lq.includes('diagram') || lq.includes('node')) {
         triggers.push({ label: '◈ Open Canvas Builder', action: 'OPEN_CANVAS' });
-        if (lq.includes('open') || lq.includes('show')) {
+        if (currentModeRef.current !== 'CLAUDE_CHAT' && (lq.includes('open') || lq.includes('show'))) {
           setIsCanvasBuilderOpen(true);
         }
       } else if (lq.includes('video') || lq.includes('studio') || lq.includes('render')) {
@@ -372,67 +642,231 @@ export const App: React.FC = () => {
           toolsUsed: [],
           difficulty: diff,
           actionTriggers: triggers,
+          model: next.model,
+          modelSource: next.model === 'auto' ? 'nexus-default' : 'nvidia-nim',
+          thinking: '',
+          status: 'streaming',
         },
       ]);
 
+      let finalAnswer = '';
+      let finalModel = next.model;
+      let finalModelSource = next.model === 'auto' ? 'nexus-default' : 'nvidia-nim';
+      let thinkingTrace = '';
+      let streamSucceeded = false;
+      let generationStopped = false;
+      let finalExecution: ChatExecutionMetadata | undefined;
+      let finalQuality: ChatQualityMetadata | undefined;
+      const toolsUsed = new Set<string>();
+
       try {
         let answerReceived = false;
-        const toolsUsed = new Set<string>();
-        await nexusChatStream(next.query, next.actionType === 'CODE' ? 'coding' : 'general', (event) => {
-          if (event.type === 'tool_call' && event.tool_id) toolsUsed.add(event.tool_id);
-          if (event.type === 'start' || event.type === 'thought' || event.type === 'tool_call') {
-            setConversationalMessages((prev) =>
-              prev.map((item) => item.id === assistantId
-                ? {
-                    ...item,
-                    content: event.type === 'thought' ? 'NEXUS is reasoning...' : 'NEXUS is processing...',
-                    toolsUsed: [...toolsUsed],
-                  }
-                : item),
-            );
-          }
-          if (event.type === 'answer') {
-            answerReceived = true;
-            setConversationalMessages((prev) =>
-              prev.map((item) => item.id === assistantId
-                ? { ...item, content: event.content || '', toolsUsed: [...toolsUsed] }
-                : item),
-            );
-          }
-        });
+        await nexusChatStream(
+          next.query,
+          next.actionType === 'CODE' ? 'coding' : 'general',
+          (event) => {
+            if (event.model) finalModel = event.model;
+            if (event.model_source) finalModelSource = event.model_source;
+            if (event.execution) finalExecution = event.execution;
+            if (event.quality) finalQuality = event.quality;
+            if (event.type === 'tool_call' && event.tool_id) toolsUsed.add(event.tool_id);
+
+            if (event.type === 'metadata') {
+              setConversationalMessages((prev) =>
+                prev.map((item) => item.id === assistantId
+                  ? { ...item, execution: finalExecution, quality: finalQuality }
+                  : item),
+              );
+            }
+
+            if (event.type === 'thought' && next.capabilities.extendedThinking && event.content) {
+              const piece = sanitizeThinking(event.content);
+              if (piece) {
+                if (!thinkingTrace || piece.startsWith(thinkingTrace)) {
+                  thinkingTrace = piece;
+                } else if (!thinkingTrace.includes(piece)) {
+                  thinkingTrace = `${thinkingTrace}\n\n${piece}`;
+                }
+              }
+            }
+
+            if (
+              event.type === 'start' ||
+              event.type === 'thought' ||
+              event.type === 'tool_call' ||
+              event.type === 'quality_repair'
+            ) {
+              setConversationalMessages((prev) =>
+                prev.map((item) => item.id === assistantId
+                  ? {
+                      ...item,
+                      content:
+                        event.type === 'thought'
+                          ? 'NEXUS is reasoning...'
+                          : event.type === 'quality_repair'
+                            ? 'NEXUS is verifying and improving the answer...'
+                            : 'NEXUS is processing...',
+                      toolsUsed: [...toolsUsed],
+                      model: finalModel,
+                      modelSource: finalModelSource,
+                      thinking: thinkingTrace,
+                    }
+                  : item),
+              );
+            }
+
+            if (event.type === 'answer') {
+              answerReceived = true;
+              finalAnswer = event.content || '';
+              setConversationalMessages((prev) =>
+                prev.map((item) => item.id === assistantId
+                  ? {
+                      ...item,
+                      content: finalAnswer,
+                      toolsUsed: [...toolsUsed],
+                      model: finalModel,
+                      modelSource: finalModelSource,
+                      thinking: thinkingTrace,
+                    }
+                  : item),
+              );
+            }
+          },
+          {
+            model: next.model,
+            effort: next.capabilities.effort,
+            sessionId: next.capabilities.memory ? next.sessionId : undefined,
+            extendedThinking: next.capabilities.extendedThinking,
+            deepResearch: next.capabilities.deepResearch,
+            artifacts: next.capabilities.artifacts,
+            signal: generationController.signal,
+          },
+        );
         if (!answerReceived) throw new Error('NEXUS stream ended without an answer.');
+        streamSucceeded = true;
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown stream error.';
+        const aborted =
+          generationController.signal.aborted ||
+          (error instanceof DOMException && error.name === 'AbortError') ||
+          (error instanceof Error && error.name === 'AbortError');
+        generationStopped = aborted;
+        if (aborted) {
+          finalAnswer = finalAnswer.trim()
+            ? `${finalAnswer.trim()}\n\n_Generation stopped._`
+            : 'Generation stopped before an answer arrived.';
+          setConversationalMessages((prev) =>
+            prev.map((item) => item.id === assistantId
+              ? { ...item, content: finalAnswer, status: 'stopped', thinking: thinkingTrace }
+              : item),
+          );
+        } else {
+          const message = error instanceof Error ? error.message : 'Unknown stream error.';
+          finalAnswer = '';
+          setConversationalMessages((prev) =>
+            prev.map((item) => item.id === assistantId
+              ? { ...item, content: `NEXUS stream failed: ${message}`, status: 'error' }
+              : item),
+          );
+        }
+      } finally {
+        if (activeGenerationControllerRef.current === generationController) {
+          activeGenerationControllerRef.current = null;
+        }
+      }
+
+      if (streamSucceeded) {
         setConversationalMessages((prev) =>
           prev.map((item) => item.id === assistantId
-            ? { ...item, content: `NEXUS stream failed: ${message}` }
+            ? { ...item, status: 'complete', execution: finalExecution, quality: finalQuality }
             : item),
         );
       }
 
-      if (voiceEnabled) {
-        // Spoken confirmation - voice synthesis coordinates agentStatus to 'speaking'
-        const spokenConfirmation = `NEXUS processed: ${next.query.slice(0, 42)}`;
-        speakWithStatus(spokenConfirmation, setAgentStatus, () => {
+      if (streamSucceeded || generationStopped) {
+        const finalAssistantMessage: ConversationalMessage = {
+          id: assistantId,
+          role: 'assistant',
+          content: finalAnswer,
+          timestamp: new Date().toLocaleTimeString(),
+          toolsUsed: [...toolsUsed],
+          difficulty: diff,
+          actionTriggers: triggers,
+          model: finalModel,
+          modelSource: finalModelSource,
+          thinking: thinkingTrace,
+          execution: finalExecution,
+          quality: finalQuality,
+          status: generationStopped ? 'stopped' : 'complete',
+        };
+        try {
+          const historyResult = await appendChatMessages(
+            next.sessionId,
+            [conversationalToStored(userMsg), conversationalToStored(finalAssistantMessage)],
+            { model: finalModel },
+          );
+          setHistorySource(historyResult.source);
+          if (historyResult.session) upsertChatSessionSummary(historyResult.session);
+        } catch {
+          // chatHistory already falls back to localStorage; a storage failure
+          // must never suppress the completed answer or its voice reply.
+        }
+      }
+
+      if (streamSucceeded && next.capabilities.voiceReplies && finalAnswer.trim()) {
+        // Speak the actual answer (voiceManager strips code/markdown and
+        // chunks it) with the saved accent — en-IN by default.
+        speechGatesQueueRef.current = true;
+        setSpeakingMessageId(assistantId);
+        let speechSettled = false;
+        const finishSpeech = () => {
+          if (speechSettled) return;
+          speechSettled = true;
+          speechGatesQueueRef.current = false;
+          setSpeakingMessageId(null);
           processNextCommand();
-        });
+        };
+        const started = speakWithStatus(
+          finalAnswer,
+          setAgentStatus,
+          finishSpeech,
+          voicePreferencesRef.current,
+        );
+        if (!started) finishSpeech();
       } else {
         setTimeout(() => {
           processNextCommand();
         }, 500);
       }
     });
-  }, [voiceEnabled, executeCommandDirect]);
+  }, [executeCommandDirect, upsertChatSessionSummary]);
 
   // Inject command or research result into the live knowledge graph with queueing
   const handleExecuteCommand = useCallback(
-    (query: string, actionType: 'RESEARCH' | 'WORKFLOW' | 'CODE' | 'MEMORY' | 'GRAPH') => {
+    (query: string, actionType: CommandActionType) => {
+      const cleanQuery = query.trim();
+      if (!cleanQuery) return;
       playChime();
+      const snapshotCapabilities = { ...capabilitiesRef.current };
+      const effectiveActionType =
+        snapshotCapabilities.deepResearch && actionType === 'GRAPH' ? 'RESEARCH' : actionType;
+      const commandId = `cmd-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const userMessage: ConversationalMessage = {
+        id: `usr-${commandId}`,
+        role: 'user',
+        content: cleanQuery,
+        timestamp: new Date().toLocaleTimeString(),
+      };
+      setConversationalMessages((prev) => [...prev, userMessage]);
       commandQueueRef.current.push({
-        id: `cmd-${Date.now()}-${Math.random()}`,
-        query,
-        actionType,
+        id: commandId,
+        query: cleanQuery,
+        actionType: effectiveActionType,
+        userMessage,
+        model: selectedModelIdRef.current,
+        capabilities: snapshotCapabilities,
+        sessionId: currentSessionIdRef.current,
       });
+      setQueuedCommandCount(commandQueueRef.current.length);
 
       if (!isProcessingCommandRef.current) {
         processNextCommand();
@@ -440,6 +874,48 @@ export const App: React.FC = () => {
     },
     [processNextCommand]
   );
+
+  const handleStopGeneration = useCallback(() => {
+    activeGenerationControllerRef.current?.abort();
+  }, []);
+
+  const handleStopSpeaking = useCallback(() => {
+    const shouldResumeQueue = speechGatesQueueRef.current;
+    speechGatesQueueRef.current = false;
+    stopAnySpeaking();
+    setSpeakingMessageId(null);
+    setAgentStatus('idle');
+    // stopAnySpeaking suppresses the utterance onFinish callback, so resume
+    // a speech-gated command queue explicitly instead of stranding it.
+    if (shouldResumeQueue) processNextCommand();
+  }, [processNextCommand]);
+
+  useEffect(() => {
+    stopSpeakingRef.current = handleStopSpeaking;
+  }, [handleStopSpeaking]);
+
+  const handleSpeakMessage = useCallback((message: ConversationalMessage) => {
+    if (!message.content.trim()) return;
+    const shouldResumeQueue = speechGatesQueueRef.current;
+    setSpeakingMessageId(message.id);
+    let speechSettled = false;
+    const finishSpeech = () => {
+      if (speechSettled) return;
+      speechSettled = true;
+      setSpeakingMessageId(null);
+      if (shouldResumeQueue) {
+        speechGatesQueueRef.current = false;
+        processNextCommand();
+      }
+    };
+    const started = speakWithStatus(
+      message.content,
+      setAgentStatus,
+      finishSpeech,
+      voicePreferencesRef.current,
+    );
+    if (!started) finishSpeech();
+  }, [processNextCommand]);
 
   // Sync Deep Research output into knowledge graph as a new document node
   const handleInjectResearchIntoGraph = useCallback((reportTitle: string, claims: ResearchClaim[]) => {
@@ -541,16 +1017,33 @@ export const App: React.FC = () => {
     }
   };
 
+  const openClaudeChat = useCallback(() => {
+    // Chat now ships as its own Vite entry (`/chat.html`) with a standalone
+    // controller. Workplace OS links to it instead of embedding the full
+    // Claude-style chat as an internal operating mode.
+    playHudClick();
+    window.location.assign('/chat.html');
+  }, []);
+
+  const handleOperatingModeChange = useCallback(
+    (mode: OperatingMode) => {
+      if (mode === 'CLAUDE_CHAT') {
+        openClaudeChat();
+        return;
+      }
+      setCurrentMode(mode);
+      playHudClick();
+    },
+    [openClaudeChat],
+  );
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#030508] text-slate-100 font-sans antialiased select-none">
-      {/* ── Minimal Floating Top Bar (hidden on the light Workspace surface) ──── */}
-      {currentMode !== 'WORKSPACE' && (
+      {/* ── Minimal Floating Top Bar (hidden on the light Workspace and Claude-style chat surfaces) ──── */}
+      {currentMode !== 'WORKSPACE' && currentMode !== 'CLAUDE_CHAT' && (
       <TopBar
         currentMode={currentMode}
-        onModeChange={(mode) => {
-          setCurrentMode(mode);
-          playHudClick();
-        }}
+        onModeChange={handleOperatingModeChange}
         onOpenClaudeStudio={() => {
           setIsClaudeStudioOpen(true);
           playHudClick();
@@ -566,6 +1059,16 @@ export const App: React.FC = () => {
         onOpenIntegrationsModal={() => setIsIntegrationsModalOpen(true)}
         onOpenNim={() => setIsJarvisOpen(true)}
         agentStatus={agentStatus}
+        modelCatalog={modelCatalog}
+        selectedModelId={selectedModelId}
+        onModelChange={handleModelChange}
+        capabilities={capabilities}
+        onCapabilitiesChange={handleCapabilitiesChange}
+        voicePreferences={voicePreferences}
+        onVoicePreferencesChange={handleVoicePreferencesChange}
+        onAgentStatusChange={setAgentStatus}
+        sessionCount={chatSessions.length}
+        onOpenChat={openClaudeChat}
       />
       )}
 
@@ -581,7 +1084,7 @@ export const App: React.FC = () => {
       />
 
       {/* Floating JARVIS orb - always visible, mirrors listening/speaking state */}
-      {currentMode !== 'WORKSPACE' && (
+      {currentMode !== 'WORKSPACE' && currentMode !== 'CLAUDE_CHAT' && (
       <div className="fixed bottom-5 right-5 z-40 hidden md:block">
         <JarvisHUD
           ringActive
@@ -596,8 +1099,8 @@ export const App: React.FC = () => {
       </div>
       )}
 
-      {/* ── Left Sidebar: Workspaces, Search & System Telemetry (hidden on Workspace) ── */}
-      {currentMode !== 'WORKSPACE' && (
+      {/* ── Left Sidebar: Workspaces, Search & System Telemetry (hidden on Workspace/Chat) ── */}
+      {currentMode !== 'WORKSPACE' && currentMode !== 'CLAUDE_CHAT' && (
       <LeftSidebar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -618,7 +1121,9 @@ export const App: React.FC = () => {
       <main className="flex-1 h-full relative overflow-hidden bg-[#0a0f1d]">
         {/* ── SCREEN 1+2: Light-canvas NEXUS OS workspace — the full light
              suite (home, graph, research, workflow, architecture, analytics,
-             agents) with the floating multi-modal Query Cockpit. */}
+             agents) with the floating multi-modal Query Cockpit. The full
+             Chat UI is intentionally not mounted here; it has its own
+             `/chat.html` entry and standalone controller. */}
         {currentMode === 'WORKSPACE' && <WorkspaceView onOpenIntegrations={() => setIsIntegrationsModalOpen(true)} />}
 
         {/* Real-time Information Flow Ticker (Cortex vs Subcortex) in Graph Mode */}
@@ -755,8 +1260,26 @@ export const App: React.FC = () => {
         />
       )}
 
-      {/* ── Conversational Stream: Framing AI Feedback & Actions (Module 2 & 4) ─ */}
-      {currentMode !== 'WORKSPACE' && (
+      {/* Workspace keeps its light Query Cockpit; this launcher opens the
+          full hybrid NEXUS chat (practical solutions, history, Claude-style
+          model changer, tools/files, repository builder, and voice). */}
+      {currentMode === 'WORKSPACE' && (
+        <button
+          type="button"
+          onClick={openClaudeChat}
+          title="Open Nexus Chat — real-life solutions, tools, files, repositories, models, voice and backend history"
+          className="fixed bottom-24 right-6 z-50 flex items-center gap-2.5 rounded-full border border-white/70 bg-[#262624]/95 px-4 py-2.5 font-sans text-sm font-semibold text-[#f7f5ef] shadow-[0_16px_40px_rgba(61,57,47,0.30)] backdrop-blur transition-all hover:scale-[1.03] hover:bg-[#34322e] cursor-pointer"
+        >
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[linear-gradient(135deg,#d97757,#8b7cf6_58%,#2f9e8f)] text-white">
+            <Sparkles className="h-3.5 w-3.5" />
+          </span>
+          <span>Nexus Chat</span>
+          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-[#e6e0d2]">solve · tools · repos</span>
+        </button>
+      )}
+
+      {/* ── Conversational Stream: compact graph/HUD chat; CLAUDE_CHAT has its own full window ─ */}
+      {currentMode !== 'WORKSPACE' && currentMode !== 'CLAUDE_CHAT' && (
       <ConversationalStream
         messages={conversationalMessages}
         isOpen={isConversationalStreamOpen}
@@ -770,7 +1293,30 @@ export const App: React.FC = () => {
         }}
         isStreaming={agentStatus === 'thinking'}
         onSendMessage={(q) => handleExecuteCommand(q, 'GRAPH')}
-        onClearMessages={() => setConversationalMessages([])}
+        onStopGeneration={handleStopGeneration}
+        queuedCount={queuedCommandCount}
+        modelCatalog={modelCatalog}
+        selectedModelId={selectedModelId}
+        onModelChange={handleModelChange}
+        capabilities={capabilities}
+        onCapabilitiesChange={handleCapabilitiesChange}
+        voicePreferences={voicePreferences}
+        onVoicePreferencesChange={handleVoicePreferencesChange}
+        agentStatus={agentStatus}
+        onAgentStatusChange={setAgentStatus}
+        speakingMessageId={speakingMessageId}
+        onSpeakMessage={handleSpeakMessage}
+        onStopSpeaking={handleStopSpeaking}
+        sessions={chatSessions}
+        historySource={historySource}
+        currentSessionId={currentSessionId}
+        isHistoryLoading={isHistoryLoading}
+        onRefreshHistory={refreshChatHistory}
+        onNewChat={handleNewChat}
+        onOpenSession={handleOpenSession}
+        onRenameSession={handleRenameSession}
+        onDeleteSession={handleDeleteSession}
+        onClearHistory={handleClearHistory}
       />
       )}
 
@@ -778,6 +1324,8 @@ export const App: React.FC = () => {
       {(currentMode === 'GRAPH' || currentMode === 'HUD') && (
         <CommandCenter
           onExecuteCommand={handleExecuteCommand}
+          onStopGeneration={handleStopGeneration}
+          queuedCount={queuedCommandCount}
           onOpenClaudeStudio={() => setIsClaudeStudioOpen(true)}
           onOpenResearchMode={(t) => {
             if (t) setResearchTopic(t);
@@ -851,10 +1399,11 @@ export const App: React.FC = () => {
         onClose={() => setIsCodeCompilerOpen(false)}
       />
 
-      {/* ── Spoken Voice Cortex Assistant ───────────────────────────────────── */}
+      {/* ── Spoken Voice Cortex Assistant (Claude chat has native voice controls) ─ */}
+      {currentMode !== 'CLAUDE_CHAT' && (
       <VoiceCortex
         voiceEnabled={voiceEnabled}
-        onToggleVoice={() => setVoiceEnabled(!voiceEnabled)}
+        onToggleVoice={() => handleCapabilitiesChange({ ...capabilities, voiceReplies: !capabilities.voiceReplies })}
         agentStatus={agentStatus}
         onStatusChange={setAgentStatus}
         onCommand={(cmd, text) => {
@@ -864,16 +1413,14 @@ export const App: React.FC = () => {
           handleExecuteCommand(prompt, 'RESEARCH');
         }}
       />
+      )}
 
       {/* ── Mobile Application UI: High-Velocity Thumb Cockpit ──────────────── */}
-      {currentMode !== 'WORKSPACE' && (
+      {currentMode !== 'WORKSPACE' && currentMode !== 'CLAUDE_CHAT' && (
       <MobileCompactCockpit
         agentStatus={agentStatus}
         currentMode={currentMode}
-        onModeChange={(m) => {
-          setCurrentMode(m);
-          playHudClick();
-        }}
+        onModeChange={handleOperatingModeChange}
         onToggleVoice={() => {
           setIsVoiceCortexOpen((prev) => !prev);
           playHudClick();
