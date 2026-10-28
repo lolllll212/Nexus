@@ -691,6 +691,31 @@ class ProcessMessageUseCase:
 
         return selected, pack
 
+    @staticmethod
+    def _is_casual_message(text: str) -> bool:
+        """True for greetings and short pleasantries that need no tools."""
+        t = (text or "").strip().lower().rstrip("!?., ")
+        if len(t.split()) > 4:
+            return False
+        greetings = (
+            "hi",
+            "hello",
+            "hey",
+            "yo",
+            "greetings",
+            "good morning",
+            "good afternoon",
+            "good evening",
+            "how are you",
+            "sup",
+            "what's up",
+            "whats up",
+            "test",
+            "ping",
+            "you there",
+        )
+        return t in greetings
+
     async def _react_loop(
         self,
         conversation: Conversation,
@@ -767,6 +792,62 @@ class ProcessMessageUseCase:
             else 0
         )
         total_tokens = self._estimate_tokens(context)
+
+        # Greeting / casual-chat gate: a hello needs conversation, not 37 tool
+        # calls. Short pleasantries with no question and no tool verbs skip the
+        # loop entirely and get one direct LLM reply. The quality-aware loop
+        # still returns its normal ``(answer, report)`` tuple.
+        last_user = next((m["content"] for m in reversed(context) if m.get("role") == "user"), "")
+        if self._is_casual_message(str(last_user)):
+            context = [m for m in context if "[OBSERVATION" not in str(m.get("content", ""))]
+            context.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "The operator is greeting you or making casual conversation. "
+                        "Reply warmly and briefly (1-3 sentences). Do NOT use tools. "
+                        "Do not mention tools, loops, or subsystems."
+                    ),
+                }
+            )
+            try:
+                reasoning = str(
+                    await active_llm.complete(
+                        context,
+                        temperature=profile.temperature,
+                        max_tokens=profile.max_tokens,
+                    )
+                    or ""
+                )
+            except LLMUnavailableError:
+                # Same contract as the loop: surface the outage through the
+                # graceful fallback instead of a 500.
+                fallback = await self._build_unavailable_fallback(context, active_tools)
+                return fallback, self._assess_candidate(
+                    profile,
+                    fallback,
+                    tools_used,
+                    observations_for_quality,
+                    context_pack,
+                    repair_attempts_used=repair_attempts_used,
+                    exhausted=True,
+                )
+            # Same answer contract as the loop: a model that prefixes its reply
+            # with the final-answer marker gets it stripped here too.
+            if "FINAL ANSWER:" in reasoning:
+                reasoning = reasoning.split("FINAL ANSWER:", 1)[-1].strip()
+            display_reasoning = self._guardrails.evaluate_output(reasoning).text
+            thoughts.append(Thought(content=display_reasoning, thought_type=ThoughtType.REASONING))
+            if on_event is not None:
+                await on_event({"type": "thought", "content": display_reasoning})
+            return reasoning, self._assess_candidate(
+                profile,
+                reasoning,
+                tools_used,
+                observations_for_quality,
+                context_pack,
+                repair_attempts_used=repair_attempts_used,
+            )
 
         tool_entities = list(await active_tools.list_all())
         native_tools = self._native_tool_definitions(tool_entities, profile)
@@ -1002,10 +1083,41 @@ class ProcessMessageUseCase:
             if on_event is not None:
                 await on_event({"type": "observation", "content": observation})
 
-        # Final fallback — synthesize what we have
-        fallback = "I've reached my reasoning limit. Here's my best synthesis: " + self._extract_last_content(
-            context
-        )
+        # Final fallback — one LLM synthesis over the gathered observations.
+        # Never dump raw observations: let the active model compose a concise
+        # answer; if synthesis fails, say so without leaking tool internals.
+        # Either way, preserve the quality-aware ``(answer, report)`` contract
+        # and mark the report exhausted so callers see this was a cap hit.
+        try:
+            context.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "You have reached your reasoning-step limit. Synthesize a "
+                        "concise final answer (max 5 sentences) from the "
+                        "observations above. Do not repeat raw tool output or "
+                        "observation markers; speak plainly to the operator."
+                    ),
+                }
+            )
+            fallback = str(
+                await active_llm.complete(
+                    context,
+                    temperature=profile.temperature,
+                    max_tokens=profile.max_tokens,
+                )
+                or ""
+            ).strip()
+            if "FINAL ANSWER:" in fallback:
+                fallback = fallback.split("FINAL ANSWER:", 1)[-1].strip()
+            if not fallback:
+                raise ValueError("cap-hit synthesis returned an empty answer")
+        except Exception:
+            fallback = (
+                "I explored the available tools but hit my reasoning limit before "
+                "completing the synthesis. Please rephrase or narrow the "
+                "question and I'll try again."
+            )
         return fallback, self._assess_candidate(
             profile,
             fallback,
