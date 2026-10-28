@@ -393,7 +393,7 @@ async def test_cortex_falls_back_to_text_when_native_tool_calling_fails():
 
     result = await fake.process_message.execute(
         user_id="u-native-fallback",
-        message="Hello",
+        message="Please explain why native tool calling needs a text fallback.",
         session_id="native-fallback",
         tenant_id="default",
         llm=llm,

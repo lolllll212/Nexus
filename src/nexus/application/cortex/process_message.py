@@ -811,7 +811,7 @@ class ProcessMessageUseCase:
                 }
             )
             try:
-                reasoning = str(
+                casual_reasoning = str(
                     await active_llm.complete(
                         context,
                         temperature=profile.temperature,
@@ -834,15 +834,17 @@ class ProcessMessageUseCase:
                 )
             # Same answer contract as the loop: a model that prefixes its reply
             # with the final-answer marker gets it stripped here too.
-            if "FINAL ANSWER:" in reasoning:
-                reasoning = reasoning.split("FINAL ANSWER:", 1)[-1].strip()
-            display_reasoning = self._guardrails.evaluate_output(reasoning).text
-            thoughts.append(Thought(content=display_reasoning, thought_type=ThoughtType.REASONING))
+            if "FINAL ANSWER:" in casual_reasoning:
+                casual_reasoning = casual_reasoning.split("FINAL ANSWER:", 1)[-1].strip()
+            casual_display_reasoning = self._guardrails.evaluate_output(casual_reasoning).text
+            thoughts.append(
+                Thought(content=casual_display_reasoning, thought_type=ThoughtType.REASONING)
+            )
             if on_event is not None:
-                await on_event({"type": "thought", "content": display_reasoning})
-            return reasoning, self._assess_candidate(
+                await on_event({"type": "thought", "content": casual_display_reasoning})
+            return casual_reasoning, self._assess_candidate(
                 profile,
-                reasoning,
+                casual_reasoning,
                 tools_used,
                 observations_for_quality,
                 context_pack,
