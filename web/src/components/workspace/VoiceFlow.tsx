@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, MicOff, AudioLines } from 'lucide-react';
 import { nexusJson } from '../../api';
+import { getVoicePreferences } from '../../utils/voiceManager';
 
 /* ────────────────────────────────────────────────────────────────────────────
  * WHISPER FLOW — the voice input for the NEXUS cockpit.
@@ -56,9 +57,11 @@ interface UseVoiceInputOptions {
   onInterim?: (text: string) => void;
   /** A finalised phrase. */
   onFinal?: (text: string) => void;
+  /** BCP-47 recognition language. Defaults to the saved Nexus accent (en-IN). */
+  language?: string;
 }
 
-export function useVoiceInput({ onInterim, onFinal }: UseVoiceInputOptions = {}) {
+export function useVoiceInput({ onInterim, onFinal, language }: UseVoiceInputOptions = {}) {
   const [state, setState] = useState<VoiceState>('idle');
   const [note, setNote] = useState('');
   /** Live mic level 0..1 — kept in a ref (read by the canvas rAF loop). */
@@ -71,6 +74,7 @@ export function useVoiceInput({ onInterim, onFinal }: UseVoiceInputOptions = {})
   const rafRef = useRef<number | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const transcriptionControllerRef = useRef<AbortController | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const intentRef = useRef<'idle' | 'listening'>('idle');
   const callbacksRef = useRef({ onInterim, onFinal });
@@ -104,6 +108,7 @@ export function useVoiceInput({ onInterim, onFinal }: UseVoiceInputOptions = {})
 
   const start = useCallback(async () => {
     if (intentRef.current === 'listening') return;
+    transcriptionControllerRef.current?.abort();
     intentRef.current = 'listening';
     setState('starting');
     setNote('');
@@ -157,7 +162,7 @@ export function useVoiceInput({ onInterim, onFinal }: UseVoiceInputOptions = {})
     if (Ctor) {
       try {
         const rec = new Ctor();
-        rec.lang = 'en-US';
+        rec.lang = language || getVoicePreferences().accent || 'en-IN';
         rec.continuous = true;
         rec.interimResults = true;
         rec.onresult = (ev) => {
@@ -210,16 +215,23 @@ export function useVoiceInput({ onInterim, onFinal }: UseVoiceInputOptions = {})
         const blob = new Blob(chunksRef.current, { type: mime || 'audio/webm' });
         chunksRef.current = [];
         if (blob.size < 1200) return; // too short to be speech
+        const controller = new AbortController();
+        transcriptionControllerRef.current = controller;
         try {
           const fd = new FormData();
           fd.append('audio_file', blob, 'whisper-flow.webm');
           const stt = await nexusJson<{ text: string; engine?: string }>('/api/audio/stt', {
             method: 'POST',
             body: fd,
+            signal: controller.signal,
           });
-          if (stt.text?.trim()) callbacksRef.current.onFinal?.(stt.text.trim());
-        } catch {
-          setNote('Transcription failed — the audio route did not respond');
+          if (!controller.signal.aborted && stt.text?.trim()) callbacksRef.current.onFinal?.(stt.text.trim());
+        } catch (error) {
+          if (!controller.signal.aborted && !(error instanceof Error && error.name === 'AbortError')) {
+            setNote('Transcription failed — the audio route did not respond');
+          }
+        } finally {
+          if (transcriptionControllerRef.current === controller) transcriptionControllerRef.current = null;
         }
       };
       recorder.start();
@@ -233,12 +245,13 @@ export function useVoiceInput({ onInterim, onFinal }: UseVoiceInputOptions = {})
       setNote('Voice capture unsupported in this browser — type or attach media');
       window.setTimeout(() => setState((s) => (s === 'unsupported' ? 'idle' : s)), 3200);
     }
-  }, [teardownAudio]);
+  }, [language, teardownAudio]);
 
   /* Unmount hygiene. */
   useEffect(() => {
     return () => {
       intentRef.current = 'idle';
+      transcriptionControllerRef.current?.abort();
       try {
         recognitionRef.current?.abort();
       } catch {

@@ -20,6 +20,8 @@ from nexus.domain.value_objects.schema import JSONSchema
 class OpenAIProvider(StreamingLLMProvider):
     """Implements LLMProvider + StreamingLLMProvider via an OpenAI-compatible API."""
 
+    supports_native_tool_calls = True
+
     def __init__(
         self,
         api_key: str,

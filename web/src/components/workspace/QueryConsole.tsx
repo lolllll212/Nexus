@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Telescope, ImagePlus, Search, Music, ArrowUp, Paperclip, X, ScanSearch, FileText, Film, AudioLines, File as FileIcon } from 'lucide-react';
+import { Telescope, ImagePlus, Search, Music, ArrowUp, Paperclip, Square, X, ScanSearch, FileText, Film, AudioLines, File as FileIcon } from 'lucide-react';
 import { useVoiceInput, WhisperFlowBand, MicButton, RecorderBadge } from './VoiceFlow';
 
 export type ConsoleMode = 'chat' | 'research' | 'image' | 'search' | 'music';
@@ -39,6 +39,8 @@ interface QueryConsoleProps {
   onSubmit: (query: string, mode: ConsoleMode) => void;
   /** Multimodal dispatch — fired by submit when attachments are staged. */
   onSubmitMedia: (attachments: MediaAttachment[], question: string) => void;
+  /** Aborts the active cockpit request/stream; the parent owns the controller. */
+  onCancel?: () => void;
   status: ConsoleStatus;
   statusDetail: string;
   activeMode: ConsoleMode;
@@ -117,6 +119,7 @@ export const QueryConsole: React.FC<QueryConsoleProps> = ({
   onChange,
   onSubmit,
   onSubmitMedia,
+  onCancel,
   status,
   statusDetail,
   activeMode,
@@ -205,7 +208,8 @@ export const QueryConsole: React.FC<QueryConsoleProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    const nativeEvent = e.nativeEvent as KeyboardEvent;
+    if (e.key === 'Enter' && !e.shiftKey && !nativeEvent.isComposing && nativeEvent.keyCode !== 229) {
       e.preventDefault();
       if (isLive) return;
       if (hasMedia) {
@@ -432,11 +436,13 @@ export const QueryConsole: React.FC<QueryConsoleProps> = ({
             onPaste={handlePaste}
             rows={1}
             placeholder={
-              hasMedia
-                ? 'Optional: ask a question about the attached media…'
-                : activeMode === 'chat'
-                  ? MODE_HINTS.chat
-                  : MODE_HINTS[activeMode]
+              isLive
+                ? 'Nexus is working — draft the next run or stop this one…'
+                : hasMedia
+                  ? 'Optional: ask a question about the attached media…'
+                  : activeMode === 'chat'
+                    ? MODE_HINTS.chat
+                    : MODE_HINTS[activeMode]
             }
             spellCheck={false}
             aria-label="Query the NEXUS cortex"
@@ -515,6 +521,19 @@ export const QueryConsole: React.FC<QueryConsoleProps> = ({
                 </button>
               );
             })}
+
+            {isLive && onCancel && (
+              <button
+                type="button"
+                onClick={onCancel}
+                aria-label="Stop this run"
+                title="Stop this run"
+                className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-rose-300/50 bg-rose-400/15 px-3 text-[11px] font-bold text-rose-100 transition-colors hover:bg-rose-400/25 cursor-pointer"
+              >
+                <Square className="h-3.5 w-3.5" strokeWidth={2.2} />
+                <span className="hidden md:inline">Stop</span>
+              </button>
+            )}
 
             {/* Submit — becomes the multimodal scanner when media is staged */}
             <button

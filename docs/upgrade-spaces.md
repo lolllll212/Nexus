@@ -9,13 +9,19 @@ every acceptance criterion includes the rule learned during the dispatch: **new
 (the [env-var guard](../tests/eval/test_docs_env_vars.py) enforces it).
 
 Status below is the measured state, not the plan's intent — this page is
-updated as each space lands on master. Nine of ten spaces are landed on master
-(verified in the code: `src/nexus/domain/crdt/`, `LearnedRouter` +
-`train_from_route_log`, bandit in the consensus reviewers, the swarm dashboard,
-the bridge token auth, hybrid memory scoring, `docker-compose.loop.yml`); only
-Space 9 (OTel spans for the heal and consensus loops) is not wired yet — the
-`OTELTracer` adapter exists but nothing in `heal_loop.py` or the consensus
-protocol emits spans.
+updated as each space lands. **All ten spaces are now landed in code**. That is
+not the same as saying every optional runtime is switched on: the overnight
+daemon, Docker loop, bridge, learned-router provider, LoRA job, and telemetry
+export still start only through their explicit commands, profiles, providers,
+or environment gates.
+
+The machine-readable source of truth is
+`src/nexus/domain/value_objects/upgrade_spaces.py`. The authenticated
+`GET /api/system/upgrade-spaces` endpoint publishes that catalog with the live
+tool count and agent-telemetry snapshot; the React workspace, buildless
+workspace, and API dashboard render the same list instead of keeping separate
+status copies. The swarm dashboard is a separate live-state surface over the
+authenticated WebSocket bridge.
 
 | Space | What it is | Priority | Status | Owner |
 |---|---|---|---|---|
@@ -27,7 +33,7 @@ protocol emits spans.
 | 6 | Real-time swarm dashboard (Vite over the WebSocket bridge) | medium | **landed** | Xenom |
 | 7 | Bridge security hardening (shared-token auth, op allowlist) | high | **landed** | Xenom |
 | 8 | Offline LoRA fine-tuning on approved work | medium | **landed** | Astra |
-| 9 | Agent-layer observability (OTel spans, Prometheus counters) | low | not landed | Xenom |
+| 9 | Agent-layer observability (OTel spans, Prometheus counters) | low | **landed** | Xenom |
 | 10 | Containerized full loop (docker-compose profile) | low | **landed** | Xenom |
 
 ## Space 2 — Overnight autonomy daemon (landed)
@@ -85,14 +91,22 @@ python -m nexus.training.cli lora --baseline 0.8 --min-pass-rate 0.6
 python -m nexus.training.cli lora --run-eval   # evaluate now, not from a report
 ```
 
-## The remaining space
+## Space 9 — Agent telemetry (landed)
 
-**Space 9** — not landed. The `OTELTracer` adapter exists (the pre-existing
-observability adapter, enabled by `NEXUS_OTEL_ENABLED=true`), but nothing in
-`heal_loop.py` or the consensus protocol emits spans for heal iterations and
-consensus verdicts, and no Prometheus counters are exported. Owner: Xenom,
-dispatch in [`plan-upgrade-spaces.json`](../config/plans/plan-upgrade-spaces.json). This page's
-status table is updated as it lands, and its env vars must arrive documented in
-the same commit as the code that reads them (the
-[ops table](architecture-map.md) + the
-[env-var guard](../tests/eval/test_docs_env_vars.py)).
+`AgentTelemetry` records route hits, heal cycles and success rate, consensus
+rounds, and token spend. Heal and consensus emit spans/counters, and
+`RoutingProvider` now records every completed local, primary, speculative,
+fallback, and no-route outcome through a fail-soft telemetry hook.
+
+Two reliability details matter:
+
+- The DI container binds its metrics/tracer to the **same process-wide**
+  telemetry instance used by routes and scripts, so `/metrics` cannot render a
+  different empty store from the one receiving events.
+- `enabled` is reactive for default adapters. If the singleton was created
+  while telemetry was off, enabling it later swaps the no-op metrics/tracer for
+  real adapters; explicitly injected adapters are preserved.
+
+Set `NEXUS_OTEL_ENABLED=true` to export agent telemetry. Prometheus output is
+available from `/metrics`, while `/api/system/telemetry` and
+`/api/system/upgrade-spaces` include the JSON snapshot used by the websites.

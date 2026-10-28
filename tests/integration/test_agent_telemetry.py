@@ -76,3 +76,36 @@ async def test_agent_telemetry_counters_exposed_at_metrics_endpoint(monkeypatch)
     assert 'verdict="approved"' in output
     assert "nexus_token_spend_total" in output
     assert 'agent="tron"' in output
+
+
+def test_agent_telemetry_can_be_enabled_after_creation() -> None:
+    telemetry = AgentTelemetry(enabled=False)
+    telemetry.record_route("ignored")
+    assert telemetry.render_prometheus() == ""
+    assert telemetry.snapshot()["counters"]["route_hits"] == 0
+
+    telemetry.enabled = True
+    telemetry.record_route("primary", agent="router")
+    telemetry.record_heal_cycle("ok", 0.1, agent="heal")
+    telemetry.record_heal_cycle("failed", 0.2, agent="heal")
+
+    snapshot = telemetry.snapshot()
+    assert snapshot["enabled"] is True
+    assert snapshot["metrics_backend"] == "InMemoryMetrics"
+    assert snapshot["counters"]["route_hits"] == 1
+    assert snapshot["heal_success_rate"] == 0.5
+    assert 'route="primary"' in telemetry.render_prometheus()
+
+
+async def test_upgrade_spaces_endpoint_publishes_the_shared_catalog() -> None:
+    from nexus.infrastructure.api.routes.telemetry import upgrade_spaces
+    from tests.fakes.container import FakeContainer
+
+    payload = await upgrade_spaces(FakeContainer())
+
+    assert payload["summary"] == {"total": 10, "landed": 10, "pending": 0}
+    assert [space["id"] for space in payload["spaces"]] == list(range(1, 11))
+    assert payload["spaces"][8]["name"] == "Agent telemetry"
+    assert payload["generated_at"]
+    assert "tools_count" in payload
+    assert "enabled" in payload["telemetry"]

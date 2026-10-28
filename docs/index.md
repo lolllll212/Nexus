@@ -8,8 +8,9 @@ dreaming, and self-evolution.
 NEXUS is not a chatbot wrapper. It is a cerebral architecture with two loops:
 
 - **The conscious loop** (`/v1/chat`) - a ReAct reasoning engine with tool use,
-  multimodal I/O (vision + speech), session-level emotional state, and hybrid
-  memory recall (vector + graph).
+  multimodal I/O (vision + speech), session-level emotional state, runtime
+  AI guardrails, cited hybrid memory context (vector + graph), adaptive
+  execution effort, native-tool fallback, and verified final-answer quality.
 - **The subconscious loop** - asynchronous synthesis, pattern detection,
   autonomic self-healing, nocturnal dreaming, conscious goal pursuit, and
   multi-agent swarms.
@@ -28,6 +29,8 @@ Then:
 
 - `POST /v1/chat` - talk to the conscious engine
 - `POST /v1/chat/stream` - watch it think, event by event (SSE)
+- `GET /api/ai/capabilities` - inspect guardrail, context, execution-quality, and feedback features
+- `POST /api/ai/feedback` - rate a response by its returned `response_id`
 - `GET /dashboard` - the live brain dashboard
 - `POST /v1/system/dream` - trigger a dreaming cycle
 - `POST /v1/swarms/{id}/run` - fan a task out to a swarm
@@ -49,6 +52,9 @@ nexus train <add|search|...> # coding-training data CLI
 - [Clean Architecture & Dependency Rule](clean-architecture.md) - layering
   enforced by tests
 - [Memory System](memory.md) - synaptic graph + vector + working memory
+- [Modern AI Platform](ai-platform.md) - runtime guardrails, hybrid RRF/MMR
+  context packing with citations, adaptive effort/native tools/answer repair,
+  response feedback, and quality metrics
 - [Dreaming Pipeline](dreaming.md) - the 4-phase overnight cycle
 - [Self-Evolution](self-evolution.md) - dynamic tool generation
 - [Autonomous Goals](autonomous-goals.md) - P2 budget/approval/audit guardrails
@@ -73,6 +79,8 @@ nexus train <add|search|...> # coding-training data CLI
 - [Architecture Map](architecture-map.md) - every port and the adapter the DI
   container binds to it, plus every ops env var
 - [Agent Onboarding](agent-onboarding.md) - read this before your first change
+- [Development Guide](development.md) - one-command local stack, the separated
+  Workplace OS and Chat entries, and day-to-day verification commands
 - [Multi-Agent Coordination](AGENT_COORDINATION.md) - who owns which directory,
   and how handoffs work
 
@@ -85,6 +93,8 @@ If you change a binding, change the map in the same commit or CI will say so.
 
 - `NEXUS_INFRA_BACKEND=memory` — offline/in-memory backend (dreaming + evals without Docker).
 - `NEXUS_QUOTA_CHAT_PER_DAY`, `NEXUS_QUOTA_TOOL_GEN_PER_DAY`, `NEXUS_QUOTA_MEMORIES_PER_DAY` — per-tenant daily quotas (0 = unlimited); `NEXUS_GOALS_MAX_ACTIVE` caps active goals.
+- `NEXUS_AI_GUARDRAILS_ENABLED`, `NEXUS_AI_GUARDRAIL_REDACT_PII`, and `NEXUS_AI_FEEDBACK_PATH` — configure the modern AI guardrail and feedback layer.
+- `NEXUS_AI_QUALITY_GATE_ENABLED`, `NEXUS_AI_NATIVE_TOOL_CALLING_ENABLED`, `NEXUS_AI_QUALITY_MAX_REPAIRS`, and `NEXUS_AI_DEFAULT_EFFORT` — configure adaptive effort, provider-native tools, and bounded answer repair.
 
 ## Multi-modal I/O (P3)
 

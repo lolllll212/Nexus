@@ -3,7 +3,7 @@
 The nightly job runs `python -m nexus.eval` against a real model. These tests
 pin the part that decides pass/fail so a broken gate cannot ship unnoticed:
 the NEXUS_EVAL_MIN_PASS_RATE threshold, the JSON artifact CI publishes, and the
-grading rubric the 16-case golden set relies on.
+grading rubric the 25-case golden set relies on.
 
 Every LLM here is scripted. Nothing in this file opens a socket.
 """
@@ -77,7 +77,7 @@ def test_golden_set_tasks_are_unique():
 
 def test_golden_set_spans_every_required_category():
     categories = {c.category for c in GOLDEN_SET}
-    for required in ("grounding", "tool_use", "multi_hop", "refusal", "self_evolution"):
+    for required in ("grounding", "tool_use", "multi_hop", "refusal", "self_evolution", "real_life"):
         assert required in categories, f"golden set must cover {required}"
 
 
@@ -385,8 +385,8 @@ def test_report_groups_by_category():
         EvalResult(EvalCase(task="c", category="refusal"), [], "", True, 1),
     ]
     text = runner.report()
-    assert "grounding (1/1)" in text
-    assert "refusal (1/2)" in text
+    assert "grounding (1/1, quality 0.0/100)" in text
+    assert "refusal (1/2, quality 0.0/100)" in text
     assert "[FAIL] b" in text
 
 
@@ -397,6 +397,149 @@ def test_to_json_includes_per_category_rollup():
     assert "by_category" in data
     assert data["by_category"]["general"]["total"] == 4
     assert data["by_category"]["general"]["passed"] == 3
+
+
+def test_golden_set_execution_quality_cases_have_real_thresholds():
+    cases = [case for case in GOLDEN_SET if case.category == "execution_quality"]
+    assert len(cases) >= 4
+    for case in cases:
+        assert case.min_quality_score >= 75
+        assert case.expected_effort == case.effort
+        assert case.effort in {"fast", "balanced", "deep", "max"}
+
+
+def test_quality_threshold_and_effort_are_part_of_grading():
+    case = EvalCase(
+        task="What is the capital of France?",
+        expected_keywords=["Paris"],
+        effort="fast",
+        expected_effort="fast",
+        min_quality_score=80,
+    )
+    runner = _runner()
+    good_result = type(
+        "R",
+        (),
+        {
+            "tools_used": [],
+            "response": "Paris.",
+            "execution": {"effective_effort": "fast"},
+            "quality": {
+                "score": 100,
+                "passed": True,
+                "status": "verified",
+                "issues": [],
+                "repair_attempts_used": 0,
+            },
+        },
+    )()
+    weak_result = type(
+        "R",
+        (),
+        {
+            "tools_used": [],
+            "response": "Paris.",
+            "execution": {"effective_effort": "deep"},
+            "quality": {
+                "score": 45,
+                "passed": False,
+                "status": "degraded",
+                "issues": ["unsupported_claim"],
+                "repair_attempts_used": 2,
+            },
+        },
+    )()
+
+    good = runner._grade(case, good_result, started=0.0)
+    weak = runner._grade(case, weak_result, started=0.0)
+
+    assert good.passed is True
+    assert good.quality_score == 100
+    assert weak.passed is False
+    assert weak.quality_status == "degraded"
+    assert weak.repair_attempts == 2
+    assert "Quality below threshold" in weak.details
+    assert "Effort mismatch" in weak.details
+
+
+async def test_eval_runner_passes_effort_and_records_verified_quality():
+    case = EvalCase(
+        task="What is the capital of France?",
+        expected_keywords=["Paris"],
+        effort="fast",
+        expected_effort="fast",
+        min_quality_score=80,
+        category="execution_quality",
+    )
+    result = await _runner().run_case(case, llm=ScriptedLLM(["FINAL ANSWER: Paris."]))
+
+    assert result.passed is True
+    assert result.execution_effort == "fast"
+    assert result.quality_score >= 80
+    assert result.quality_passed is True
+
+
+async def test_eval_runner_fails_an_unsupported_current_claim_at_quality_threshold():
+    case = EvalCase(
+        task=(
+            "Research the latest official NVIDIA NIM model today, cite dated sources, "
+            "and recommend it for coding."
+        ),
+        expected_keywords=["NVIDIA"],
+        effort="deep",
+        expected_effort="deep",
+        min_quality_score=75,
+        category="execution_quality",
+    )
+    result = await _runner().run_case(
+        case,
+        llm=ScriptedLLM(["FINAL ANSWER: The latest NVIDIA NIM model is Example-9."]),
+    )
+
+    assert result.passed is False
+    assert result.execution_effort == "deep"
+    assert result.quality_passed is False
+    assert result.quality_status == "degraded"
+    assert "Quality below threshold" in result.details
+    assert result.quality_issues == ["missing_current_evidence"]
+
+
+def test_quality_average_is_reported_in_text_and_json(tmp_path):
+    runner = _runner()
+    runner.results = [
+        EvalResult(
+            EvalCase(task="a", category="execution_quality"),
+            [],
+            "ok",
+            True,
+            1,
+            quality_score=80,
+            quality_passed=True,
+            quality_status="verified",
+            execution_effort="fast",
+        ),
+        EvalResult(
+            EvalCase(task="b", category="execution_quality"),
+            [],
+            "ok",
+            True,
+            1,
+            quality_score=100,
+            quality_passed=True,
+            quality_status="verified",
+            execution_effort="max",
+        ),
+    ]
+
+    assert runner.average_quality_score == 90.0
+    assert "Average quality score: 90.0/100" in runner.report()
+    payload = write_report_json(runner.results, tmp_path / "quality.json")
+    assert payload["average_quality_score"] == 90.0
+    row = payload["results"][0]
+    assert row["quality_score"] == 80
+    assert row["quality_status"] == "verified"
+    assert row["execution_effort"] == "fast"
+    assert row["repair_attempts"] == 0
 
 
 @pytest.mark.parametrize("threshold", [0.0, 0.25, 0.5, 0.75, 1.0])

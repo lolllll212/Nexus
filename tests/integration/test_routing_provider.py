@@ -198,3 +198,42 @@ def test_train_from_route_log_with_eval_feedback(tmp_path: Path) -> None:
 
     assert trained_count == 2
     assert rp.learned_router.classifier.samples_seen == initial_samples + 2  # type: ignore[union-attr]
+
+
+class RecordingTelemetry:
+    def __init__(self) -> None:
+        self.routes: list[str] = []
+
+    def record_route(self, route: str, *, agent: str | None = None) -> None:
+        self.routes.append(route)
+
+
+def test_routing_provider_records_every_completed_route() -> None:
+    telemetry = RecordingTelemetry()
+    rp = RoutingProvider(
+        primary=MockLLM("premium-result"),
+        local=MockLLM("local-result"),
+        force_route=Complexity.LOW,
+        telemetry=telemetry,
+    )
+
+    reply = asyncio.run(rp.complete([{"role": "user", "content": "fix typo"}]))
+
+    assert reply == "local-result"
+    assert telemetry.routes == ["local"]
+    assert rp.route_log[-1]["route"] == "local"
+
+
+def test_routing_provider_survives_broken_telemetry() -> None:
+    class BrokenTelemetry:
+        def record_route(self, route: str, *, agent: str | None = None) -> None:
+            raise RuntimeError("collector unavailable")
+
+    rp = RoutingProvider(
+        primary=MockLLM("premium-result"),
+        force_route=Complexity.HIGH,
+        telemetry=BrokenTelemetry(),
+    )
+
+    assert asyncio.run(rp.complete([{"role": "user", "content": "design this"}])) == "premium-result"
+    assert rp.route_log[-1]["route"] == "primary"

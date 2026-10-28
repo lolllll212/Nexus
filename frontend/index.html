@@ -1,8 +1,8 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>NEXUS â€” COGNITIVE OS</title>
+<title>NEXUS — COGNITIVE OS</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="shared/hud.css">
 <script type="module" src="shared/voice.js"></script>
@@ -48,6 +48,14 @@
   #search:focus { border-color:var(--cyan-glow); box-shadow:0 0 16px rgba(125,255,217,.2); }
   #search-box .key-hint { position:absolute; right:10px; top:8px; font-family:"SF Mono",monospace;
     font-size:9px; color:#6f8f86; border:1px solid rgba(125,255,217,.15); padding:1px 5px; border-radius:4px; }
+
+
+  .nexus-crosslinks { display:flex; flex-wrap:wrap; gap:6px; margin:10px 14px 2px; }
+  .nexus-crosslinks a { color:#9fd8cc; text-decoration:none; border:1px solid rgba(125,255,217,.22);
+    background:rgba(125,255,217,.05); border-radius:999px; padding:5px 9px;
+    font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:8.5px; letter-spacing:.14em; }
+  .nexus-crosslinks a:hover { color:#eafff8; border-color:rgba(125,255,217,.55); }
+  .nexus-crosslinks a:focus-visible, .dock-btn:focus-visible, #chat-latest:focus-visible { outline:2px solid #00f0ff; outline-offset:2px; }
 
   #open-workspace { display:flex; align-items:center; justify-content:center; gap:7px;
     margin:10px 14px 2px; padding:9px 10px; border-radius:10px; text-decoration:none;
@@ -231,7 +239,7 @@
     width:min(660px, 86vw); display:flex; flex-direction:column; gap:8px; align-items:center; }
 
   /* Expandable Chat Drawer */
-  #chat-drawer { width:100%; max-height:220px; overflow-y:auto; display:flex; flex-direction:column;
+  #chat-drawer { width:100%; max-height:220px; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; display:flex; flex-direction:column;
     gap:8px; padding:0 4px; pointer-events:auto; }
   #chat-drawer::-webkit-scrollbar { width:4px; }
   #chat-drawer::-webkit-scrollbar-thumb { background:rgba(125,255,217,.25); border-radius:4px; }
@@ -316,14 +324,14 @@
 <!-- Top-Center Unified Toolbar -->
 <div id="top-toolbar">
   <button class="tbtn" id="btn-view-mode" title="Toggle 2D / 3D Layout">3D</button>
-  <button class="tbtn" id="btn-fit" title="Fit Camera (F)">âŠ™ FIT</button>
+  <button class="tbtn" id="btn-fit" title="Fit Camera (F)">⊙ FIT</button>
   <span id="focus-name">NEXUS GALAXY</span>
-  <button class="tbtn gold" id="btn-reset" title="Reset Selection (Esc)">â†º RESET</button>
-  <button class="tbtn magenta" id="btn-dream" title="Dream Mode: Auto-Link Discovery">âœ§ DREAM</button>
-  <button class="tbtn danger" id="btn-shield" title="Shield Radar: Security Audit">ðŸ›¡ SHIELD</button>
+  <button class="tbtn gold" id="btn-reset" title="Reset Selection (Esc)">↺ RESET</button>
+  <button class="tbtn magenta" id="btn-dream" title="Dream Mode: Auto-Link Discovery">✧ DREAM</button>
+  <button class="tbtn danger" id="btn-shield" title="Shield Radar: Security Audit">🛡 SHIELD</button>
   
   <div style="position:relative;">
-    <button class="tbtn" id="btn-forces" title="Physics & Forces">âš™ FORCES</button>
+    <button class="tbtn" id="btn-forces" title="Physics & Forces">⚙ FORCES</button>
     <div class="popover-menu" id="forces-popover">
       <div class="fslider">
         <span>Repel (<b id="lbl-repel">80</b>)</span>
@@ -362,7 +370,7 @@
   <div class="head">
     <b>NEXUS COGNITIVE OS</b>
     <!-- Single source of truth for counts -->
-    <div class="sub" id="counts">â€” nodes Â· â€” connections</div>
+    <div class="sub" id="counts">— nodes · — connections</div>
   </div>
 
   <div id="search-box">
@@ -374,18 +382,23 @@
   <a id="open-workspace" href="/workspace" title="Open the NEXUS OS workspace cockpit">
     <span>&#9670;</span> OPEN NEXUS OS COCKPIT
   </a>
+  <nav class="nexus-crosslinks" aria-label="Other Nexus surfaces">
+    <a href="/workspace#spaces">SPACES</a>
+    <a href="/chat.html">BRAIN CHAT</a>
+    <a href="/holo.html">HOLO WORKBENCH</a>
+  </nav>
 
   <!-- Inspector Card (Hidden until node clicked) -->
   <div id="inspector">
     <div class="ins-header">
       <div id="ins-name"><span class="dot"></span><span>Node Name</span></div>
-      <button class="close-btn" id="btn-close-ins" title="Close Inspector">âœ•</button>
+      <button class="close-btn" id="btn-close-ins" title="Close Inspector">✕</button>
     </div>
     <div id="ins-group">CORE</div>
-    <div id="ins-meta">â€”</div>
+    <div id="ins-meta">—</div>
 
     <div id="path-banner">
-      <div class="path-title">âš¡ SHORTEST PATH TRACER</div>
+      <div class="path-title">⚡ SHORTEST PATH TRACER</div>
       <div id="path-summary" style="font-size:10.5px; color:#c9d6d2;"></div>
       <div class="path-chips" id="path-chips"></div>
       <button class="btn-sm btn-cancel" id="btn-clear-path" style="margin-top:6px;">Clear Trace</button>
@@ -403,7 +416,7 @@
     </div>
 
     <div class="ins-actions">
-      <button class="act-btn secondary" id="btn-edit-note">âœŽ Edit Note</button>
+      <button class="act-btn secondary" id="btn-edit-note">✎ Edit Note</button>
       <span id="ins-dynamic-run"></span>
     </div>
 
@@ -441,18 +454,19 @@
 
   <!-- Compact Icon Toggles -->
   <div class="hud-toggles">
-    <div class="hud-tog" id="tog-watch" title="Watch Swarm Activity">ðŸ‘ Watch</div>
-    <div class="hud-tog" id="tog-hold" title="Hold Force Simulation">â¸ Hold</div>
-    <div class="hud-tog" id="tog-focus" title="1-Hop Isolation">ðŸŽ¯ Focus</div>
+    <div class="hud-tog" id="tog-watch" title="Watch Swarm Activity">👁 Watch</div>
+    <div class="hud-tog" id="tog-hold" title="Hold Force Simulation">⏸ Hold</div>
+    <div class="hud-tog" id="tog-focus" title="1-Hop Isolation">🎯 Focus</div>
   </div>
 </div>
 
 <!-- EYES webcam PiP -->
-<div id="eyes"><span class="tag">EYES Â· LOCAL CAM</span><video id="eyesvid" autoplay playsinline muted></video></div>
+<div id="eyes"><span class="tag">EYES · LOCAL CAM</span><video id="eyesvid" autoplay playsinline muted></video></div>
 
 <!-- Bottom Floating Glassmorphic Command Dock -->
 <div id="dock-container">
-  <div id="chat-drawer"></div>
+  <button id="chat-latest" class="btn-sm btn-cancel" type="button" style="display:none;align-self:flex-end;margin:0 4px;">Jump to latest ↓</button>
+  <div id="chat-drawer" aria-live="polite"></div>
   <div id="command-dock">
     <div class="status-gem-wrap">
       <div class="status-gem" id="dock-gem"></div>
@@ -460,26 +474,29 @@
     </div>
     <select class="model-badge" id="dock-model" title="Active model - local or NVIDIA NIM" style="appearance:none;-webkit-appearance:none;cursor:pointer;background:transparent;border:none;outline:none;max-width:200px;"></select>
     <input id="msg" placeholder="Ask NEXUS or press M to speak..." autocomplete="off" />
-    <div class="dock-btn" id="mic" title="Voice (M)">ðŸŽ™</div>
-    <div class="dock-btn" id="send" title="Send (Enter)">âž¤</div>
+    <div class="dock-btn" id="mic" title="Voice (M)">🎙</div>
+    <div class="dock-btn" id="stop-chat" title="Stop generation" role="button" tabindex="0" aria-label="Stop generation" style="display:none;color:#ff9a9a;">■</div>
+    <div class="dock-btn" id="send" title="Send (Enter)" role="button" tabindex="0" aria-label="Send message">➤</div>
   </div>
 </div>
 
 <div id="caption"></div>
 <div id="toast"></div>
-<div id="fallback"><div>âš  3D libraries failed to load.<br/>Please ensure three.js and 3d-force-graph CDN connections are reachable.</div></div>
+<div id="fallback"><div>⚠  3D libraries failed to load.<br/>Please ensure three.js and 3d-force-graph CDN connections are reachable.</div></div>
 
 <script>
 /* ============================================================
-   NEXUS COGNITIVE OS â€” 3D Cosmos & ReAct Agent Brain
+   NEXUS COGNITIVE OS — 3D Cosmos & ReAct Agent Brain
    ============================================================ */
 const $ = id => document.getElementById(id);
+const escHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 const MESH_POLL = 20000, LLM_POLL = 30000;
 const FINISH_MS = 1500; // Pause buffering threshold - natural sentence pause
 
 /* API client */
+try { localStorage.removeItem('nexus_api_key'); } catch (_) {}
 const API = {
-  key: localStorage.getItem('nexus_api_key') || '',
+  key: sessionStorage.getItem('nexus_api_key') || '',
   session: localStorage.getItem('nexus_session') || ('cosmos-' + Math.random().toString(36).slice(2, 10)),
 };
 localStorage.setItem('nexus_session', API.session);
@@ -490,8 +507,8 @@ async function nexusFetch(path, opts = {}) {
   if (opts.json) headers['Content-Type'] = 'application/json';
   return fetch(path, Object.assign({}, opts, { headers }));
 }
-const jget = async p => { const r = await nexusFetch(p); if (!r.ok) throw new Error(p + ' â†’ ' + r.status); return r.json(); };
-const jpost = (p, body) => nexusFetch(p, { method: 'POST', json: true, body: JSON.stringify(body || {}) });
+const jget = async p => { const r = await nexusFetch(p); if (!r.ok) throw new Error(p + ' → ' + r.status); return r.json(); };
+const jpost = (p, body, opts = {}) => nexusFetch(p, { method: 'POST', json: true, body: JSON.stringify(body || {}), signal: opts.signal });
 const jput = (p, body) => nexusFetch(p, { method: 'PUT', json: true, body: JSON.stringify(body || {}) });
 
 /* Group Palettes */
@@ -677,7 +694,7 @@ function nodeObject(n) {
 }
 
 /* Link Key */
-const linkKey = l => `${typeof l.source === 'object' ? l.source.id : l.source}â†’${typeof l.target === 'object' ? l.target.id : l.target}`;
+const linkKey = l => `${typeof l.source === 'object' ? l.source.id : l.source}→${typeof l.target === 'object' ? l.target.id : l.target}`;
 
 /* Link Resting Opacity: 0.05 cross-group, 0.15 same-group, 0.85 on highlight */
 function getLinkOpacity(l) {
@@ -708,7 +725,7 @@ function initGraph() {
     .backgroundColor('rgba(0,0,0,0)')
     .showNavInfo(false)
     .nodeThreeObject(nodeObject)
-    .nodeLabel(n => `${n.__label || n.label || n.id} â€” ${gstyle(n.group).label}`)
+    .nodeLabel(n => `${escHtml(n.__label || n.label || n.id)} — ${escHtml(gstyle(n.group).label)}`)
     .linkColor(l => {
       if (l.__dream) return '#e056fd';
       if (l.__path) return '#00f0ff';
@@ -866,7 +883,7 @@ function computeDegree() {
 
 /* Single source of truth for counters in top-left subtitle */
 function renderCounts() {
-  $('counts').textContent = `${FULL.nodes.length} nodes Â· ${FULL.links.length} connections`;
+  $('counts').textContent = `${FULL.nodes.length} nodes · ${FULL.links.length} connections`;
 }
 
 function refresh() {
@@ -916,7 +933,7 @@ function renderFilter() {
   for (const g of order) {
     const row = document.createElement('div');
     row.className = 'frow' + (HIDDEN.has(g) ? ' off' : '');
-    row.innerHTML = `<span class="fdot" style="background:${gstyle(g).color}"></span><span>${gstyle(g).label}</span><span class="fc">${counts[g]}</span>`;
+    row.innerHTML = `<span class="fdot" style="background:${gstyle(g).color}"></span><span>${escHtml(gstyle(g).label)}</span><span class="fc">${Number(counts[g] || 0)}</span>`;
     row.onclick = () => {
       HIDDEN.has(g) ? HIDDEN.delete(g) : HIDDEN.add(g);
       row.classList.toggle('off');
@@ -963,7 +980,7 @@ function renderHubs() {
   const box = $('hubs'); box.innerHTML = '';
   for (const h of hubs) {
     const row = document.createElement('div'); row.className = 'hub';
-    row.innerHTML = `<span class="hdot" style="background:${nodeColor(h.primaryNode)}"></span><span>${h.title}</span><span class="hc">${h.count}</span>`;
+    row.innerHTML = `<span class="hdot" style="background:${nodeColor(h.primaryNode)}"></span><span>${escHtml(h.title)}</span><span class="hc">${Number(h.count || 0)}</span>`;
     row.onclick = () => {
       selectNode(h.primaryNode.id);
       focusNode(h.primaryNode.id);
@@ -1053,7 +1070,7 @@ function handlePathTracing(node) {
 
   selectNode(end);
   refresh();
-  showToast(`âš¡ Path traced: ${path.length} nodes linked.`);
+  showToast(`⚡ Path traced: ${path.length} nodes linked.`);
 }
 
 $('btn-clear-path').onclick = () => {
@@ -1084,7 +1101,7 @@ function selectNode(id) {
   ins.classList.add('active');
 
   const st = gstyle(n.group);
-  $('ins-name').innerHTML = `<span class="dot" style="background:${nodeColor(n)}"></span><span>${n.__label || n.label || n.id}</span>`;
+  $('ins-name').innerHTML = `<span class="dot" style="background:${nodeColor(n)}"></span><span>${escHtml(n.__label || n.label || n.id)}</span>`;
   $('ins-group').textContent = st.label.toUpperCase();
   $('ins-group').style.background = nodeColor(n);
 
@@ -1093,7 +1110,7 @@ function selectNode(id) {
   const conns = connectionsOf(id);
   metaBits.push(`${conns.length} connection${conns.length === 1 ? '' : 's'}`);
   if (n.status) metaBits.push(`status: ${n.status}`);
-  $('ins-meta').textContent = metaBits.join(' Â· ');
+  $('ins-meta').textContent = metaBits.join(' · ');
 
   // Full excerpt / desc
   const excerptText = n.full || n.excerpt || n.desc || 'No documentation excerpt available.';
@@ -1107,7 +1124,7 @@ function selectNode(id) {
   for (const c of conns.slice(0, 30)) {
     const cn = nodeBy(c.id); if (!cn) continue;
     const row = document.createElement('div'); row.className = 'conn';
-    row.innerHTML = `<span class="cdot" style="background:${nodeColor(cn)}"></span><span>${cn.__label || cn.label || cn.id}</span><span class="w">${c.weight.toFixed(1)}</span>`;
+    row.innerHTML = `<span class="cdot" style="background:${nodeColor(cn)}"></span><span>${escHtml(cn.__label || cn.label || cn.id)}</span><span class="w">${Number(c.weight || 0).toFixed(1)}</span>`;
     row.onclick = () => { selectNode(c.id); focusNode(c.id); };
     rows.appendChild(row);
   }
@@ -1175,7 +1192,7 @@ $('btn-save-note').onclick = async () => {
       $('ins-desc').textContent = newContent;
       $('ins-editor-wrap').classList.remove('active');
       $('ins-desc').style.display = 'block';
-      showToast('âœ“ Note saved to disk and re-indexed live.');
+      showToast('✓ Note saved to disk and re-indexed live.');
       loadAll();
     } else {
       alert('Save failed: ' + (j.error || 'Unknown error'));
@@ -1190,20 +1207,20 @@ function renderRunButton(n) {
   const box = $('ins-dynamic-run'); box.innerHTML = '';
   if (!n.triggerable) return;
   const btn = document.createElement('button'); btn.className = 'act-btn';
-  btn.textContent = { dream: 'â–¶ DREAM CYCLE', run: 'â–¶ RUN SWARM', generate: 'â–¶ GENERATE TOOL' }[n.action || n.id] || 'â–¶ RUN';
+  btn.textContent = { dream: '▶ DREAM CYCLE', run: '▶ RUN SWARM', generate: '▶ GENERATE TOOL' }[n.action || n.id] || '▶ RUN';
   btn.onclick = async () => {
     btn.textContent = 'WORKING...';
     try {
       const r = await jpost('/api/cosmos/trigger', { node: n.id, params: {} });
       const j = await r.json();
       $('ins-result').className = 'show';
-      $('ins-result').textContent = (j.ok ? 'âœ“ ' : 'âœ— ') + (j.summary || 'Trigger executed');
+      $('ins-result').textContent = (j.ok ? '✓ ' : '✗ ') + (j.summary || 'Trigger executed');
       pulseAround(n.id, 14);
     } catch (e) {
       $('ins-result').className = 'show';
-      $('ins-result').textContent = 'âœ— ' + e.message;
+      $('ins-result').textContent = '✗ ' + e.message;
     }
-    btn.textContent = 'â–¶ RUN';
+    btn.textContent = '▶ RUN';
   };
   box.appendChild(btn);
 }
@@ -1266,7 +1283,7 @@ function animateThoughtTrail(nodeIds) {
 /* Dreaming (Auto-Link Discovery) */
 $('btn-dream').onclick = async () => {
   setDockStatus('THINKING');
-  showToast('âœ§ Dreaming: scanning repository for conceptual links...');
+  showToast('✧ Dreaming: scanning repository for conceptual links...');
   try {
     const res = await jpost('/api/dream', {});
     const data = await res.json();
@@ -1285,7 +1302,7 @@ $('btn-dream').onclick = async () => {
 
     refresh();
     openDreamApprovalList(suggestions);
-    showToast(`âœ§ Discovered ${suggestions.length} dream links! Inspect to approve.`);
+    showToast(`✧ Discovered ${suggestions.length} dream links! Inspect to approve.`);
   } catch (err) {
     showToast('Dream scan failed: ' + err.message);
   }
@@ -1306,8 +1323,8 @@ function openDreamApprovalList(suggestions) {
     item.style.padding = '8px 4px';
     item.style.borderBottom = '1px solid rgba(224,86,253,.2)';
     item.innerHTML = `
-      <div style="font-size:11px; color:#eafff8; font-weight:600;">${s.source_label} â†” ${s.target_label}</div>
-      <div style="font-size:9.5px; color:#8fd8c2; margin:2px 0;">${s.reason} (${Math.round(s.score * 100)}% match)</div>
+      <div style="font-size:11px; color:#eafff8; font-weight:600;">${escHtml(s.source_label)} ↔ ${escHtml(s.target_label)}</div>
+      <div style="font-size:9.5px; color:#8fd8c2; margin:2px 0;">${escHtml(s.reason)} (${Math.round(Number(s.score || 0) * 100)}% match)</div>
       <button class="btn-sm btn-save" style="margin-top:4px; font-size:8.5px; padding:3px 9px;">Approve Link</button>
     `;
     item.querySelector('button').onclick = async (e) => {
@@ -1316,7 +1333,7 @@ function openDreamApprovalList(suggestions) {
         const r = await jpost('/api/dream/approve', { source: s.source, target: s.target });
         const j = await r.json();
         if (j.ok) {
-          showToast(`âœ“ Link approved: ${s.source_label} â†” ${s.target_label}`);
+          showToast(`✓ Link approved: ${s.source_label} ↔ ${s.target_label}`);
           item.remove();
           loadAll();
         }
@@ -1338,14 +1355,14 @@ $('btn-shield').onclick = async () => {
     return;
   }
 
-  showToast('ðŸ›¡ Auditing repository nodes for security posture...');
+  showToast('🛡 Auditing repository nodes for security posture...');
   try {
     const res = await jpost('/api/scan/nodes', {});
     const data = await res.json();
     SHIELD_AUDIT.clear();
     (data.scanned_nodes || []).forEach(item => SHIELD_AUDIT.set(item.id, item));
     refresh();
-    showToast(`ðŸ›¡ Shield Active: ${data.high_count} High, ${data.med_count} Med risk issues found.`);
+    showToast(`🛡 Shield Active: ${data.high_count} High, ${data.med_count} Med risk issues found.`);
   } catch (err) {
     showToast('Shield scan failed: ' + err.message);
   }
@@ -1378,7 +1395,7 @@ function renderAutolog(events) {
   const box = $('alog-rows');
   for (const ev of events.slice(0, 6)) {
     const row = document.createElement('div'); row.className = 'alog';
-    row.innerHTML = `<span class="ago">now</span><b>${ev.node || 'pulse'}</b> ${ev.summary || JSON.stringify(ev).slice(0, 70)}`;
+    row.innerHTML = `<span class="ago">now</span><b>${escHtml(ev.node || 'pulse')}</b> ${escHtml(ev.summary || JSON.stringify(ev).slice(0, 70))}`;
     box.insertBefore(row, box.firstChild);
   }
   while (box.children.length > 7) box.lastChild.remove();
@@ -1406,10 +1423,10 @@ async function loadDockModels() {
     const locals = (d.local && d.local.models) || [];
     const nim = (d.nim && d.nim.models) || [];
     let html = locals.length
-      ? '<optgroup label="LOCAL">' + locals.map(m => '<option value="local|' + m + '">' + m + '</option>').join('') + '</optgroup>'
+      ? '<optgroup label="LOCAL">' + locals.map(m => '<option value="local|' + escHtml(m) + '">' + escHtml(m) + '</option>').join('') + '</optgroup>'
       : '<optgroup label="LOCAL"><option value="local|">local offline</option></optgroup>';
     html += '<optgroup label="NVIDIA NIM">' +
-      nim.map(m => '<option value="nim|' + m.id + '">' + String(m.name || m.id).slice(0, 28) + '</option>').join('') +
+      nim.map(m => '<option value="nim|' + escHtml(m.id) + '">' + escHtml(String(m.name || m.id).slice(0, 28)) + '</option>').join('') +
       '</optgroup>';
     sel.innerHTML = html;
     const active = d.active || {};
@@ -1451,28 +1468,49 @@ if (document.readyState === 'loading') {
 
 
 
+let activeChatController = null;
+let chatStickToBottom = true;
+const GALAXY_DRAFT_KEY = 'nexus-galaxy-draft';
+function setChatBusy(busy) {
+  const stop = $('stop-chat');
+  if (stop) stop.style.display = busy ? 'flex' : 'none';
+}
+function stopChatGeneration() {
+  activeChatController?.abort();
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  setDockStatus('IDLE');
+}
+
 async function sendChat(raw) {
   const text = (raw || $('msg').value || '').trim();
   if (!text) return;
-  $('msg').value = '';
 
-  // Intercept instant interrupts
+  // Intercept instant interrupts: stop speech and any in-flight generation.
   if (/^(stop|wait|pause|hold|quiet)$/i.test(text)) {
-    if (window.speechSynthesis) speechSynthesis.cancel();
-    setDockStatus('IDLE');
-    showToast('Speech halted.');
+    stopChatGeneration();
+    $('msg').value = '';
+    try { sessionStorage.removeItem(GALAXY_DRAFT_KEY); } catch (_) {}
+    showToast(activeChatController ? 'Generation halted.' : 'Speech halted.');
     return;
   }
+  if (activeChatController) {
+    showToast('NEXUS is still working — use Stop or wait for this reply.');
+    return;
+  }
+  $('msg').value = '';
+  try { sessionStorage.removeItem(GALAXY_DRAFT_KEY); } catch (_) {}
 
   // Voice Routes
   if (checkVoiceRoutes(text)) return;
 
-  appendChatBubble('user', text.replace(/</g, '&lt;'));
+  appendChatBubble('user', text);
   setDockStatus('THINKING');
   pulseAround('N.E.X.U.S', 12);
+  activeChatController = new AbortController();
+  setChatBusy(true);
 
   try {
-    const res = await jpost('/chat', { message: text, question: text, session_id: API.session });
+    const res = await jpost('/chat', { message: text, question: text, session_id: API.session }, { signal: activeChatController.signal });
     const j = await res.json();
     const answer = j.answer || j.response || 'No synthesis returned.';
     const reasoning = (j.reasoning || '').trim();
@@ -1482,9 +1520,16 @@ async function sendChat(raw) {
     speak(answer);
     animateThoughtTrail(returnedNodes);
   } catch (err) {
-    appendChatBubble('nexus', 'Communication link disrupted: ' + err.message);
+    if (err.name === 'AbortError') {
+      appendChatBubble('nexus', 'Generation stopped. The browser request was cancelled; a non-streaming backend task may still finish server-side.');
+    } else {
+      appendChatBubble('nexus', 'Communication link disrupted: ' + err.message);
+    }
+  } finally {
+    activeChatController = null;
+    setChatBusy(false);
+    setDockStatus('IDLE');
   }
-  setDockStatus('IDLE');
 }
 
 function appendChatBubble(role, text, nodes = [], originalPrompt = '', reasoning = '') {
@@ -1509,7 +1554,12 @@ function appendChatBubble(role, text, nodes = [], originalPrompt = '', reasoning
       d.appendChild(think);
     }
 
-    d.innerHTML = `<div>${text.replace(/\n/g, '<br>')}</div>`;
+    const answerBody = document.createElement('div');
+    String(text).split('\n').forEach((line, index) => {
+      if (index) answerBody.appendChild(document.createElement('br'));
+      answerBody.appendChild(document.createTextNode(line));
+    });
+    d.appendChild(answerBody);
 
     const footer = document.createElement('div');
     footer.className = 'bubble-footer';
@@ -1541,8 +1591,8 @@ function appendChatBubble(role, text, nodes = [], originalPrompt = '', reasoning
         const r = await jpost('/api/notes/save', { title, content });
         const resp = await r.json();
         if (resp.ok) {
-          showToast('âœ“ Note saved to docs/notes/ & indexed into graph!');
-          saveBtn.textContent = 'âœ“ Saved';
+          showToast('✓ Note saved to docs/notes/ & indexed into graph!');
+          saveBtn.textContent = '✓ Saved';
           loadAll();
         }
       } catch (e) { alert('Save failed: ' + e.message); }
@@ -1555,7 +1605,13 @@ function appendChatBubble(role, text, nodes = [], originalPrompt = '', reasoning
   const drawer = $('chat-drawer');
   drawer.appendChild(d);
   while (drawer.children.length > 8) drawer.firstChild.remove();
-  drawer.scrollTop = drawer.scrollHeight;
+  if (role === 'user' || chatStickToBottom) {
+    drawer.scrollTop = drawer.scrollHeight;
+    chatStickToBottom = true;
+    $('chat-latest').style.display = 'none';
+  } else {
+    $('chat-latest').style.display = 'block';
+  }
 }
 
 /* Voice Routes: Extensible voice dispatch */
@@ -1611,7 +1667,7 @@ function speak(text) {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(NEXUS_VOICE.speakable(text));
     const v = NEXUS_VOICE.pickVoice();
-    if (v) { u.voice = v; u.lang = v.lang; }
+    if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = NEXUS_VOICE.LANGUAGE || 'en-IN'; }
     u.rate = 0.98; u.pitch = 1.0;
     u.onstart = () => setDockStatus('SPEAKING');
     u.onend = () => setDockStatus('IDLE');
@@ -1625,7 +1681,7 @@ function speak(text) {
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (SR) {
   micRec = new SR();
-  micRec.lang = 'en-US';
+  micRec.lang = (window.NEXUS_VOICE && NEXUS_VOICE.recognitionLanguage()) || 'en-IN';
   micRec.interimResults = true;
   micRec.maxAlternatives = 1;
 
@@ -1638,7 +1694,8 @@ if (SR) {
     }
     const current = (final || interim);
     $('msg').value = current;
-    caption('ðŸŽ™ ' + current, 1800);
+    try { sessionStorage.setItem(GALAXY_DRAFT_KEY, current); } catch (_) {}
+    caption('🎙 ' + current, 1800);
 
     // Buffer pause for 900ms before auto-dispatch
     silenceTimer = setTimeout(() => {
@@ -1672,6 +1729,7 @@ function toggleMic() {
   }
   try {
     if (window.speechSynthesis) speechSynthesis.cancel();
+    micRec.lang = (window.NEXUS_VOICE && NEXUS_VOICE.recognitionLanguage()) || 'en-IN';
     micRec.start();
     listening = true;
     $('mic').classList.add('live');
@@ -1681,7 +1739,33 @@ function toggleMic() {
 }
 $('mic').onclick = toggleMic;
 $('send').onclick = () => sendChat();
-$('msg').onkeydown = e => { if (e.key === 'Enter') sendChat(); };
+$('send').onkeydown = e => { if ((e.key === 'Enter' || e.key === ' ') && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); sendChat(); } };
+$('stop-chat').onclick = stopChatGeneration;
+$('stop-chat').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); stopChatGeneration(); } };
+$('msg').addEventListener('input', () => {
+  try { sessionStorage.setItem(GALAXY_DRAFT_KEY, $('msg').value); } catch (_) {}
+});
+try {
+  const savedDraft = sessionStorage.getItem(GALAXY_DRAFT_KEY);
+  if (savedDraft) $('msg').value = savedDraft;
+} catch (_) {}
+$('chat-drawer').addEventListener('scroll', () => {
+  const drawer = $('chat-drawer');
+  chatStickToBottom = drawer.scrollHeight - drawer.scrollTop - drawer.clientHeight < 72;
+  $('chat-latest').style.display = chatStickToBottom ? 'none' : 'block';
+}, { passive: true });
+$('chat-latest').onclick = () => {
+  const drawer = $('chat-drawer');
+  drawer.scrollTop = drawer.scrollHeight;
+  chatStickToBottom = true;
+  $('chat-latest').style.display = 'none';
+};
+$('msg').onkeydown = e => {
+  if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) {
+    e.preventDefault();
+    sendChat();
+  }
+};
 
 /* Keyboard Shortcuts */
 addEventListener('keydown', e => {

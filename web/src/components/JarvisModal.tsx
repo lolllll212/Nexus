@@ -15,7 +15,7 @@ import {
   Loader2 
 } from 'lucide-react';
 import { NimStatus, NimModel, AgentStatus } from '../types';
-import { speakWithStatus, stopAnySpeaking } from '../utils/voiceManager';
+import { getVoicePreferences, speakWithStatus, stopAnySpeaking } from '../utils/voiceManager';
 import { nexusFetch } from '../api';
 
 /* ---------- Minimal Web Speech API typings (no external dependency) ---------- */
@@ -322,14 +322,18 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
   /* --------------------------- Recognition engine -------------------------- */
 
   const getRecognition = (): SpeechRecognitionLike | null => {
-    if (recognitionRef.current) return recognitionRef.current;
+    const recognitionLanguage = getVoicePreferences().accent || 'en-IN';
+    if (recognitionRef.current) {
+      recognitionRef.current.lang = recognitionLanguage;
+      return recognitionRef.current;
+    }
     const Ctor = getSpeechRecognitionCtor();
     if (!Ctor) return null;
 
     const rec = new Ctor();
     rec.continuous = true;
     rec.interimResults = true;
-    rec.lang = 'en-US';
+    rec.lang = recognitionLanguage;
 
     rec.onresult = (event) => {
       let interim = '';
@@ -696,7 +700,10 @@ export const JarvisModal: React.FC<JarvisModalProps> = ({
             value={inputPrompt}
             disabled={isBusy}
             onChange={(e) => setInputPrompt(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            onKeyDown={(e) => {
+              const nativeEvent = e.nativeEvent as KeyboardEvent;
+              if (e.key === 'Enter' && !nativeEvent.isComposing && nativeEvent.keyCode !== 229) handleSend();
+            }}
             placeholder={
               isListening
                 ? 'Listening... speak now (say "stop", "close", or a hub name to command)'

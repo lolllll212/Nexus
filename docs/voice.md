@@ -40,6 +40,29 @@ touches audio; it only produces text, which the frontend vocalizes locally.
 - Voice-out toggle: the speaker button in chat.html gates all speech; the
   docks mute via the `mute=1` URL parameter.
 
+## React chat voice output (accent-first)
+
+The main React app (`web/`) has its own canonical speech manager,
+`web/src/utils/voiceManager.ts`, shared by the conversational chat, the
+Voice Cortex, and the Jarvis console:
+
+- **Default accent: Indian English (`en-IN`)** — e.g. Microsoft Neerja /
+  Prabhat where available. British (`en-GB`), US (`en-US`), Australian
+  (`en-AU`), Canadian (`en-CA`), and Irish (`en-IE`) English are selectable in
+  the voice settings popover (chat header and top bar). If the browser has no
+  exact-accent voice installed, the closest English voice is scored and used,
+  and the UI says so — voice quality is whatever the browser/OS ships.
+- Preferences (accent, specific voice, rate 0.5–1.5×, pitch 0.5–1.5×) persist
+  in `localStorage` under `nexus_voice_prefs`. The settings popover includes a
+  **Test voice** button and a master **Voice replies** switch (the same
+  capability toggle as the chat's capabilities panel).
+- When voice replies are on, the assistant's **actual final answer** is read
+  aloud — never the Extended Thinking trace, tool calls, code blocks, or
+  markdown syntax. `speakable()` strips those and the text is chunked to
+  ~180 characters so long Chromium utterances don't stall.
+- Every assistant message has a **Listen / Stop** button for replay, and the
+  composer shows a global Stop while anything is speaking.
+
 ## Common failure modes (and their fixes in this repo)
 
 - **Mic cuts off after ~1.5 s**: caused by `continuous = false` plus a fatal

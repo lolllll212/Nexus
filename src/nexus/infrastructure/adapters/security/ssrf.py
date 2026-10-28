@@ -219,7 +219,39 @@ def build_safe_opener(
     return opener
 
 
-def safe_http_fetch(
+DEFAULT_MAX_RESPONSE_BYTES = 1_000_000
+MAX_RESPONSE_BYTES = 10_000_000
+
+
+def _bounded_body(response: Any, max_bytes: int) -> tuple[str, bool, int]:
+    """Decode at most ``max_bytes`` from a urllib response.
+
+    Reading one byte past the cap distinguishes an exactly-sized response
+    from a truncated one without ever loading an unbounded body into memory.
+    """
+
+    limit = max(1, min(int(max_bytes), MAX_RESPONSE_BYTES))
+    raw = response.read(limit + 1)
+    if isinstance(raw, str):
+        raw_bytes = raw.encode("utf-8", errors="replace")
+    else:
+        raw_bytes = bytes(raw or b"")
+    truncated = len(raw_bytes) > limit
+    if truncated:
+        raw_bytes = raw_bytes[:limit]
+
+    charset = "utf-8"
+    headers = getattr(response, "headers", None)
+    get_charset = getattr(headers, "get_content_charset", None)
+    if callable(get_charset):
+        try:
+            charset = get_charset() or charset
+        except Exception:
+            pass
+    return raw_bytes.decode(charset, errors="replace"), truncated, len(raw_bytes)
+
+
+def safe_http_fetch_detailed(
     url: str,
     method: str = "GET",
     headers: dict[str, str] | None = None,
@@ -227,11 +259,26 @@ def safe_http_fetch(
     timeout: float = 12.0,
     allow_local: bool = False,
     max_redirects: int = 5,
-) -> tuple[int, str, dict[str, str]]:
-    """Perform an SSRF-safe HTTP request with pinned validation and redirect protection."""
+    max_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
+) -> dict[str, Any]:
+    """Perform an SSRF-safe request and return bounded response metadata.
+
+    HTTP error statuses are successful *observations* for caller tools: their
+    status, headers, final URL, and bounded body are returned instead of being
+    collapsed into a generic urllib exception. Transport failures still raise
+    so callers can distinguish “no response” from an HTTP response.
+    """
+
     is_safe, err, pinned_ip = resolve_and_validate_safe_url(url, allow_local=allow_local)
     if not is_safe:
-        return 403, f"SSRF Blocked: {err}", {}
+        return {
+            "status": 403,
+            "body": f"SSRF Blocked: {err}",
+            "headers": {},
+            "final_url": url,
+            "truncated": False,
+            "bytes_read": 0,
+        }
 
     parsed = urlparse(url.strip())
     original_host = parsed.netloc
@@ -251,7 +298,56 @@ def safe_http_fetch(
         req_headers["Host"] = original_host
 
     req = urllib.request.Request(url, data=body, headers=req_headers, method=method)
-    with opener.open(req, timeout=timeout) as resp:
-        content = resp.read().decode("utf-8", errors="replace")
-        resp_headers = dict(resp.headers)
-        return resp.status, content, resp_headers
+    try:
+        with opener.open(req, timeout=timeout) as resp:
+            content, truncated, bytes_read = _bounded_body(resp, max_bytes)
+            return {
+                "status": int(getattr(resp, "status", 200) or 200),
+                "body": content,
+                "headers": dict(resp.headers),
+                "final_url": resp.geturl(),
+                "truncated": truncated,
+                "bytes_read": bytes_read,
+            }
+    except urllib.error.HTTPError as exc:
+        try:
+            content, truncated, bytes_read = _bounded_body(exc, max_bytes)
+            return {
+                "status": int(exc.code or 0),
+                "body": content,
+                "headers": dict(exc.headers or {}),
+                "final_url": exc.geturl() if hasattr(exc, "geturl") else url,
+                "truncated": truncated,
+                "bytes_read": bytes_read,
+            }
+        finally:
+            exc.close()
+
+
+def safe_http_fetch(
+    url: str,
+    method: str = "GET",
+    headers: dict[str, str] | None = None,
+    body: bytes | None = None,
+    timeout: float = 12.0,
+    allow_local: bool = False,
+    max_redirects: int = 5,
+    max_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
+) -> tuple[int, str, dict[str, str]]:
+    """Backward-compatible tuple form of :func:`safe_http_fetch_detailed`."""
+
+    result = safe_http_fetch_detailed(
+        url,
+        method=method,
+        headers=headers,
+        body=body,
+        timeout=timeout,
+        allow_local=allow_local,
+        max_redirects=max_redirects,
+        max_bytes=max_bytes,
+    )
+    response_headers = dict(result["headers"])
+    response_headers["X-Nexus-Final-Url"] = str(result["final_url"])
+    response_headers["X-Nexus-Truncated"] = "true" if result["truncated"] else "false"
+    response_headers["X-Nexus-Bytes-Read"] = str(result["bytes_read"])
+    return int(result["status"]), str(result["body"]), response_headers

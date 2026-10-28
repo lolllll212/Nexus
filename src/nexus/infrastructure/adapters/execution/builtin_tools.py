@@ -74,9 +74,21 @@ def core_builtin_tools() -> list[Tool]:
         Tool(
             id="web_search",
             name="web_search",
-            description="Search the web via DuckDuckGo and return top results.",
-            input_schema=JSONSchema(properties={"query": {"type": "string"}}, required=["query"]),
-            output_schema=JSONSchema(properties={"results": {"type": "array"}}),
+            description="Search the web via DuckDuckGo and return structured title, URL, and snippet results.",
+            input_schema=JSONSchema(
+                properties={
+                    "query": {"type": "string"},
+                    "max_results": {"type": "integer", "default": 5, "minimum": 1, "maximum": 10},
+                },
+                required=["query"],
+            ),
+            output_schema=JSONSchema(
+                properties={
+                    "query": {"type": "string"},
+                    "results": {"type": "array"},
+                    "source": {"type": "string"},
+                }
+            ),
             status=ToolStatus.READY,
         ),
         Tool(

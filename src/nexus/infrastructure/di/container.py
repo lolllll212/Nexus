@@ -17,6 +17,7 @@ import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TypedDict
 
 from dotenv import load_dotenv
 
@@ -67,6 +68,7 @@ from nexus.domain.ports.secrets import SecretStore
 from nexus.domain.ports.speech import SpeechToText, TextToSpeech
 from nexus.domain.ports.swarm import AgentRepository, SwarmRepository
 from nexus.domain.ports.tool_registry import ToolRegistry
+from nexus.domain.value_objects.execution_quality import normalize_effort
 from nexus.domain.value_objects.synapse import SynapseConfig
 
 
@@ -81,6 +83,13 @@ def _parse_json_env(name: str, default: dict | None = None) -> dict:
         return json.loads(raw)
     except json.JSONDecodeError:
         return default or {}
+
+
+class AIExecutionConfig(TypedDict):
+    quality_gate_enabled: bool
+    native_tool_calling_enabled: bool
+    quality_max_repairs: int
+    default_effort: str
 
 
 @dataclass
@@ -187,6 +196,39 @@ class Config:
     tts_voice: str = field(default_factory=lambda: os.getenv("NEXUS_TTS_VOICE", "alloy"))
     # ---- Swarm (P4) ----
     swarm_max_workers: int = field(default_factory=lambda: int(os.getenv("NEXUS_SWARM_MAX_WORKERS", "5")))
+    # ---- Chat history (history window) ----
+    # File-backed JSON store for conversation sessions; empty or "memory" = ephemeral only.
+    history_path: str = field(default_factory=lambda: os.getenv("NEXUS_HISTORY_PATH", "data/chat_history.json"))
+    # ---- Modern AI platform layer ----
+    ai_guardrails_enabled: bool = field(
+        default_factory=lambda: os.getenv("NEXUS_AI_GUARDRAILS_ENABLED", "true").lower()
+        not in {"0", "false", "no", "off"}
+    )
+    ai_guardrail_redact_pii: bool = field(
+        default_factory=lambda: os.getenv("NEXUS_AI_GUARDRAIL_REDACT_PII", "true").lower()
+        not in {"0", "false", "no", "off"}
+    )
+    ai_feedback_path: str = field(
+        default_factory=lambda: os.getenv("NEXUS_AI_FEEDBACK_PATH", "data/ai_feedback.json")
+    )
+    ai_quality_gate_enabled: bool = field(
+        default_factory=lambda: os.getenv("NEXUS_AI_QUALITY_GATE_ENABLED", "true").lower()
+        not in {"0", "false", "no", "off"}
+    )
+    ai_native_tool_calling_enabled: bool = field(
+        default_factory=lambda: os.getenv(
+            "NEXUS_AI_NATIVE_TOOL_CALLING_ENABLED", "true"
+        ).lower()
+        not in {"0", "false", "no", "off"}
+    )
+    ai_quality_max_repairs: int = field(
+        default_factory=lambda: max(
+            0, min(5, int(os.getenv("NEXUS_AI_QUALITY_MAX_REPAIRS", "3")))
+        )
+    )
+    ai_default_effort: str = field(
+        default_factory=lambda: os.getenv("NEXUS_AI_DEFAULT_EFFORT", "auto")
+    )
     # ---- Plugins ----
     plugins_dir: str = field(default_factory=lambda: os.getenv("NEXUS_PLUGINS_DIR", "plugins"))
     # ---- Sandbox (P1 security) ----
@@ -236,6 +278,10 @@ class Container:
         self.synapse: SynapseConfig = SynapseConfig()
         self.concept_repo: ConceptRepository = self._build_concept_repo()
         self.working_memory: ShortTermMemory = self._build_working_memory()
+        self.history_store = self._build_history_store()
+        self.ai_feedback_store = self._build_ai_feedback_store()
+        self.ai_guardrail_policy = self._build_guardrail_policy()
+        self.ai_execution_config = self._build_ai_execution_config()
         self.tool_registry: ToolRegistry = self._build_tool_registry()
         self.mcp_server = self._build_mcp_server()
         self.deployer: DeploymentProvider | None = self._build_deployer()
@@ -260,6 +306,12 @@ class Container:
             session_manager=self.session_manager,
             tracer=self.tracer,
             metrics=self.metrics,
+            guardrail_policy=self.ai_guardrail_policy,
+            quality_gate_enabled=self.ai_execution_config["quality_gate_enabled"],
+            native_tool_calling_enabled=self.ai_execution_config[
+                "native_tool_calling_enabled"
+            ],
+            quality_max_repairs=self.ai_execution_config["quality_max_repairs"],
         )
         # A second cortex instance bound to the background LLM, so autonomous
         # steps run on the cheap/local provider instead of the interactive one.
@@ -274,6 +326,12 @@ class Container:
             session_manager=self.session_manager,
             tracer=self.tracer,
             metrics=self.metrics,
+            guardrail_policy=self.ai_guardrail_policy,
+            quality_gate_enabled=self.ai_execution_config["quality_gate_enabled"],
+            native_tool_calling_enabled=self.ai_execution_config[
+                "native_tool_calling_enabled"
+            ],
+            quality_max_repairs=self.ai_execution_config["quality_max_repairs"],
         )
         # Subconscious + dreaming loops use the background (local/cheap) LLM.
         self.entity_synthesis = EntitySynthesisUseCase(
@@ -490,9 +548,17 @@ class Container:
         )
 
     def _build_agent_telemetry(self):
-        from nexus.infrastructure.adapters.observability.agent_telemetry import AgentTelemetry
+        from nexus.infrastructure.adapters.observability.agent_telemetry import (
+            bind_global_agent_telemetry,
+        )
 
-        return AgentTelemetry(metrics=self.metrics, tracer=self.tracer)
+        # Routes/scripts use the process-global telemetry; the container must
+        # expose that same instance or /metrics can render an empty split-brain.
+        return bind_global_agent_telemetry(
+            metrics=self.metrics,
+            tracer=self.tracer,
+            enabled=self.config.otel_enabled,
+        )
 
     def _build_llm(self) -> LLMProvider:
         if self.config.llm_provider in ("nvidia", "nim"):
@@ -522,7 +588,12 @@ class Container:
             )
 
             local_high, local_low = build_local_tier()
-            routed: LLMProvider = RoutingProvider(primary=primary, local_high=local_high, local_low=local_low)
+            routed: LLMProvider = RoutingProvider(
+                primary=primary,
+                local_high=local_high,
+                local_low=local_low,
+                telemetry=self.agent_telemetry,
+            )
             ledger = Path(os.environ.get("NEXUS_TOKEN_BUDGET_LEDGER", "token_budget_ledger.json"))
             return TokenBudgetMiddleware(
                 inner=routed,
@@ -625,6 +696,48 @@ class Container:
         from nexus.infrastructure.adapters.persistence.redis_short_term_memory import RedisShortTermMemory
 
         return RedisShortTermMemory(host=self.config.redis_host, port=self.config.redis_port)
+
+    def _build_history_store(self):
+        """Conversation sessions for the history window.
+
+        File-backed under ``NEXUS_HISTORY_PATH`` whenever a real path is
+        configured — including the local ``memory`` infra backend, so the
+        history window survives a backend restart in local development.
+        An empty value or ``memory`` explicitly selects an ephemeral store.
+        """
+        from nexus.infrastructure.adapters.persistence.chat_history_store import ChatHistoryStore
+
+        history_path = (self.config.history_path or "").strip()
+        if not history_path or history_path.lower() in {"memory", ":memory:", "none"}:
+            return ChatHistoryStore(path=None)
+        return ChatHistoryStore(path=history_path)
+
+    def _build_ai_feedback_store(self):
+        """Closed-loop response-quality feedback under ``NEXUS_AI_FEEDBACK_PATH``."""
+        from nexus.infrastructure.adapters.persistence.ai_feedback_store import AIFeedbackStore
+
+        feedback_path = (self.config.ai_feedback_path or "").strip()
+        if not feedback_path or feedback_path.lower() in {"memory", ":memory:", "none"}:
+            return AIFeedbackStore(path=None)
+        return AIFeedbackStore(path=feedback_path)
+
+    def _build_guardrail_policy(self):
+        from nexus.domain.value_objects.ai_guardrails import GuardrailPolicy
+
+        return GuardrailPolicy(
+            enabled=self.config.ai_guardrails_enabled,
+            redact_pii=self.config.ai_guardrail_redact_pii,
+        )
+
+    def _build_ai_execution_config(self) -> AIExecutionConfig:
+        return {
+            "quality_gate_enabled": bool(self.config.ai_quality_gate_enabled),
+            "native_tool_calling_enabled": bool(
+                self.config.ai_native_tool_calling_enabled
+            ),
+            "quality_max_repairs": max(0, min(5, int(self.config.ai_quality_max_repairs))),
+            "default_effort": normalize_effort(self.config.ai_default_effort),
+        }
 
     def _build_tool_registry(self) -> ToolRegistry:
         from nexus.infrastructure.adapters.execution.builtin_tools import (

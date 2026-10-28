@@ -4,6 +4,7 @@ The light-mode ``frontend/workspace.html`` page is a thin shell over this router
 
 * ``GET  /api/workspace/bootstrap``            → identity, engine state, usage meters,
                                                  feature cards, route catalog, history
+* ``GET  /api/workspace/spaces``               → searchable shared Upgrade Spaces catalog
 * ``POST /api/workspace/runs``                 → open a run on one of four routes
                                                  (deep_research | image | search | music)
 * ``GET  /api/workspace/runs/{id}/stream``     → SSE frames that drive the dual-layer
@@ -34,6 +35,7 @@ import math
 import os
 import re
 import struct
+import sys
 import time
 import uuid
 import wave
@@ -1172,6 +1174,61 @@ def _usage_payload() -> dict[str, Any]:
     }
 
 
+def _upgrade_spaces_payload(query: str = "", priority: str = "") -> dict[str, Any]:
+    """Load the one shared Upgrade Spaces catalog used by every Nexus surface.
+
+    The sibling ``backend`` app normally inserts ``src/`` into ``sys.path`` before
+    importing this router. The fallback keeps direct router imports and tests
+    working without duplicating the ten-space catalog in this module.
+    """
+
+    try:
+        from nexus.domain.value_objects.upgrade_spaces import upgrade_spaces_catalog
+    except ImportError:
+        src_dir = str(ROOT_DIR / "src")
+        if src_dir not in sys.path:
+            sys.path.insert(0, src_dir)
+        from nexus.domain.value_objects.upgrade_spaces import upgrade_spaces_catalog
+
+    catalog = upgrade_spaces_catalog()
+    all_spaces = list(catalog.get("spaces", []))
+    priorities = sorted({str(space.get("priority", "")) for space in all_spaces if space.get("priority")})
+    needle = " ".join(query.lower().split())
+    selected_priority = priority.strip().upper()
+
+    def matches(space: dict[str, Any]) -> bool:
+        if selected_priority and str(space.get("priority", "")).upper() != selected_priority:
+            return False
+        if not needle:
+            return True
+        haystack = " ".join(
+            [
+                str(space.get("id", "")),
+                str(space.get("name", "")),
+                str(space.get("priority", "")),
+                str(space.get("owner", "")),
+                str(space.get("summary", "")),
+                str(space.get("status", "")),
+                str(space.get("runtime_note", "")),
+                " ".join(str(path) for path in space.get("evidence", [])),
+            ]
+        ).lower()
+        return needle in haystack
+
+    filtered = [space for space in all_spaces if matches(space)]
+    return {
+        "ok": True,
+        "spaces": filtered,
+        "summary": catalog.get("summary", {"total": len(all_spaces), "landed": 0, "pending": len(all_spaces)}),
+        "filtered_count": len(filtered),
+        "priorities": priorities,
+        "query": query,
+        "priority": selected_priority,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "source": "nexus.domain.value_objects.upgrade_spaces",
+    }
+
+
 def _sse(event: str, payload: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
 
@@ -1211,6 +1268,7 @@ async def workspace_bootstrap():
         },
     ]
     history = sorted(RUNS.values(), key=lambda r: r["created"], reverse=True)[:MAX_HISTORY]
+    spaces_summary = _upgrade_spaces_payload()["summary"]
     return JSONResponse(
         {
             "user": {
@@ -1239,6 +1297,7 @@ async def workspace_bootstrap():
                 "indexed_at": datetime.now(UTC).isoformat(),
             },
             "routes": [ROUTES[r] for r in ROUTE_ORDER],
+            "spaces": {**spaces_summary, "endpoint": "/api/workspace/spaces"},
             "features": [
                 {
                     "id": "fast_start",
@@ -1279,6 +1338,23 @@ async def workspace_bootstrap():
             ],
         }
     )
+
+
+@router.get("/api/workspace/spaces")
+async def workspace_spaces(q: str = "", priority: str = ""):
+    """Search the shared ten-space platform catalog for the legacy workspace."""
+
+    payload = _upgrade_spaces_payload(query=q, priority=priority)
+    if payload["priority"] and payload["priority"] not in payload["priorities"]:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": f"unknown priority '{priority}'",
+                "priorities": payload["priorities"],
+            },
+            status_code=400,
+        )
+    return JSONResponse(payload)
 
 
 @router.post("/api/workspace/runs")

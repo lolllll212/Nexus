@@ -38,6 +38,7 @@ from nexus.application.swarm.swarm import (
 from nexus.application.tools.generate_tool import GenerateToolUseCase
 from nexus.application.tools.self_heal import SelfHealUseCase
 from nexus.domain.ports.observability import NoopTracer
+from nexus.domain.value_objects.ai_guardrails import GuardrailPolicy
 from nexus.domain.value_objects.synapse import SynapseConfig
 from nexus.infrastructure.adapters.auth.api_key_authenticator import ApiKeyAuthenticator
 from nexus.infrastructure.adapters.autonomy.executor import CortexStepExecutor
@@ -45,6 +46,7 @@ from nexus.infrastructure.adapters.autonomy.goal_repository import InMemoryGoalR
 from nexus.infrastructure.adapters.autonomy.policy import DefaultAutonomyPolicy
 from nexus.infrastructure.adapters.observability.activity_feed import InMemoryActivityFeed
 from nexus.infrastructure.adapters.observability.observability import InMemoryMetrics
+from nexus.infrastructure.adapters.persistence.ai_feedback_store import AIFeedbackStore
 from nexus.infrastructure.adapters.security.rate_limiter import SlidingWindowRateLimiter
 from nexus.infrastructure.adapters.security.secrets import EnvSecretStore
 from nexus.infrastructure.adapters.swarm.executor import SwarmAgentExecutor
@@ -84,6 +86,13 @@ class FakeContainer:
         )
         self.tracer = NoopTracer()
         self.metrics = InMemoryMetrics()
+        from nexus.infrastructure.adapters.observability.agent_telemetry import (
+            get_global_agent_telemetry,
+        )
+
+        # Mirror production: routes and scripts share one process-wide agent
+        # telemetry instance instead of a separate fake-only counter store.
+        self.agent_telemetry = get_global_agent_telemetry()
         self.activity_feed = InMemoryActivityFeed()
         self.rate_limiter = SlidingWindowRateLimiter()
         self.quota = None  # will be None in fake mode; real Container builds RateLimitQuota
@@ -116,6 +125,15 @@ class FakeContainer:
         self.agent_repo = InMemoryAgentRepository()
         self.swarm_repo = InMemorySwarmRepository()
 
+        self.ai_feedback_store = AIFeedbackStore(path=None)
+        self.ai_guardrail_policy = GuardrailPolicy()
+        self.ai_execution_config = {
+            "quality_gate_enabled": True,
+            "native_tool_calling_enabled": True,
+            "quality_max_repairs": 3,
+            "default_effort": "auto",
+        }
+
         self.session_manager = SessionManager(self.working_memory)
         self.process_message = ProcessMessageUseCase(
             llm=self.llm,
@@ -128,6 +146,12 @@ class FakeContainer:
             session_manager=self.session_manager,
             tracer=self.tracer,
             metrics=self.metrics,
+            guardrail_policy=self.ai_guardrail_policy,
+            quality_gate_enabled=self.ai_execution_config["quality_gate_enabled"],
+            native_tool_calling_enabled=self.ai_execution_config[
+                "native_tool_calling_enabled"
+            ],
+            quality_max_repairs=self.ai_execution_config["quality_max_repairs"],
         )
         self.background_process_message = ProcessMessageUseCase(
             llm=self.background_llm,
@@ -140,6 +164,12 @@ class FakeContainer:
             session_manager=self.session_manager,
             tracer=self.tracer,
             metrics=self.metrics,
+            guardrail_policy=self.ai_guardrail_policy,
+            quality_gate_enabled=self.ai_execution_config["quality_gate_enabled"],
+            native_tool_calling_enabled=self.ai_execution_config[
+                "native_tool_calling_enabled"
+            ],
+            quality_max_repairs=self.ai_execution_config["quality_max_repairs"],
         )
         self.entity_synthesis = EntitySynthesisUseCase(
             self.background_llm, self.concept_repo, self.memory_repo, self.event_bus

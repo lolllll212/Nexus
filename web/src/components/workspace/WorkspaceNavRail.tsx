@@ -7,19 +7,22 @@ import {
   Boxes,
   BarChart3,
   Bot,
+  Layers3,
   Radio,
   Settings2,
 } from 'lucide-react';
 import { WorkspaceRoute } from './shared';
 
+export type WorkspaceNavRoute = WorkspaceRoute | 'SPACES';
+
 interface WorkspaceNavRailProps {
-  activeRoute: WorkspaceRoute;
-  onRouteChange: (route: WorkspaceRoute) => void;
+  activeRoute: WorkspaceNavRoute;
+  onRouteChange: (route: WorkspaceNavRoute) => void;
   onOpenIntegrations: () => void;
 }
 
 interface RailItem {
-  id: WorkspaceRoute;
+  id: WorkspaceNavRoute;
   label: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
 }
@@ -32,6 +35,7 @@ const RAIL_ITEMS: RailItem[] = [
   { id: 'ARCHITECTURE', label: 'Hexagonal Architecture', icon: Boxes },
   { id: 'ANALYTICS', label: 'Analytics Dashboard', icon: BarChart3 },
   { id: 'AGENTS', label: 'Agent Orchestration', icon: Bot },
+  { id: 'SPACES', label: 'Upgrade Spaces', icon: Layers3 },
 ];
 
 /**

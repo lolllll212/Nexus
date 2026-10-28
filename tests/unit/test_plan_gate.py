@@ -188,9 +188,33 @@ class TestPlanGate:
 
     def test_outside_editable_roots_refused(self, tmp_path: Path):
         b = PlanningBoard(tmp_path / "plans.json")
-        allowed, reason = check_file("frontend/holo.html", b)
+        allowed, reason = check_file("private/notes.txt", b)
         assert allowed is False
         assert "outside the editable roots" in reason
+
+    def test_existing_website_surfaces_are_gateable(self, tmp_path: Path):
+        """The React app, buildless frontend, and sibling web backend are
+        maintained product surfaces, so explicit plans may cover them."""
+        website_files = (
+            "web/src/components/ClaudeChatWorkspace.tsx",
+            "frontend/workspace.html",
+            "backend/routers/workspace.py",
+        )
+        b = PlanningBoard(tmp_path / "plans.json")
+        for f in website_files:
+            allowed, reason = check_file(f, b)
+            assert allowed is False
+            assert "outside the editable roots" not in reason
+        p, error = b.create_plan(
+            title="Upgrade websites",
+            agent="ceo",
+            steps=[("upgrade every website surface", list(website_files))],
+        )
+        assert error is None
+        b.begin(p.id)
+        for f in website_files:
+            allowed, _ = check_file(f, b)
+            assert allowed is True
 
     def test_done_plan_no_longer_covers(self, tmp_path: Path):
         b = PlanningBoard(tmp_path / "plans.json")

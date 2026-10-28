@@ -326,6 +326,19 @@ input[type="range"].cyan-slider::-moz-range-track {
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.nxs-scroll {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+/* Keyboard users get a consistent, visible focus ring across chat surfaces. */
+button:focus-visible,
+a:focus-visible,
+select:focus-visible {
+  outline: 2px solid rgba(139, 124, 246, 0.85);
+  outline-offset: 2px;
+}
+
 /* Light, subdued scrollbar for the workspace canvas */
 .nxs-workspace::-webkit-scrollbar,
 .nxs-scroll::-webkit-scrollbar {
@@ -470,4 +483,184 @@ input[type="range"].cyan-slider::-moz-range-track {
 @keyframes nxs-fade-in {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Hybrid chat: Claude warmth + Gemini aurora + ChatGPT clarity ─────────── */
+
+.nexus-hybrid-chat {
+  color-scheme: light;
+  isolation: isolate;
+}
+
+.nexus-aurora {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% -10%, rgba(255, 203, 164, 0.34), transparent 34rem),
+    radial-gradient(circle at 88% 6%, rgba(167, 187, 255, 0.28), transparent 32rem),
+    radial-gradient(circle at 58% 108%, rgba(168, 238, 219, 0.22), transparent 34rem),
+    linear-gradient(145deg, #fbf8f2 0%, #f7f4ed 48%, #f4f7fb 100%);
+}
+
+.nexus-aurora-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(54px);
+  mix-blend-mode: multiply;
+  opacity: 0.52;
+  will-change: transform, opacity;
+}
+
+.nexus-aurora-blob-warm {
+  width: 34rem;
+  height: 34rem;
+  left: -10rem;
+  top: -13rem;
+  background: radial-gradient(circle, rgba(234, 143, 94, 0.46), rgba(244, 184, 126, 0.18) 58%, transparent 72%);
+  animation: nexus-aurora-drift-a 18s ease-in-out infinite alternate;
+}
+
+.nexus-aurora-blob-violet {
+  width: 38rem;
+  height: 38rem;
+  right: -13rem;
+  top: -10rem;
+  background: radial-gradient(circle, rgba(139, 124, 246, 0.38), rgba(169, 187, 255, 0.16) 58%, transparent 72%);
+  animation: nexus-aurora-drift-b 22s ease-in-out infinite alternate;
+}
+
+.nexus-aurora-blob-teal {
+  width: 30rem;
+  height: 30rem;
+  right: 16%;
+  bottom: -17rem;
+  background: radial-gradient(circle, rgba(47, 158, 143, 0.30), rgba(142, 220, 202, 0.13) 58%, transparent 72%);
+  animation: nexus-aurora-drift-c 20s ease-in-out infinite alternate;
+}
+
+.nexus-aurora-active .nexus-aurora-blob {
+  opacity: 0.68;
+}
+
+.nexus-aurora-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.36;
+  background-image:
+    radial-gradient(rgba(94, 86, 70, 0.13) 0.65px, transparent 0.65px),
+    linear-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.16) 1px, transparent 1px);
+  background-size: 26px 26px, 92px 92px, 92px 92px;
+  mask-image: radial-gradient(circle at 50% 28%, black 0%, rgba(0, 0, 0, 0.52) 48%, transparent 86%);
+}
+
+.nexus-aurora-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.nexus-aurora-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.18), transparent 18%, transparent 78%, rgba(247, 245, 239, 0.58)),
+    radial-gradient(circle at center, transparent 48%, rgba(121, 105, 80, 0.055) 100%);
+}
+
+@keyframes nexus-aurora-drift-a {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(6rem, 3.5rem, 0) scale(1.13); }
+}
+
+@keyframes nexus-aurora-drift-b {
+  from { transform: translate3d(0, 0, 0) scale(1.04); }
+  to { transform: translate3d(-5rem, 5rem, 0) scale(0.94); }
+}
+
+@keyframes nexus-aurora-drift-c {
+  from { transform: translate3d(0, 0, 0) rotate(0deg) scale(0.96); }
+  to { transform: translate3d(-4rem, -3rem, 0) rotate(16deg) scale(1.08); }
+}
+
+.nexus-gradient-text {
+  background: linear-gradient(92deg, #c65b35 0%, #7c6cf0 48%, #239184 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.nexus-gradient-orb {
+  background: linear-gradient(135deg, #d97757 0%, #8b7cf6 55%, #2f9e8f 100%);
+}
+
+.nexus-glass-light {
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(224, 219, 206, 0.86);
+  box-shadow: 0 18px 50px rgba(73, 63, 45, 0.09);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.nexus-composer-glow {
+  position: relative;
+}
+
+.nexus-composer-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(105deg, rgba(217, 119, 87, 0.52), rgba(139, 124, 246, 0.42), rgba(47, 158, 143, 0.44));
+  opacity: 0;
+  filter: blur(10px);
+  transition: opacity 0.25s ease;
+}
+
+.nexus-composer-glow:focus-within::before {
+  opacity: 0.72;
+}
+
+.nexus-suggestion-card {
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+}
+
+.nexus-suggestion-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 38px rgba(73, 63, 45, 0.11);
+}
+
+@keyframes nexus-popover-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.nexus-popover-in {
+  transform-origin: bottom right;
+  animation: nexus-popover-in 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes nexus-sparkle-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-5px) rotate(8deg); }
+}
+
+.nexus-sparkle-float {
+  animation: nexus-sparkle-float 4.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nexus-aurora-blob,
+  .nexus-popover-in,
+  .nexus-sparkle-float {
+    animation: none !important;
+  }
+
+  .nexus-suggestion-card,
+  .nexus-composer-glow::before {
+    transition: none !important;
+  }
 }

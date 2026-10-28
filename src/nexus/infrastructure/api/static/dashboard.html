@@ -29,12 +29,31 @@
         .tag-error { background: #2a1a1a; color: #ff4444; }
         .tag-synapse { background: #2a2a1a; color: #ffff00; }
         .muted { color: #444; }
-        @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .full-width, .two-col { grid-column: span 1; } }
+        .nav { display: flex; gap: 8px; flex-wrap: wrap; font-size: 11px; }
+        .nav a { color: #8affc7; text-decoration: none; border: 1px solid #24402f; border-radius: 999px; padding: 6px 10px; background: #101a13; }
+        .nav a:hover { border-color: #00ff88; color: #eafff2; }
+        .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto; gap: 8px; margin-bottom: 10px; }
+        .toolbar input, .toolbar select, .toolbar button {
+            min-width: 0; background: #151515; border: 1px solid #2a2a2a; color: #d8ffe8;
+            padding: 7px 9px; border-radius: 5px; font-family: inherit; font-size: 11px;
+        }
+        .toolbar button { cursor: pointer; color: #00ff88; }
+        .summary { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; font-size: 10px; color: #8a9a90; }
+        .summary span { border: 1px solid #263329; border-radius: 999px; padding: 4px 7px; background: #101510; }
+        .space-note { color: #9db3a5; margin-top: 3px; line-height: 1.45; }
+        .evidence { color: #5f7666; margin-top: 3px; overflow-wrap: anywhere; }
+        button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #00ff88; outline-offset: 2px; }
+        @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .full-width, .two-col { grid-column: span 1; } .toolbar { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>NEXUS Brain Dashboard</h1>
+        <nav class="nav" aria-label="Nexus surfaces">
+            <a href="/docs">API docs</a>
+            <a href="/api/system/upgrade-spaces">Spaces JSON</a>
+            <a href="/metrics">Metrics</a>
+        </nav>
         <div class="auth">
             <label for="apiKey">API key</label>
             <input type="password" id="apiKey" placeholder="sk-test-1 ...">
@@ -69,6 +88,18 @@
             <h3>Tool Registry</h3>
             <div class="list" id="tools-list"></div>
         </div>
+        <div class="card full-width">
+            <h3>Upgrade Spaces</h3>
+            <div class="summary" id="spaces-summary"><span>Waiting for secured data…</span></div>
+            <div class="toolbar">
+                <input id="spaces-search" type="search" placeholder="Search spaces, runtime notes, evidence…" aria-label="Search Upgrade Spaces">
+                <select id="spaces-priority" aria-label="Filter Upgrade Spaces by priority">
+                    <option value="">All priorities</option>
+                </select>
+                <button id="spaces-refresh" type="button">Refresh</button>
+            </div>
+            <div class="list" id="spaces-list" style="max-height: 420px;"><div class="list-item muted">Enter an API key to load the catalog.</div></div>
+        </div>
         <div class="card two-col">
             <h3>Recent Dreams</h3>
             <div class="list" id="dream-log"></div>
@@ -80,8 +111,9 @@
     </div>
 
     <script>
+        try { localStorage.removeItem('nexus_api_key'); } catch (e) {}
         const SDK = {
-            key: localStorage.getItem('nexus_api_key') || '',
+            key: sessionStorage.getItem('nexus_api_key') || '',
             req: async function(path, opts) {
                 const headers = Object.assign({}, opts && opts.headers);
                 if (this.key) headers['Authorization'] = 'Bearer ' + this.key;
@@ -92,6 +124,38 @@
             },
             status: function(msg) { document.getElementById('status').textContent = msg; }
         };
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, ch => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[ch]));
+        }
+
+        function makeElement(tag, className, text) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text !== undefined) node.textContent = String(text ?? '');
+            return node;
+        }
+
+        function renderList(container, nodes, emptyText) {
+            container.replaceChildren(...(nodes.length ? nodes : [makeElement('div', 'muted', emptyText)]));
+        }
+
+        function listItem(tagClass, tagText, mainText, detailText) {
+            const item = makeElement('div', 'list-item');
+            item.appendChild(makeElement('span', 'tag ' + tagClass, tagText));
+            item.appendChild(document.createTextNode(' ' + String(mainText ?? '')));
+            if (detailText) {
+                item.appendChild(document.createTextNode(' '));
+                item.appendChild(makeElement('span', 'muted', detailText));
+            }
+            return item;
+        }
+
+        function istTime(date = new Date()) {
+            return date.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'medium' });
+        }
 
         function currentKey() {
             const input = document.getElementById('apiKey');
@@ -115,7 +179,7 @@
                 document.getElementById('messages').textContent = metrics['chat_messages_total'] || '0';
                 document.getElementById('dreams').textContent = metrics['dream_sessions_total'] || '0';
                 document.getElementById('requests').textContent = metrics['http_requests'] || '0';
-                SDK.status('Last updated: ' + new Date().toLocaleTimeString());
+                SDK.status('Last updated: ' + istTime() + ' IST');
             } catch (e) {
                 SDK.status('Error fetching metrics');
             }
@@ -123,27 +187,40 @@
 
         function setApiKey() {
             const value = currentKey();
-            localStorage.setItem('nexus_api_key', value);
+            sessionStorage.setItem('nexus_api_key', value);
             SDK.key = value;
             loadSecured();
         }
 
+        let securedLoading = false;
         async function loadSecured() {
+            if (securedLoading) return;
             SDK.key = currentKey();
             if (!SDK.key) { SDK.status('Enter an API key above'); return; }
-            await Promise.all([fetchTools(), fetchGraph(), fetchDreams(), fetchSwarmRuns()]);
+            securedLoading = true;
+            try {
+                await Promise.all([fetchTools(), fetchGraph(), fetchDreams(), fetchSwarmRuns(), fetchSpaces()]);
+            } finally {
+                securedLoading = false;
+            }
         }
 
         async function fetchTools() {
             const resp = await SDK.req('/v1/tools');
             if (!resp) return;
             try {
-                const tools = await resp.json();
+                const payload = await resp.json();
+                const tools = Array.isArray(payload) ? payload : (payload.tools || []);
                 const list = document.getElementById('tools-list');
-                list.innerHTML = tools.map(t =>
-                    `<div class="list-item"><span class="tag tag-tool">${t.name}</span> ${t.description} <span class="muted">(${t.status}, used ${t.use_count}x)</span></div>`
-                ).join('') || '<div class="muted">No tools registered</div>';
-            } catch (e) {}
+                renderList(list, tools.map(t => listItem(
+                    'tag-tool',
+                    t.name || 'tool',
+                    t.description || '',
+                    '(' + (t.status || 'ready') + ', used ' + Number(t.use_count || 0) + 'x)'
+                )), 'No tools registered');
+            } catch (e) {
+                SDK.status('Tool registry could not be parsed');
+            }
         }
 
         async function fetchGraph() {
@@ -152,7 +229,9 @@
             try {
                 const data = await resp.json();
                 renderGraph(data.nodes || [], data.edges || []);
-            } catch (e) {}
+            } catch (e) {
+                SDK.status('Synaptic graph could not be parsed');
+            }
         }
 
         // Simple force-directed graph renderer (no external deps, offline-safe).
@@ -200,15 +279,19 @@
             for (const e of edges) {
                 const a = pos.get(e.source), b = pos.get(e.target);
                 if (!a || !b) continue;
-                const alpha = Math.min(0.9, 0.15 + e.weight * 0.2);
-                out += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#22aa55" stroke-opacity="${alpha}" stroke-width="${Math.min(3, 0.5 + e.weight)}"/>`;
+                const weight = Number.isFinite(Number(e.weight)) ? Number(e.weight) : 0;
+                const alpha = Math.min(0.9, 0.15 + weight * 0.2);
+                out += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#22aa55" stroke-opacity="${alpha}" stroke-width="${Math.min(3, 0.5 + weight)}"/>`;
             }
             for (const n of nodes) {
                 const p = pos.get(n.id);
-                const r = Math.max(6, Math.min(16, 4 + n.strength * 2));
+                const strength = Number.isFinite(Number(n.strength)) ? Number(n.strength) : 0;
+                const r = Math.max(6, Math.min(16, 4 + strength * 2));
                 const hue = n.concept_type === 'skill' ? 60 : n.concept_type === 'emotion' ? 350 : 150;
+                const rawLabel = String(n.label || n.id || 'node');
+                const label = escapeHtml(rawLabel.length > 14 ? rawLabel.slice(0, 13) + '…' : rawLabel);
                 out += `<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="hsl(${hue}, 70%, 12%)" stroke="#00ff88" stroke-opacity="0.7"/>`;
-                out += `<text x="${p.x}" y="${p.y + 3.5}" fill="#00ff88" font-size="9" text-anchor="middle">${n.label.length > 14 ? n.label.slice(0, 13) + '…' : n.label}</text>`;
+                out += `<text x="${p.x}" y="${p.y + 3.5}" fill="#00ff88" font-size="9" text-anchor="middle">${label}</text>`;
             }
             svg.innerHTML = out;
         }
@@ -217,31 +300,105 @@
             const resp = await SDK.req('/v1/system/dreams?limit=12');
             if (!resp) return;
             try {
-                const dreams = await resp.json();
-                const list = document.getElementById('dream-log');
-                list.innerHTML = dreams.map(d =>
-                    `<div class="list-item"><span class="tag tag-dream">dream</span> ${d.session_id} <span class="muted">${d.duration_seconds.toFixed(1)}s</span></div>`
-                ).join('') || '<div class="muted">No dream cycles yet</div>';
-                const activity = document.getElementById('activity');
+                const payload = await resp.json();
+                const dreams = Array.isArray(payload) ? payload : (payload.dreams || []);
+                const duration = d => {
+                    const value = Number(d.duration_seconds || 0);
+                    return (Number.isFinite(value) ? value : 0).toFixed(1) + 's';
+                };
+                renderList(
+                    document.getElementById('dream-log'),
+                    dreams.map(d => listItem('tag-dream', 'dream', d.session_id || 'session', duration(d))),
+                    'No dream cycles yet'
+                );
                 const entries = dreams.slice(0, 5);
                 if (entries.length) {
-                    activity.innerHTML = entries.map(d =>
-                        `<div class="list-item"><span class="tag tag-dream">dream</span> ${d.session_id} completed (${d.duration_seconds.toFixed(1)}s)</div>`
-                    ).join('');
+                    renderList(
+                        document.getElementById('activity'),
+                        entries.map(d => listItem('tag-dream', 'dream', (d.session_id || 'session') + ' completed', duration(d))),
+                        'Waiting for data...'
+                    );
                 }
-            } catch (e) {}
+            } catch (e) {
+                SDK.status('Dream log could not be parsed');
+            }
         }
 
         async function fetchSwarmRuns() {
             const resp = await SDK.req('/v1/swarms/runs?limit=12');
             if (!resp) return;
             try {
-                const runs = await resp.json();
-                const list = document.getElementById('swarm-log');
-                list.innerHTML = runs.map(r =>
-                    `<div class="list-item"><span class="tag tag-swarm">swarm</span> ${r.swarm_name} <span class="muted">${r.worker_count} workers</span> — ${r.task.length > 60 ? r.task.slice(0, 59) + '…' : r.task}</div>`
-                ).join('') || '<div class="muted">No swarm runs yet</div>';
-            } catch (e) {}
+                const payload = await resp.json();
+                const runs = Array.isArray(payload) ? payload : (payload.runs || []);
+                renderList(
+                    document.getElementById('swarm-log'),
+                    runs.map(r => {
+                        const task = String(r.task || '');
+                        return listItem(
+                            'tag-swarm', 'swarm', r.swarm_name || 'swarm',
+                            Number(r.worker_count || 0) + ' workers — ' + (task.length > 60 ? task.slice(0, 59) + '…' : task)
+                        );
+                    }),
+                    'No swarm runs yet'
+                );
+            } catch (e) {
+                SDK.status('Swarm runs could not be parsed');
+            }
+        }
+
+        let allSpaces = [];
+        function renderSpaces() {
+            const query = document.getElementById('spaces-search').value.trim().toLowerCase();
+            const priority = document.getElementById('spaces-priority').value;
+            const filtered = allSpaces.filter(space => {
+                if (priority && space.priority !== priority) return false;
+                if (!query) return true;
+                return [space.id, space.name, space.priority, space.owner, space.summary, space.status, space.runtime_note,
+                    ...(space.evidence || [])].join(' ').toLowerCase().includes(query);
+            });
+            renderList(document.getElementById('spaces-list'), filtered.map(space => {
+                const item = listItem(
+                    'tag-synapse', '#' + String(space.id ?? '?').padStart(2, '0') + ' ' + (space.priority || ''),
+                    space.name || 'Untitled space', space.status || 'unknown'
+                );
+                item.appendChild(makeElement('div', 'space-note', space.summary || ''));
+                if (space.runtime_note) item.appendChild(makeElement('div', 'space-note', space.runtime_note));
+                if (space.evidence?.length) item.appendChild(makeElement('div', 'evidence', space.evidence.join(' · ')));
+                return item;
+            }), 'No Upgrade Spaces match this search.');
+        }
+
+        async function fetchSpaces() {
+            const resp = await SDK.req('/api/system/upgrade-spaces');
+            if (!resp) return;
+            try {
+                const payload = await resp.json();
+                allSpaces = Array.isArray(payload.spaces) ? payload.spaces : [];
+                const summary = payload.summary || {};
+                const priorities = [...new Set(allSpaces.map(space => space.priority).filter(Boolean))].sort();
+                const select = document.getElementById('spaces-priority');
+                const current = select.value;
+                const options = [makeElement('option', '', 'All priorities')];
+                options[0].value = '';
+                priorities.forEach(priority => {
+                    const option = makeElement('option', '', priority);
+                    option.value = priority;
+                    options.push(option);
+                });
+                select.replaceChildren(...options);
+                select.value = priorities.includes(current) ? current : '';
+                const generated = payload.generated_at ? new Date(payload.generated_at) : null;
+                const generatedText = generated && Number.isFinite(generated.getTime()) ? istTime(generated) + ' IST' : 'time unavailable';
+                document.getElementById('spaces-summary').replaceChildren(
+                    makeElement('span', '', (summary.landed ?? 0) + '/' + (summary.total ?? allSpaces.length) + ' landed'),
+                    makeElement('span', '', Number(payload.tools_count || 0) + ' live tools'),
+                    makeElement('span', '', 'Telemetry ' + (payload.telemetry?.enabled ? 'enabled' : 'available when enabled')),
+                    makeElement('span', '', generatedText)
+                );
+                renderSpaces();
+            } catch (e) {
+                SDK.status('Upgrade Spaces could not be parsed');
+            }
         }
 
         document.getElementById('apiKey').addEventListener('change', setApiKey);
@@ -249,6 +406,9 @@
             SDK.key = currentKey();
         });
         document.getElementById('apiKey').value = SDK.key;
+        document.getElementById('spaces-search').addEventListener('input', renderSpaces);
+        document.getElementById('spaces-priority').addEventListener('change', renderSpaces);
+        document.getElementById('spaces-refresh').addEventListener('click', loadSecured);
 
         fetchMetrics();
         setInterval(fetchMetrics, 10000);

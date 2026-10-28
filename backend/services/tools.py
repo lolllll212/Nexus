@@ -256,9 +256,19 @@ def _safe_repo_path(raw: str) -> Path | None:
 
 def _extract_path_hint(query: str) -> str:
     """Pull the most path-like token out of a natural-language request."""
+    # Quoted absolute paths may contain spaces. The candidate is still passed
+    # through _safe_repo_path before use, so extraction alone grants no access.
+    m = re.search(r"[\"']((?:[A-Za-z]:\\|/)[^\"']+)[\"']", query)
+    if m:
+        return m.group(1).strip()
     m = re.search(r"[A-Za-z]:\\[^\s\"']*", query)
     if m:
         return m.group(0)
+    # POSIX absolute paths (for example a Linux /tmp/... repository root) do
+    # not necessarily end in a file extension, unlike README.md-style hints.
+    m = re.search(r"(?<![\w:/])/[^\s\"']+", query)
+    if m:
+        return m.group(0).rstrip(").,;:")
     m = re.search(r"[\w./\\-]+\.[A-Za-z0-9]{1,6}\b", query)
     if m:
         return m.group(0)

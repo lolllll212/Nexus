@@ -108,45 +108,221 @@ evals, so anything that was already in-process stays in-process.
 | `thought.py` | `Thought`, `ThoughtType` |
 | `tool.py` | `Tool`, `ToolStatus` |
 
-## Value objects (9 modules)
+## Value objects (15 modules)
 
 `domain/value_objects/` — immutable, compared by value.
 
 | Module | Types |
 |---|---|
+| `ai_feedback.py` | `AIFeedback`, `FeedbackCategory`, `summarize_feedback` |
+| `ai_guardrails.py` | `GuardrailPolicy`, `GuardrailDecision`, `GuardrailFinding`, `GuardrailAction`, `combine_guardrail_decisions` |
 | `clock.py` | `utc_now()` (the only sanctioned clock — avoids the `utcnow()` deprecation) |
+| `context_pack.py` | `ContextCandidate`, `ContextItem`, `ContextPack`, `build_context_pack`, `estimate_tokens` |
 | `emotion.py` | `EmotionalState` |
+| `execution_quality.py` | `ExecutionProfile`, `ResponseQualityReport`, `build_execution_profile`, `build_execution_contract`, `assess_response_quality`, adaptive effort/evidence policy and bounded repair prompts |
 | `hex_fourier.py` | `HexCoord`-space `AxisSpectrum`, `HexSpectrum` |
 | `hex_grid.py` | `HexCoord`, `HexGrid` |
 | `hex_index.py` | `HexIndex` |
 | `identity.py` | `Identity`, `Role` |
 | `schema.py` | `JSONSchema` |
+| `solution_brief.py` | `SolutionBrief`, `RepositoryRequest`, `DeterministicToolCall`, multi-workstream request execution briefs and practical fallback rendering |
 | `synapse.py` | `SynapseConfig`, `ConnectionType` |
+| `upgrade_spaces.py` | `UpgradeSpace`, `upgrade_spaces_catalog` |
 | `valence.py` | `ValenceTag` |
 
-## Built-in tools (27)
+## Modern AI platform layer
+
+The cortex wraps each run in four provider-independent platform features.
+`GuardrailPolicy` evaluates input before sanitized text reaches session state,
+subconscious dispatch, recall, prompts, tools, or episodic memory; evaluates
+displayed reasoning, tool observations, rendered memories, and the final
+answer on the way out; and returns safe allow/redact/flag/block metadata
+without matched sensitive values. Blocked secret-exfiltration and tool-bypass
+inputs never reach dispatch, recall, an LLM, a tool, or episodic encoding.
+
+`build_context_pack` fuses up to 16 semantic and 8 graph candidates with
+weighted reciprocal-rank fusion (`semantic=1.0`, `graph=0.85`, RRF `k=60`),
+merges repeated IDs/normalized text, applies MMR diversity (`lambda=0.72`),
+and renders at most 8 cited items inside a 1,200-token evidence budget.
+`MessageResult` and the chat API expose the run `response_id`, combined
+guardrail metadata, and each selected item's citation/source/rank/score/token
+provenance.
+
+The Elite Execution Engine keeps policy in
+`domain/value_objects/execution_quality.py`: `build_execution_profile`
+resolves Auto/Fast/Balanced/Deep/Max into sampling, token, repair, quality,
+and evidence requirements, and `build_execution_contract` renders a compact
+workstream/evidence contract from the solution brief. The cortex applies that
+profile to its provider calls, canonicalizes provider-native tool calls into
+the existing approval/audit path with textual ReAct fallback, assesses the
+candidate final answer with `assess_response_quality`, and performs only the
+profile/deployment-capped number of private repairs. `MessageResult` returns
+API-safe `execution` and `quality` metadata, and metrics record reports,
+scores, issues, and repairs by tenant/effort/status. The 25-case golden eval
+set grades effective effort and minimum verified quality for its
+`execution_quality` cases.
+
+Response feedback is a deliberately thin persistence concern rather than a new
+domain port in this slice: the DI container binds the `ai_feedback` routes to
+`infrastructure/adapters/persistence/ai_feedback_store.py`
+(`AIFeedbackStore`), an atomic JSON/in-memory store scoped by verified tenant
+and user. It updates an existing vote for the same response, scrubs comments
+through the output guardrail, and computes personal/admin-tenant quality
+summaries from `domain/value_objects/ai_feedback.py`. See
+[Modern AI Platform](ai-platform.md) for the API and operator contract.
+
+## Built-in tools (48)
 
 Registered by `BuiltinToolRegistry(default_builtin_tools())`; handlers live in
 `infrastructure/adapters/execution/extended_tools.py`.
 
 `web_search`, `web_fetch`, `calculator`, `run_python`, `run_shell`, `read_file`,
-`write_file`, `list_directory`, `json_query`, `json_transform`,
+`write_file`, `list_directory`, `edit_file`, `delete_file`, `create_directory`,
+`create_repository`, `project_scan`, `find_files`, `directory_tree`,
+`read_files`, `file_outline`, `find_symbol`, `code_diagnostics`, `git_diff`,
+`project_checks`, `secret_scan`, `release_readiness`, `changelog_draft`,
+`write_files`, `batch_edit_files`, `move_path`, `copy_path`,
+`delete_directory`, `json_query`, `json_transform`,
 `current_datetime`, `diff_text`, `hash_text`, `base64_encode`, `git_info`,
 `http_request`, `grep`, `system_info`, `find_databases`, `query_database`,
 `process_multimodal_media`, `pytest_runner`, `csv_query`, `memory_graph_query`,
 `code_search_semantic`, `dependency_audit`, `regex_extract`.
 
-Two of these exist specifically so the ReAct prompt can tell the agent to act
-on its own: `find_databases` scans a tree for `.sqlite`/`.db` files and
-`docker-compose`/`.env` connection config; `query_database` speaks
-sqlite/postgres/mysql/redis.
+The coding power tools are designed for existing projects larger than a
+single file. `project_scan` maps languages, manifests, frameworks,
+entrypoints, tests, and Git state in one pruned traversal. `find_files`,
+`directory_tree`, `read_files`, `file_outline`, and `find_symbol` provide
+fast project navigation with less context waste than repeated one-file reads.
+`code_diagnostics`, `git_diff`, and `project_checks` find syntax problems,
+show actual changes, and run bounded Python/npm/Git verification.
+`write_files` and `batch_edit_files` prevalidate coordinated changes and
+stage writes with rollback, while `move_path`, `copy_path`, and
+`delete_directory` solve file/folder reorganization problems under the same
+workspace confinement and approval rules as the one-file mutation tools.
+`secret_scan` reports likely committed credentials with redacted previews,
+`release_readiness` combines scan/diagnostics/secrets/dependencies/Git and
+optional checks into a ship/no-ship gate, and `changelog_draft` turns real
+Git history into categorized release notes while listing uncommitted files
+separately.
 
-## API route modules (19)
+Two of these support authorized project/database exploration:
+`find_databases` scans a tree for `.sqlite`/`.db` files and
+`docker-compose`/`.env` connection config; `query_database` speaks
+sqlite/postgres/mysql/redis. The ReAct prompt treats database access as
+read-only by default, forbids printing `.env` secrets or guessing external
+targets, and requires an explicit instruction for mutations.
+
+`create_repository` is the approval-gated local project builder. It writes a
+runnable template, starter tests, README, license, and optional CI under a
+confined workspace folder; initializes Git when requested; refuses unknown
+non-empty targets unless overwrite is explicit; and returns the actual files,
+Git status, and next commands. It can configure an existing GitHub remote but
+never creates or pushes a remote repository by itself.
+
+## API route modules (22)
 
 `infrastructure/api/routes/`: `chat`, `memory`, `tools`, `coding`, `goals`,
 `swarm`, `graph`, `system`, `telemetry`, `research`, `analyze`, `workflows`,
 `mcp`, `multimodal`, `audio`, `nim`, `integrations`, `coding_assistant`,
-`workspace`.
+`workspace`, `history`, `models`, `ai_feedback`.
+
+### Chat history and model changer
+
+The `history` routes expose owner-scoped conversation sessions under
+`/api/history/sessions` for the web chat's history window. The DI container
+binds them to the concrete persistence adapter
+`infrastructure/adapters/persistence/chat_history_store.py` (`ChatHistoryStore`),
+an atomic JSON-file store (tmp file + `os.replace`) with an in-memory mode for
+tests and ephemeral deploys. It is deliberately not a domain port: chat
+transcripts are a UI concern, kept separate from semantic/graph memory.
+
+The `models` route (`GET /api/models`) is the model picker's catalog and also
+publishes top-level `execution` discovery metadata (supported/default effort,
+adaptive-routing availability, quality gate, native tool calling, and repair
+cap). A chat request may carry `model: "auto"` or any NVIDIA NIM model id from
+the catalog. An explicit NIM selection always wins; in Auto on a NIM-backed
+cortex, the execution profile chooses fast, balanced, flagship/deep, or vision
+catalog entries. Either way, the selected NIM model runs on a fresh
+per-request `NvidiaNimProvider` passed through
+`ProcessMessageUseCase.execute(llm=..., effort=...)`, so the shared container
+provider is never mutated. The request's `effort` is validated against
+Auto/Fast/Balanced/Deep/Max and falls back to `NEXUS_AI_DEFAULT_EFFORT` when
+Auto is left to the operator default. Claude-style capability flags on the
+same request (`extended_thinking`, `deep_research`, `artifacts`) become prompt
+instructions plus a sanitized `thinking` trace in the response/SSE frames.
+There is no Anthropic integration — "Claude-style" describes the UX, not a
+provider.
+
+### AI capabilities, feedback, and quality
+
+The `ai_feedback` route exposes `GET /api/ai/capabilities`—including
+`features.execution_quality` checks/settings and quality metric names—
+owner-scoped `POST`/`GET /api/ai/feedback`, the caller's
+`GET /api/ai/feedback/summary`, and admin-only aggregate `GET /api/ai/quality`.
+`POST /v1/chat` returns `response_id`, `guardrail`, `context_sources`,
+`execution`, and `quality`; the SSE endpoint includes resolved effort in its
+start frame, may emit `quality_repair` while a draft is being improved, places
+the response ID in its `answer` frame, and emits all settled metadata in a
+`metadata` frame before `done`.
+
+The main React app also has a full-screen hybrid chat workspace: Claude-like
+warmth and composer ergonomics, Gemini-like gradient/sparkle suggestion cards,
+and ChatGPT-like top model selection/message actions, over a reduced-motion
+aware Nexus aurora/constellation background. Its searchable light model
+changer is used in the header, composer, and Customize view; Projects includes
+a direct Repository Builder form. The agent path is the same ReAct loop, which
+injects every registered tool into the model context. The tools route
+additionally exposes schemas/categories
+on `GET /v1/tools`, tenant approval state on `GET /v1/tools/approvals`,
+admin grants on `POST /v1/tools/approvals/grant`, and admin-only direct
+execution on `POST /v1/tools/execute` for the workspace's Tools/Code panel.
+Direct execution still passes through registry schema validation, sandboxing,
+workspace path confinement, the sensitive-file denylist, and approval gates
+for shell and mutating file tools.
+
+Before the ReAct prompt, the cortex inserts a deterministic real-world
+request-execution brief from `domain/value_objects/solution_brief.py`. The
+brief keeps a dominant intent for compatibility but also preserves every
+workstream in a compound Claude-style ask (for example research → inspect →
+fix → test → summarize). It extracts explicit budget/deadline/location,
+audience, technology, format, quantity, and must/avoid constraints from the
+latest message plus recent human turns; identifies deliverables and referenced
+paths; classifies the operation as answer-only, read-only, external research,
+workspace mutation, or mixed; and emits ordered execution phases plus
+acceptance criteria. Its readiness gate distinguishes ready work,
+proceed-with-assumptions, proceed-with-caution, confirmation-required,
+safety-first, and clarify-first requests. The ReAct prompt mirrors this with
+an understand → inspect/gather evidence → act → verify → deliver contract.
+The NVIDIA NIM simulation uses the same pure module for a structured
+practical fallback and, inside ReAct, can emit a real `create_repository`
+call plus narrow deterministic read-only calls (`calculator`,
+`list_directory`, `read_file`, `grep`, `git_info`, `pytest_runner`,
+`current_datetime`, `system_info`, and `hash_text`), summarizing only the
+returned observation. The golden eval set includes a `real_life` category for
+compound inspection, current research, data analysis, constrained planning,
+and safe clarification before a destructive action.
+
+## Website surfaces
+
+Nexus has three website families that deliberately share contracts instead of
+copying state:
+
+- The main React app in `web/` hosts the hybrid chat, workspace cockpit,
+  searchable Upgrade Spaces panel, tool approvals/results, voice controls, and
+  the swarm dashboard. The swarm view connects to the same-origin `/bridge`
+  WebSocket proxy, authenticates with a first message rather than a URL token,
+  and labels data live only after a bridge snapshot or delta arrives.
+- The buildless workspace in `frontend/workspace.html` is served by the sibling
+  `backend/` app. Its `/api/workspace/spaces` endpoint imports the same
+  `domain/value_objects/upgrade_spaces.py` catalog as the core API, with
+  server-side search and priority filtering.
+- The buildless Brain Chat and galaxy pages use `frontend/shared/voice.js` as
+  the single Indian-English (`en-IN`) voice source. Their chat docks support
+  browser-side cancellation, IME-safe Enter, session drafts, smart scrolling,
+  and escaped/text-node rendering for model and graph output.
+- The core API's static dashboard renders tools, dreams, swarm runs, graph
+  labels, and Upgrade Spaces without interpolating API strings into HTML; its
+  API key is kept only in session storage.
 
 ## Wiring summary by module
 
@@ -159,7 +335,7 @@ sqlite/postgres/mysql/redis.
 | `application/tools/` | `generate_tool`, `self_heal`, `multimodal_perception` |
 | `application/interfaces/` | `subconscious_coordinator` |
 | `infrastructure/adapters/` | `auth`, `autonomy`, `cognition`, `eventbus`, `execution`, `inmemory`, `llm`, `observability`, `persistence`, `sandbox`, `security`, `speech`, `swarm`, `embedding` |
-| `infrastructure/api/` | `main`, `dependencies`, `routes/` (18), `schemas` |
+| `infrastructure/api/` | `main`, `dependencies`, `routes/` (22), `schemas` |
 | `infrastructure/workers/` | Celery tasks + beat schedule (`dream`, `autonomy_loop`, `pattern_detection`, `entity_synthesis`) |
 | `infrastructure/backup/` | `QdrantBackup`, `Neo4jBackup`, `BackupManager` |
 | `infrastructure/di/` | `container.py` — the only place adapters are chosen |
@@ -191,6 +367,14 @@ mentions a variable the code never reads.
 | `NEXUS_LLM_BASE_URL` | Points the OpenAI-compatible adapters at a local server (LM Studio, Ollama). |
 | `NEXUS_API_KEYS` | JSON map of key to `{user_id, tenant_id, role}`. Empty means fail-closed: every request gets 401. |
 | `NEXUS_TENANTS` | Comma-separated tenant ids; each one gets its memory collection pre-created at startup. |
+| `NEXUS_HISTORY_PATH` | JSON file for the chat history window's server-side conversation sessions (`data/chat_history.json`). Empty or `memory` keeps history process-local and ephemeral. The file is gitignored — it contains transcripts. |
+| `NEXUS_AI_GUARDRAILS_ENABLED` | Enables the deterministic input/output guardrail (`true` by default; `false`, `0`, `no`, or `off` disables it for controlled debugging only). |
+| `NEXUS_AI_GUARDRAIL_REDACT_PII` | Enables email/phone/SSN/payment-card redaction in the guardrail (`true` by default; `false`, `0`, `no`, or `off` disables only that category). |
+| `NEXUS_AI_FEEDBACK_PATH` | Atomic JSON file for tenant/user-scoped response feedback (`data/ai_feedback.json`). Empty, `memory`, `:memory:`, or `none` keeps feedback process-local. Treat the file as user data. |
+| `NEXUS_AI_QUALITY_GATE_ENABLED` | Enables deterministic final-answer assessment and bounded repair (`true` by default; `false`, `0`, `no`, or `off` disables it). |
+| `NEXUS_AI_NATIVE_TOOL_CALLING_ENABLED` | Enables provider-native tool calls (`true` by default); textual ReAct remains the per-request fallback. |
+| `NEXUS_AI_QUALITY_MAX_REPAIRS` | Deployment-wide quality-repair ceiling (`3`, clamped to 0–5), further capped by the effective effort profile. |
+| `NEXUS_AI_DEFAULT_EFFORT` | Operator chat effort default (`auto`), normalized to Auto/Fast/Balanced/Deep/Max for requests that do not select a non-Auto effort. |
 
 ### Models and providers
 
@@ -251,5 +435,6 @@ These are read by the ops scripts (`scripts/`), not by the `src/` modules — th
 - [Dual-Loop Architecture](dual-loop.md)
 - [Clean Architecture & Dependency Rule](clean-architecture.md)
 - [Memory System](memory.md)
+- [Modern AI Platform](ai-platform.md)
 - [Backup & DR](backup-dr.md)
 - [Upgrade Spaces](upgrade-spaces.md)

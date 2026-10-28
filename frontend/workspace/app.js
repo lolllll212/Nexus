@@ -47,6 +47,14 @@ const runEngine = $('#run-engine');
 const runScroll = $('#run-scroll');
 const routeHint = $('#route-hint');
 const toastEl = $('#toast');
+const runLatestBtn = $('#run-latest');
+const spacesSearch = $('#spaces-search');
+const spacesPriority = $('#spaces-priority');
+const spacesGrid = $('#spaces-grid');
+const spacesState = $('#spaces-state');
+const spacesSummary = $('#spaces-summary');
+const spacesCount = $('#spaces-count');
+const WORKSPACE_DRAFT_KEY = 'nexus-legacy-workspace-draft';
 
 const state = {
   route: 'deep_research',
@@ -57,18 +65,27 @@ const state = {
   answer: '',
   renderQueued: false,
   stickToBottom: true,
+  spaces: [],
+  spacesController: null,
   robot: null,
   startedAt: 0,
 };
 
 /* ── formatting helpers ─────────────────────────────────────────────────── */
 
-const fmt = new Intl.NumberFormat('en-US');
+const fmt = new Intl.NumberFormat('en-IN');
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]
   ));
+}
+
+function safeArtifactUrl(value) {
+  const url = String(value || '').trim();
+  if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) return url;
+  if (/^(https?:|data:image\/|data:audio\/)/i.test(url)) return url;
+  return '#';
 }
 
 function inline(text) {
@@ -204,18 +221,19 @@ function wireAudio(card) {
 
 function renderArtifact(artifact) {
   const card = document.createElement('div');
+  const safeUrl = escapeHtml(safeArtifactUrl(artifact.url));
   card.className = 'nx-art';
 
   if (artifact.kind === 'image') {
     card.classList.add('nx-art--image');
     card.innerHTML = `
-      <a class="nx-art__zoom" href="${escapeHtml(artifact.url)}" target="_blank" rel="noopener"
+      <a class="nx-art__zoom" href="${safeUrl}" target="_blank" rel="noopener"
          aria-label="Open the full-size poster">
-        <img src="${escapeHtml(artifact.url)}" alt="${escapeHtml(artifact.title)}" loading="lazy">
+        <img src="${safeUrl}" alt="${escapeHtml(artifact.title)}" loading="lazy">
       </a>
       <div class="nx-art__bar">
         <span class="nx-art__cap">${escapeHtml(artifact.title)}<span>${escapeHtml(artifact.subtitle || '')}</span></span>
-        <a class="nx-art__dl nx-art__dl--light" href="${escapeHtml(artifact.url)}" download="${escapeHtml(artifact.download || 'nexus-poster.svg')}" aria-label="Download poster">
+        <a class="nx-art__dl nx-art__dl--light" href="${safeUrl}" download="${escapeHtml(artifact.download || 'nexus-poster.svg')}" aria-label="Download poster">
           <svg class="nx-icon"><use href="#i-download"/></svg>
         </a>
       </div>`;
@@ -228,7 +246,7 @@ function renderArtifact(artifact) {
         <p>${escapeHtml(artifact.subtitle || '')}</p>
       </div>
       <a class="nx-art__dl" style="background:#f1f5f9;border-color:rgba(11,15,25,.08);color:#0b0f19"
-         href="${escapeHtml(artifact.url)}" download="${escapeHtml(artifact.download || 'nexus-asset.jpg')}" aria-label="Open reference">
+         href="${safeUrl}" download="${escapeHtml(artifact.download || 'nexus-asset.jpg')}" aria-label="Open reference">
         <svg class="nx-icon"><use href="#i-download"/></svg>
       </a>`;
   } else if (artifact.kind === 'audio') {
@@ -247,10 +265,10 @@ function renderArtifact(artifact) {
         <div class="nx-audio__wave" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="8">${bars}</div>
       </div>
       <a class="nx-art__dl" style="background:#f1f5f9;border-color:rgba(11,15,25,.08);color:#0b0f19"
-         href="${escapeHtml(artifact.url)}" download="${escapeHtml(artifact.download || 'nexus-stem.wav')}" aria-label="Download stem">
+         href="${safeUrl}" download="${escapeHtml(artifact.download || 'nexus-stem.wav')}" aria-label="Download stem">
         <svg class="nx-icon"><use href="#i-download"/></svg>
       </a>
-      <audio src="${escapeHtml(artifact.url)}" preload="metadata" hidden></audio>`;
+      <audio src="${safeUrl}" preload="metadata" hidden></audio>`;
   } else if (artifact.kind === 'source') {
     card.classList.add('nx-art--source');
     card.innerHTML = `
@@ -298,6 +316,7 @@ function openRunPanel(run, plan) {
   )).join('');
   state.answer = '';
   state.stickToBottom = true;
+  if (runLatestBtn) runLatestBtn.hidden = true;
   runScroll.scrollTop = 0;
 }
 
@@ -344,6 +363,7 @@ function finishRun(run, failed = false) {
   setState('done');
   $('#run-rerun').disabled = false;
   state.stickToBottom = false;
+  if (runLatestBtn) runLatestBtn.hidden = runScroll.scrollHeight <= runScroll.clientHeight + 48;
   runScroll.scrollTo({ top: 0, behavior: 'smooth' });
   if (run) {
     const seconds = ((run.duration_ms || 0) / 1000).toFixed(1);
@@ -454,6 +474,7 @@ async function submit(promptOverride) {
     return;
   }
   if (promptOverride) promptEl.value = promptOverride;
+  try { sessionStorage.setItem(WORKSPACE_DRAFT_KEY, promptEl.value); } catch { /* storage unavailable */ }
   autosize();
 
   state.streaming = true;
@@ -469,6 +490,7 @@ async function submit(promptOverride) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, route: state.route }),
+      signal: state.controller.signal,
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -518,6 +540,139 @@ function autosize() {
   promptEl.style.height = `${Math.min(promptEl.scrollHeight, 132)}px`;
 }
 
+/* ── Platform Spaces ────────────────────────────────────────────────────── */
+
+function makeTextElement(tag, className, text) {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  element.textContent = String(text ?? '');
+  return element;
+}
+
+function renderSpaces(payload) {
+  if (!spacesGrid || !spacesState || !spacesSummary || !spacesCount) return;
+  const spaces = Array.isArray(payload?.spaces) ? payload.spaces : [];
+  const summary = payload?.summary || {};
+  state.spaces = spaces;
+
+  if (spacesPriority && Array.isArray(payload?.priorities)) {
+    const current = spacesPriority.value;
+    const options = [makeTextElement('option', '', 'All priorities')];
+    options[0].value = '';
+    payload.priorities.forEach((priority) => {
+      const option = makeTextElement('option', '', priority);
+      option.value = String(priority);
+      options.push(option);
+    });
+    spacesPriority.replaceChildren(...options);
+    spacesPriority.value = payload.priorities.includes(current) ? current : '';
+  }
+
+  const generated = payload?.generated_at ? new Date(payload.generated_at) : null;
+  const generatedLabel = generated && Number.isFinite(generated.getTime())
+    ? generated.toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short',
+      })
+    : 'time unavailable';
+  spacesCount.textContent = `${spaces.length} shown · ${summary.landed ?? 0}/${summary.total ?? spaces.length} landed`;
+  spacesSummary.replaceChildren(
+    makeTextElement('span', '', `${summary.landed ?? 0} landed`),
+    makeTextElement('span', '', `${summary.pending ?? 0} pending`),
+    makeTextElement('span', '', `Updated ${generatedLabel} IST`),
+    makeTextElement('span', '', 'Shared catalog'),
+  );
+
+  if (!spaces.length) {
+    spacesGrid.replaceChildren();
+    spacesGrid.hidden = true;
+    spacesState.hidden = false;
+    spacesState.textContent = 'No platform spaces match this search. Try a name, priority, runtime note, or evidence path.';
+    return;
+  }
+
+  const cards = spaces.map((space) => {
+    const card = document.createElement('article');
+    card.className = 'nx-space-card';
+    const head = document.createElement('div');
+    head.className = 'nx-space-card__head';
+    head.appendChild(makeTextElement('span', 'nx-space-card__id', String(space.id ?? '?').padStart(2, '0')));
+    head.appendChild(makeTextElement('h4', '', space.name || 'Untitled space'));
+    const badges = document.createElement('div');
+    badges.className = 'nx-space-card__badges';
+    badges.appendChild(makeTextElement('span', 'nx-space-badge nx-space-badge--priority', space.priority || '—'));
+    badges.appendChild(makeTextElement('span', 'nx-space-badge', space.status || 'unknown'));
+    head.appendChild(badges);
+    card.appendChild(head);
+    card.appendChild(makeTextElement('p', '', space.summary || ''));
+    if (space.runtime_note) {
+      card.appendChild(makeTextElement('p', 'nx-space-card__note', space.runtime_note));
+    }
+    const evidence = document.createElement('div');
+    evidence.className = 'nx-space-card__evidence';
+    (Array.isArray(space.evidence) ? space.evidence : []).forEach((path) => {
+      const code = makeTextElement('code', '', path);
+      code.title = String(path);
+      evidence.appendChild(code);
+    });
+    if (evidence.childNodes.length) card.appendChild(evidence);
+    return card;
+  });
+
+  spacesGrid.replaceChildren(...cards);
+  spacesGrid.hidden = false;
+  spacesState.hidden = true;
+}
+
+async function loadSpaces() {
+  if (!spacesGrid || !spacesState) return;
+  state.spacesController?.abort();
+  const controller = new AbortController();
+  state.spacesController = controller;
+  const refresh = $('#spaces-refresh');
+  if (refresh) refresh.disabled = true;
+  spacesState.hidden = false;
+  spacesState.textContent = 'Loading the shared platform catalog…';
+
+  const params = new URLSearchParams();
+  const query = spacesSearch?.value.trim() || '';
+  const priority = spacesPriority?.value || '';
+  if (query) params.set('q', query);
+  if (priority) params.set('priority', priority);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+
+  try {
+    const response = await fetch(`/api/workspace/spaces${suffix}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || `spaces failed (${response.status})`);
+    renderSpaces(payload);
+  } catch (error) {
+    if (error?.name === 'AbortError') return;
+    spacesGrid.hidden = true;
+    spacesState.hidden = false;
+    spacesState.textContent = 'Platform Spaces could not load. Check that the workspace API is running, then refresh.';
+    spacesCount.textContent = 'Unavailable';
+    spacesSummary?.replaceChildren(makeTextElement('span', '', 'Catalog unavailable'));
+  } finally {
+    if (state.spacesController === controller) {
+      state.spacesController = null;
+      if (refresh) refresh.disabled = false;
+    }
+  }
+}
+
+function wireSpaces() {
+  let timer = null;
+  spacesSearch?.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(loadSpaces, 160);
+  });
+  spacesPriority?.addEventListener('change', loadSpaces);
+  $('#spaces-refresh')?.addEventListener('click', loadSpaces);
+}
+
 /* ── bootstrap ──────────────────────────────────────────────────────────── */
 
 function renderWeek() {
@@ -534,9 +689,9 @@ function renderWeek() {
     cell.classList.toggle('is-today', date.toDateString() === now.toDateString());
     cell.classList.toggle('is-dim', index > 4);
   });
-  const label = now.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+  const label = now.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
   $('#runway-date').textContent = label;
-  $('#hero-session').textContent = `${now.toLocaleDateString('en-US', { weekday: 'long' })} · Session ${String(now.getDate()).padStart(2, '0')}`;
+  $('#hero-session').textContent = `${now.toLocaleDateString('en-IN', { weekday: 'long' })} · Session ${String(now.getDate()).padStart(2, '0')}`;
 }
 
 function applyBootstrap(data) {
@@ -648,9 +803,12 @@ function wireCockpit() {
     submit();
   });
 
-  promptEl.addEventListener('input', autosize);
+  promptEl.addEventListener('input', () => {
+    autosize();
+    try { sessionStorage.setItem(WORKSPACE_DRAFT_KEY, promptEl.value); } catch { /* storage unavailable */ }
+  });
   promptEl.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
       event.preventDefault();
       submit();
     }
@@ -682,6 +840,13 @@ function wireCockpit() {
   runScroll.addEventListener('scroll', () => {
     const distance = runScroll.scrollHeight - runScroll.scrollTop - runScroll.clientHeight;
     state.stickToBottom = distance < 48;
+    if (runLatestBtn) runLatestBtn.hidden = state.stickToBottom;
+  });
+
+  runLatestBtn?.addEventListener('click', () => {
+    state.stickToBottom = true;
+    runLatestBtn.hidden = true;
+    runScroll.scrollTo({ top: runScroll.scrollHeight, behavior: 'smooth' });
   });
 
   $('#run-close').addEventListener('click', () => {
@@ -750,10 +915,16 @@ function wireCockpit() {
 function init() {
   renderWeek();
   wireCockpit();
+  wireSpaces();
   wireIdeas();
+  try {
+    const draft = sessionStorage.getItem(WORKSPACE_DRAFT_KEY);
+    if (draft) promptEl.value = draft;
+  } catch { /* storage unavailable */ }
   setRoute('deep_research');
   autosize();
   bootstrap();
+  loadSpaces();
   state.robot = bootRobot();
   setTimeout(() => state.robot?.react('talk', 1800), 1400);
   window.addEventListener('beforeunload', () => state.robot?.dispose?.());

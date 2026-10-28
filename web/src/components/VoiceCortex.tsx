@@ -10,7 +10,7 @@ import {
   Radio
 } from 'lucide-react';
 import { AgentStatus } from '../types';
-import { stopAnySpeaking, speakWithStatus } from '../utils/voiceManager';
+import { getVoicePreferences, stopAnySpeaking, speakWithStatus } from '../utils/voiceManager';
 
 interface VoiceCortexProps {
   onCommand: (command: string, rawText: string) => void;
@@ -151,7 +151,7 @@ export const VoiceCortex: React.FC<VoiceCortexProps> = ({
         const recognition = new SpeechRecognition();
         recognition.continuous = false; // Single utterance at a time to prevent infinite buffering
         recognition.interimResults = true;
-        recognition.lang = 'en-US';
+        recognition.lang = getVoicePreferences().accent || 'en-IN';
 
         recognition.onstart = () => {
           setIsListening(true);
@@ -200,35 +200,28 @@ export const VoiceCortex: React.FC<VoiceCortexProps> = ({
         setIsListening(true);
         onStatusChange('listening');
       } catch (err) {
-        console.warn('Could not start speech recognition, using fallback:', err);
-        simulateVoiceInput();
+        console.warn('Could not start speech recognition:', err);
+        showVoiceUnsupported();
       }
     } else {
-      simulateVoiceInput();
+      showVoiceUnsupported();
     }
   }, [abortMicrophone, handleVoiceCommand, onStatusChange]);
 
-  const simulateVoiceInput = useCallback(() => {
-    setIsListening(true);
-    onStatusChange('listening');
-    setTranscript('Listening for vocal command...');
-
-    const simulatedPhrases = [
-      'NEXUS, research autonomous AI agent swarms',
-      'NEXUS, summarize active second brain synapses',
-      'NEXUS, check latest GitHub integration status',
-      'NEXUS, fit graph to 2D view',
-      'NEXUS, analyze AI Workshop hub architecture',
-    ];
-    const phrase = simulatedPhrases[Math.floor(Math.random() * simulatedPhrases.length)];
-
+  // Do not fabricate a spoken command when the browser cannot capture one.
+  // Nexus should say recognition is unavailable and leave control with text.
+  const showVoiceUnsupported = useCallback(() => {
+    if (simTimeoutRef.current) clearTimeout(simTimeoutRef.current);
+    setIsListening(false);
+    onStatusChange('idle');
+    setTranscript('Voice recognition is not available in this browser. Please type your command.');
     simTimeoutRef.current = setTimeout(() => {
-      setTranscript(phrase);
-      simTimeoutRef.current = setTimeout(() => {
-        handleVoiceCommand(phrase);
-      }, 1200);
-    }, 1000);
-  }, [handleVoiceCommand, onStatusChange]);
+      setTranscript((current) =>
+        current.startsWith('Voice recognition is not available') ? '' : current,
+      );
+      simTimeoutRef.current = null;
+    }, 5000);
+  }, [onStatusChange]);
 
   // ── Toggle Handler ────────────────────────────────────────────────────────
   const toggleListening = () => {
